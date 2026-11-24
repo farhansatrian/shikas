@@ -78,16 +78,7 @@ export const SettingsView: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <p className="font-mono text-[10px] tracking-[0.22em] text-[#745bc7] uppercase">
-          SYSTEM // 雫
-        </p>
-        <h1 className="mt-0.5 font-editorial text-2xl font-normal tracking-[0.26em] text-[#745bc7] uppercase sm:text-3xl">
-          {t.settings.title}
-        </h1>
-      </div>
-
-      {/* Preferences + Data Backup Grid */}
+      {/* Preferences + Data Backup Grid (Starts cleanly at same top line as CASHFLOW & ANALYTICS) */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         {/* Display Preferences */}
         <section className="vn-frame overflow-hidden">

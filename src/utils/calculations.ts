@@ -1,6 +1,8 @@
 import type { Transaction } from "../types/cashflow";
 import { shiftMonthKey } from "./format";
 
+export type AnalyticsRange = "3m" | "6m" | "12m" | "all";
+
 export interface MonthlySummary {
   month: string;
   incomeIdr: number;
@@ -15,6 +17,14 @@ export interface CategorySpendItem {
   amountIdr: number;
   percentage: number;
   count: number;
+}
+
+export interface MonthlySeriesPoint {
+  month: string;
+  incomeIdr: number;
+  expenseIdr: number;
+  netIdr: number;
+  cumulativeBalanceIdr: number;
 }
 
 export function computeCumulativeNetBalance(
@@ -63,11 +73,22 @@ export function computeCategoryBreakdown(
   monthKey: string,
   type: "expense" | "income" = "expense"
 ): CategorySpendItem[] {
+  return computeCategoryBreakdownForMonths(transactions, [monthKey], type);
+}
+
+export function computeCategoryBreakdownForMonths(
+  transactions: Transaction[],
+  monthKeys: string[] | null,
+  type: "expense" | "income" = "expense"
+): CategorySpendItem[] {
+  const allowed = monthKeys ? new Set(monthKeys) : null;
   const bucket = new Map<string, { amountIdr: number; count: number }>();
   let total = 0;
 
   for (const tx of transactions) {
-    if (!tx.date.startsWith(monthKey) || tx.type !== type) continue;
+    if (tx.type !== type) continue;
+    const txMonth = tx.date.slice(0, 7);
+    if (allowed && !allowed.has(txMonth)) continue;
     const prev = bucket.get(tx.categoryId) ?? { amountIdr: 0, count: 0 };
     bucket.set(tx.categoryId, {
       amountIdr: prev.amountIdr + tx.amountIdr,
@@ -86,33 +107,67 @@ export function computeCategoryBreakdown(
     .sort((a, b) => b.amountIdr - a.amountIdr);
 }
 
+function buildSeriesPoint(
+  transactions: Transaction[],
+  mKey: string
+): MonthlySeriesPoint {
+  const summary = computeMonthlySummary(transactions, mKey);
+  const [y, m] = mKey.split("-").map(Number);
+  const lastDay = new Date(y, m, 0).getDate();
+  const endDateIso = `${mKey}-${String(lastDay).padStart(2, "0")}`;
+  const cumulativeBalanceIdr = computeCumulativeNetBalance(transactions, endDateIso);
+
+  return {
+    month: mKey,
+    incomeIdr: summary.incomeIdr,
+    expenseIdr: summary.expenseIdr,
+    netIdr: summary.netCashflowIdr,
+    cumulativeBalanceIdr,
+  };
+}
+
 export function computeMultiMonthSeries(
   transactions: Transaction[],
   anchorMonthKey: string,
   monthsCount = 6
-): Array<{
-  month: string;
-  incomeIdr: number;
-  expenseIdr: number;
-  netIdr: number;
-  cumulativeBalanceIdr: number;
-}> {
-  const result = [];
+): MonthlySeriesPoint[] {
+  const result: MonthlySeriesPoint[] = [];
   for (let i = monthsCount - 1; i >= 0; i -= 1) {
     const mKey = shiftMonthKey(anchorMonthKey, -i);
-    const summary = computeMonthlySummary(transactions, mKey);
-    const [y, m] = mKey.split("-").map(Number);
-    const lastDay = new Date(y, m, 0).getDate();
-    const endDateIso = `${mKey}-${String(lastDay).padStart(2, "0")}`;
-    const cumulativeBalanceIdr = computeCumulativeNetBalance(transactions, endDateIso);
+    result.push(buildSeriesPoint(transactions, mKey));
+  }
+  return result;
+}
 
-    result.push({
-      month: mKey,
-      incomeIdr: summary.incomeIdr,
-      expenseIdr: summary.expenseIdr,
-      netIdr: summary.netCashflowIdr,
-      cumulativeBalanceIdr,
-    });
+export function computeTimeRangeSeries(
+  transactions: Transaction[],
+  anchorMonthKey: string,
+  range: AnalyticsRange
+): MonthlySeriesPoint[] {
+  if (range === "3m") return computeMultiMonthSeries(transactions, anchorMonthKey, 3);
+  if (range === "6m") return computeMultiMonthSeries(transactions, anchorMonthKey, 6);
+  if (range === "12m") return computeMultiMonthSeries(transactions, anchorMonthKey, 12);
+
+  // All Time: build contiguous month span from earliest to latest transaction month
+  if (transactions.length === 0) {
+    return [buildSeriesPoint(transactions, anchorMonthKey)];
+  }
+
+  let minMonth = transactions[0].date.slice(0, 7);
+  let maxMonth = minMonth;
+  for (const tx of transactions) {
+    const mk = tx.date.slice(0, 7);
+    if (mk < minMonth) minMonth = mk;
+    if (mk > maxMonth) maxMonth = mk;
+  }
+
+  const result: MonthlySeriesPoint[] = [];
+  let cursor = minMonth;
+  let guard = 0;
+  while (cursor <= maxMonth && guard < 120) {
+    result.push(buildSeriesPoint(transactions, cursor));
+    cursor = shiftMonthKey(cursor, 1);
+    guard += 1;
   }
   return result;
 }
