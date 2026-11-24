@@ -51,7 +51,11 @@ const ShiKasShell: React.FC = () => {
       <ShizukuRainLayer />
       <MinimalNav />
 
-      <main className="relative z-10 mx-auto w-full max-w-[960px] flex-1 px-5 pt-2 pb-10 sm:px-8">
+      <main
+        className={`relative z-10 mx-auto w-full max-w-[960px] flex-1 px-5 sm:px-8 ${
+          activeTab === "home" ? "flex flex-col py-0" : "pt-2 pb-12"
+        }`}
+      >
         {activeTab === "home" && <DashboardView />}
         {activeTab === "cashflow" && <CashflowView />}
         {activeTab === "analytics" && <AnalyticsView />}
