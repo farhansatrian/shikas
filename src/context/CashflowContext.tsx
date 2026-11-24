@@ -28,7 +28,7 @@ import {
 import { getMonthKey, shiftMonthKey } from "../utils/format";
 import { TRANSLATIONS, type TranslationDict } from "../i18n/translations";
 
-const STORE_KEY = "shikas_store_v1";
+const STORE_KEY = "shikas_store_v2";
 
 function generateId(prefix: string): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {

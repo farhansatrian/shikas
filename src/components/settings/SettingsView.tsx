@@ -319,11 +319,8 @@ export const SettingsView: React.FC = () => {
           <div>
             <span className="text-[#5f5368]">Mobile BG:</span> {SHIKAS_ASSETS.bgWatercolorSp}
           </div>
-          <div>
-            <span className="text-[#5f5368]">Home Left Art:</span> {SHIKAS_ASSETS.heroLeft}
-          </div>
-          <div>
-            <span className="text-[#5f5368]">Home Right Art:</span> /assets/hero-right.jpg (optional)
+          <div className="sm:col-span-2">
+            <span className="text-[#5f5368]">Home Artwork:</span> {SHIKAS_ASSETS.heroMain}
           </div>
         </div>
       </section>

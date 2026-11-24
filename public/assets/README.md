@@ -1,14 +1,13 @@
 # ShiKas Assets Directory (`public/assets/`)
 
-Taruh file gambar kamu di folder ini. Aplikasi **ShiKas** akan otomatis mendeteksi dan memakainya sesuai nama file berikut (mendukung `.jpg`, `.png`, atau `.webp`):
+Taruh file gambar kamu di folder ini. Path aktifnya terdaftar terpusat di `src/config/assets.ts`:
 
 | Path File | Fungsi di Aplikasi | Status |
 |---|---|---|
-| `public/assets/bg-watercolor-pc.jpg` | Latar watercolor resolusi tinggi (Desktop) | Sudah disalin dari `shizuku` |
-| `public/assets/bg-watercolor-sp.jpg` | Latar watercolor resolusi tinggi (Mobile) | Sudah disalin dari `shizuku` |
-| `public/assets/raindrop-line.png` | Garis pembatas *raindrop* khas `shizuku` | Sudah disalin dari `shizuku` |
-| `public/assets/hero-left.jpg` *(atau `.png`/`.webp`)* | **Ilustrasi sisi kiri** pada frame *Diptych* halaman `HOME` (sisi terang) | Opsional — otomatis menggantikan ilustrasi bawaan |
-| `public/assets/hero-right.jpg` *(atau `.png`/`.webp`)* | **Ilustrasi latar halus sisi kanan** pada *Diptych* halaman `HOME` (opsional, tampil lembut di belakang ringkasan saldo gelap) | Opsional |
-| `public/assets/avatar.jpg` *(atau `.png`/`.webp`)* | Avatar/ikon profil opsional di halaman `DATA` | Opsional |
+| `public/assets/bg-watercolor-pc.jpg` | Background watercolor resolusi tinggi (Desktop) | Disalin dari `shizuku` |
+| `public/assets/bg-watercolor-sp.jpg` | Background watercolor resolusi tinggi (Mobile) | Disalin dari `shizuku` |
+| `public/assets/raindrop-line.png` | Garis pembatas *raindrop* pada halaman `LEDGER` | Disalin dari `shizuku` |
+| `public/assets/tumblr_ohhlp7vvyH1qegob8o3_1280.jpg` | **Gambar utama terpusat** di halaman `HOME` | Aktif dipakai di `SHIKAS_ASSETS.heroMain` |
+| `public/assets/hero-left.svg` | Cadangan ilustrasi monokrom bawaan | Tersedia |
 
-> **Catatan Path di Kode React/Vite:** Semua file di dalam `public/assets/<nama-file>` diakses langsung melalui path `/assets/<nama-file>`.
+> **Cara ganti gambar nanti:** cukup taruh gambar baru di `public/assets/<nama-file>`, lalu ganti nilai `heroMain` di `src/config/assets.ts` menjadi `"/assets/<nama-file>"` (atau langsung minta saya pasangkan).
