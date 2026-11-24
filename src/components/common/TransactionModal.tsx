@@ -248,7 +248,13 @@ export const TransactionModal: React.FC = () => {
             <label className="block font-mono text-[10px] font-semibold tracking-[0.16em] text-[#5d5370] uppercase">
               {t.txModal.category}
             </label>
-            <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+            <div
+              className={`mt-2 grid gap-1.5 ${
+                filteredCategories.length <= 2
+                  ? "grid-cols-2"
+                  : "grid-cols-2 sm:grid-cols-3"
+              }`}
+            >
               {filteredCategories.map((c) => {
                 const selected = categoryId === c.id;
                 return (

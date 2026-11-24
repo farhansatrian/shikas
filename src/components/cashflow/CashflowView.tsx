@@ -558,114 +558,134 @@ export const CashflowView: React.FC = () => {
       />
 
       {/* =====================================================================
-          3. ZERO-CARD EDITORIAL TIMELINE (Authentic tuyu.moe / SHIZUKU Style)
+          3. HIGH-CONTRAST SHIZUKU RPG LOG WINDOW (Readable on Pink Watercolor)
          ===================================================================== */}
-      <section className="pt-2">
-        {/* Authentic tuyu.moe Pipe-Separated Serif Tabs + Minimal Search */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <ul className="flex max-w-full flex-nowrap items-center overflow-x-auto no-scrollbar">
-            {(["all", "income", "expense"] as const).map((tab, idx) => {
-              const active = typeFilter === tab;
-              const label =
-                tab === "all"
-                  ? t.cashflow.all
-                  : tab === "income"
-                    ? t.cashflow.income
-                    : t.cashflow.expense;
-              return (
-                <li
-                  key={tab}
-                  className={`shrink-0 border-r border-[#745bc7] ${
-                    idx === 0 ? "border-l" : ""
-                  }`}
-                >
-                  <button
-                    type="button"
-                    onClick={() => handleSetTypeFilter(tab)}
-                    className={`whitespace-nowrap px-3.5 py-0.5 font-editorial text-xs tracking-[0.2em] uppercase transition sm:px-5 sm:text-[13px] ${
-                      active
-                        ? "font-bold text-[#745bc7]"
-                        : "font-normal text-[#745bc7]/60 hover:text-[#d749d5]"
-                    }`}
-                  >
-                    {active ? `▶ ${label}` : label}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-
-          {/* Sharp Minimal Search Input */}
-          <div className="flex items-center gap-2 border-b border-[#745bc7]/55 bg-white/50 px-2.5 py-1.5 backdrop-blur-xs transition focus-within:border-[#745bc7] focus-within:bg-white/85 sm:w-64">
-            <Search className="h-3.5 w-3.5 shrink-0 text-[#745bc7]" />
-            <input
-              type="text"
-              placeholder={t.cashflow.searchPlaceholder}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="w-full bg-transparent font-mono text-[11px] text-[#14100e] outline-none placeholder:text-[#5d5370]/75"
-            />
-            {query && (
-              <button
-                type="button"
-                onClick={() => setQuery("")}
-                aria-label="Clear search"
-                className="text-[#5d5370] hover:text-[#14100e]"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
+      <section className="vn-frame overflow-hidden">
+        {/* Vivid Watercolor Band Header Strip */}
+        <div className="shikas-band-strip flex flex-wrap items-center justify-between gap-2 px-4 py-2 text-white">
+          <span className="font-mono text-[10px] font-semibold tracking-[0.2em] uppercase drop-shadow-2xs">
+            {locale === "id" ? "RIWAYAT ARUS KAS // 雫" : "CASHFLOW LOG // 雫"}
+          </span>
+          <span className="font-mono text-[10px] tracking-[0.14em] text-white/95 uppercase drop-shadow-2xs">
+            {filteredTransactions.length} {t.cashflow.entriesCount}
+          </span>
         </div>
 
-        {/* Minimal Sharp Category Index Strip (No Rounded Pills) */}
-        {activeMonthCategoryIds.length > 0 && (
-          <div className="mt-3.5 flex items-center gap-x-3 gap-y-1.5 overflow-x-auto pb-1 no-scrollbar sm:flex-wrap sm:overflow-visible">
-            <button
-              type="button"
-              onClick={() => setCategoryFilter("all")}
-              className={`shrink-0 border-b pb-0.5 font-mono text-[10px] tracking-[0.14em] uppercase transition ${
-                categoryFilter === "all"
-                  ? "border-[#745bc7] font-bold text-[#745bc7]"
-                  : "border-transparent text-[#5d5370] hover:text-[#14100e]"
-              }`}
-            >
-              [{t.cashflow.allCategories}]
-            </button>
-            {activeMonthCategoryIds.map((catId) => {
-              const cat = CATEGORY_MAP[catId];
-              const active = categoryFilter === catId;
-              return (
+        {/* High-Contrast Paper Filter Bar */}
+        <div className="bg-[#fdf9ff]/94 px-4 pt-4 pb-3 sm:px-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            {/* Authentic tuyu.moe Pipe-Separated Serif Tabs (Solid High-Contrast Ink) */}
+            <ul className="flex max-w-full flex-nowrap items-center overflow-x-auto no-scrollbar">
+              {(["all", "income", "expense"] as const).map((tab, idx) => {
+                const active = typeFilter === tab;
+                const label =
+                  tab === "all"
+                    ? t.cashflow.all
+                    : tab === "income"
+                      ? t.cashflow.income
+                      : t.cashflow.expense;
+                return (
+                  <li
+                    key={tab}
+                    className={`shrink-0 border-r border-[#745bc7] ${
+                      idx === 0 ? "border-l" : ""
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleSetTypeFilter(tab)}
+                      className={`whitespace-nowrap px-3.5 py-0.5 font-editorial text-xs tracking-[0.2em] uppercase transition sm:px-5 sm:text-[13px] ${
+                        active
+                          ? "bg-[#745bc7]/12 font-bold text-[#5237a8]"
+                          : "font-semibold text-[#4a3e63] hover:text-[#b8339f]"
+                      }`}
+                    >
+                      {active ? `▶ ${label}` : label}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+
+            {/* Crisp High-Contrast Search Input */}
+            <div className="flex items-center gap-2 border border-[#745bc7]/55 bg-white px-2.5 py-1.5 transition focus-within:border-[#745bc7] sm:w-64">
+              <Search className="h-3.5 w-3.5 shrink-0 text-[#5a3fb5]" />
+              <input
+                type="text"
+                placeholder={t.cashflow.searchPlaceholder}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                className="w-full bg-transparent font-mono text-[11px] text-[#14100e] outline-none placeholder:text-[#5d5370]"
+              />
+              {query && (
                 <button
-                  key={catId}
                   type="button"
-                  onClick={() => setCategoryFilter(active ? "all" : catId)}
-                  className={`inline-flex shrink-0 items-center gap-1.5 border-b pb-0.5 font-mono text-[10px] tracking-[0.1em] uppercase transition ${
-                    active
-                      ? "border-[#d749d5] font-bold text-[#14100e]"
-                      : "border-transparent text-[#5d5370] hover:text-[#745bc7]"
-                  }`}
+                  onClick={() => setQuery("")}
+                  aria-label="Clear search"
+                  className="text-[#4a3e63] hover:text-[#14100e]"
                 >
-                  <span
-                    className="h-1.5 w-1.5"
-                    style={{ backgroundColor: cat?.color ?? "#745bc7" }}
-                  />
-                  {getCategoryLabel(catId, locale)}
+                  <X className="h-3.5 w-3.5" />
                 </button>
-              );
-            })}
+              )}
+            </div>
           </div>
-        )}
 
-        <div className="tuyu-raindrop-divider my-5" />
+          {/* Crisp Category Filter Bar */}
+          {activeMonthCategoryIds.length > 0 && (
+            <div className="mt-3 flex items-center gap-x-3 gap-y-1.5 overflow-x-auto pb-0.5 no-scrollbar sm:flex-wrap sm:overflow-visible">
+              <button
+                type="button"
+                onClick={() => setCategoryFilter("all")}
+                className={`shrink-0 border-b-2 pb-0.5 font-mono text-[10px] tracking-[0.14em] uppercase transition ${
+                  categoryFilter === "all"
+                    ? "border-[#5a3fb5] font-bold text-[#5a3fb5]"
+                    : "border-transparent font-medium text-[#4a3e63] hover:text-[#14100e]"
+                }`}
+              >
+                [{t.cashflow.allCategories}]
+              </button>
+              {activeMonthCategoryIds.map((catId) => {
+                const cat = CATEGORY_MAP[catId];
+                const active = categoryFilter === catId;
+                const baseLabel = getCategoryLabel(catId, locale);
+                const chipLabel =
+                  typeFilter === "all" && catId === "other_income"
+                    ? `${baseLabel} (+)`
+                    : typeFilter === "all" && catId === "other_expense"
+                      ? `${baseLabel} (-)`
+                      : baseLabel;
+                return (
+                  <button
+                    key={catId}
+                    type="button"
+                    onClick={() => setCategoryFilter(active ? "all" : catId)}
+                    className={`inline-flex shrink-0 items-center gap-1.5 border-b-2 pb-0.5 font-mono text-[10px] tracking-[0.1em] uppercase transition ${
+                      active
+                        ? "border-[#b8339f] font-bold text-[#14100e]"
+                        : "border-transparent font-medium text-[#4a3e63] hover:text-[#5a3fb5]"
+                    }`}
+                  >
+                    <span
+                      className="h-2 w-2"
+                      style={{ backgroundColor: cat?.color ?? "#745bc7" }}
+                    />
+                    {chipLabel}
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
-        {/* Entries Stream Directly Over Pink Watercolor Backdrop */}
+          <div className="tuyu-raindrop-divider mt-3.5" />
+        </div>
+
+        {/* High-Contrast Entries Stream */}
         {groupedByDate.length === 0 ? (
-          <div className="vn-frame-subtle px-6 py-14 text-center">
-            <p className="font-editorial text-lg font-semibold tracking-[0.14em] text-[#745bc7] uppercase">
+          <div className="bg-[#fdf9ff]/94 px-6 py-14 text-center">
+            <p className="font-editorial text-lg font-semibold tracking-[0.14em] text-[#5a3fb5] uppercase">
               {t.cashflow.emptyTitle}
             </p>
-            <p className="mt-1.5 font-mono text-xs text-[#5d5370]">
+            <p className="mt-1.5 font-mono text-xs text-[#4a3e63]">
               {t.cashflow.emptyDesc}
             </p>
             <div className="mt-5 flex flex-wrap justify-center gap-3">
@@ -702,47 +722,50 @@ export const CashflowView: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div className="space-y-6">
-            {groupedByDate.map(([dateIso, group]) => (
-              <div key={dateIso}>
-                {/* Date Editorial Heading */}
-                <div className="flex items-baseline justify-between gap-2 pb-1.5">
-                  <span className="font-mono text-[11px] font-semibold tracking-[0.18em] text-[#745bc7] uppercase">
+          <div className="bg-[#fdf9ff]/94">
+            {groupedByDate.map(([dateIso, group], groupIdx) => (
+              <div
+                key={dateIso}
+                className={groupIdx > 0 ? "border-t border-[#745bc7]/25" : ""}
+              >
+                {/* Solid High-Contrast Date Strip */}
+                <div className="flex items-baseline justify-between gap-2 bg-[#ede4fc]/85 px-4 py-1.5 sm:px-5">
+                  <span className="font-mono text-[11px] font-bold tracking-[0.16em] text-[#4c339c] uppercase">
                     {formatDateHeading(dateIso, locale)}
                   </span>
                   <MoneyDisplay
                     amountIdr={group.dailyNet}
                     showSign
-                    className={`text-[11px] font-semibold ${
-                      group.dailyNet >= 0 ? "text-[#2276a8]" : "text-[#c837a5]"
+                    className={`text-[11px] font-bold ${
+                      group.dailyNet >= 0 ? "text-[#175e8a]" : "text-[#a82387]"
                     }`}
                   />
                 </div>
 
-                {/* Transparent Sharp Timeline Rows */}
-                <ul className="divide-y divide-[#745bc7]/20 border-t border-b border-[#745bc7]/30 bg-[#fdf9ff]/52 backdrop-blur-xs">
+                {/* High-Contrast Transaction Rows */}
+                <ul className="divide-y divide-[#745bc7]/16 bg-white/90">
                   {group.items.map((tx) => {
                     const cat = CATEGORY_MAP[tx.categoryId];
                     const isIncome = tx.type === "income";
-                    const accent = isIncome ? "#2276a8" : "#d749d5";
+                    const accent = isIncome ? "#1b6999" : "#b8339f";
 
                     return (
                       <li
                         key={tx.id}
-                        className="group relative flex items-center justify-between gap-3 px-3.5 py-3 transition hover:bg-[#fdf9ff]/92 sm:px-4"
+                        className="group relative flex items-center justify-between gap-3 px-4 py-3 transition hover:bg-[#f4eeff] sm:px-5"
                       >
                         {/* Sharp Left Type Bar */}
                         <span
-                          className="absolute top-0 bottom-0 left-0 w-[3px] opacity-65 transition group-hover:opacity-100"
+                          className="absolute top-0 bottom-0 left-0 w-[3px] opacity-80 transition group-hover:opacity-100"
                           style={{ backgroundColor: accent }}
                           aria-hidden="true"
                         />
 
                         <div className="flex min-w-0 items-center gap-3 pl-1">
                           <span
-                            className="flex h-8 w-8 shrink-0 items-center justify-center border bg-white/80"
+                            className="flex h-8 w-8 shrink-0 items-center justify-center border bg-[#fdf9ff]"
                             style={{
-                              borderColor: `${accent}55`,
+                              borderColor: `${accent}70`,
                               color: accent,
                             }}
                           >
@@ -759,7 +782,7 @@ export const CashflowView: React.FC = () => {
                               </span>
                               <span className="truncate">{tx.note}</span>
                             </p>
-                            <p className="mt-0.5 truncate font-mono text-[10px] tracking-[0.06em] text-[#5d5370]">
+                            <p className="mt-0.5 truncate font-mono text-[11px] text-[#4e4361]">
                               {getCategoryLabel(tx.categoryId, locale)}
                               {tx.merchant ? ` · ${tx.merchant}` : ""}
                             </p>
@@ -771,16 +794,16 @@ export const CashflowView: React.FC = () => {
                             amountIdr={isIncome ? tx.amountIdr : -tx.amountIdr}
                             showSign
                             className={`text-sm font-bold ${
-                              isIncome ? "text-[#2276a8]" : "text-[#14100e]"
+                              isIncome ? "text-[#175e8a]" : "text-[#14100e]"
                             }`}
                           />
 
-                          <div className="flex items-center gap-0.5 sm:opacity-35 sm:transition sm:group-hover:opacity-100">
+                          <div className="flex items-center gap-0.5 sm:opacity-60 sm:transition sm:group-hover:opacity-100">
                             <button
                               type="button"
                               onClick={() => openEditTxModal(tx)}
                               aria-label={t.actions.edit}
-                              className="border border-transparent p-1.5 text-[#5d5370] transition hover:border-[#745bc7]/50 hover:bg-white hover:text-[#745bc7]"
+                              className="border border-transparent p-1.5 text-[#4e4361] transition hover:border-[#745bc7]/60 hover:bg-white hover:text-[#5a3fb5]"
                             >
                               <Pencil className="h-3.5 w-3.5" />
                             </button>
@@ -788,7 +811,7 @@ export const CashflowView: React.FC = () => {
                               type="button"
                               onClick={() => duplicateTransaction(tx)}
                               aria-label={t.actions.duplicate}
-                              className="border border-transparent p-1.5 text-[#5d5370] transition hover:border-[#745bc7]/50 hover:bg-white hover:text-[#745bc7]"
+                              className="border border-transparent p-1.5 text-[#4e4361] transition hover:border-[#745bc7]/60 hover:bg-white hover:text-[#5a3fb5]"
                             >
                               <Copy className="h-3.5 w-3.5" />
                             </button>
@@ -796,7 +819,7 @@ export const CashflowView: React.FC = () => {
                               type="button"
                               onClick={() => deleteTransaction(tx.id)}
                               aria-label={t.actions.delete}
-                              className="border border-transparent p-1.5 text-[#5d5370] transition hover:border-[#c837a5]/50 hover:bg-white hover:text-[#c837a5]"
+                              className="border border-transparent p-1.5 text-[#4e4361] transition hover:border-[#b8339f]/60 hover:bg-white hover:text-[#b8339f]"
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </button>

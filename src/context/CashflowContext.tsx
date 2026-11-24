@@ -14,6 +14,7 @@ import type {
   Transaction,
   TransactionType,
 } from "../types/cashflow";
+import { normalizeCategoryId } from "../data/categories";
 import { createDemoSeedData, createFreshEmptyData } from "../data/seedData";
 import { getMonthKey } from "../utils/format";
 import { TRANSLATIONS, type TranslationDict } from "../i18n/translations";
@@ -36,7 +37,10 @@ function loadStoreFromStorage(): CashflowStoreData {
     const defaults = createDemoSeedData().settings;
     return {
       version: 4,
-      transactions: parsed.transactions,
+      transactions: parsed.transactions.map((tx) => ({
+        ...tx,
+        categoryId: normalizeCategoryId(tx.categoryId, tx.type),
+      })),
       settings: {
         ...defaults,
         ...(parsed.settings ?? {}),
@@ -279,7 +283,14 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const importStoreData = useCallback(
     (data: CashflowStoreData) => {
-      setStore(data);
+      const normalized: CashflowStoreData = {
+        ...data,
+        transactions: data.transactions.map((tx) => ({
+          ...tx,
+          categoryId: normalizeCategoryId(tx.categoryId, tx.type),
+        })),
+      };
+      setStore(normalized);
       notify(TRANSLATIONS[data.settings.locale].settings.importSuccess, "success");
     },
     [notify]
