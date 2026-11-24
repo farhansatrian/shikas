@@ -12,10 +12,10 @@ interface VnDialogueBoxProps {
 }
 
 const MOOD_TAG: Record<VesselMood, { en: string; id: string; color: string }> = {
-  calm: { en: "CALM", id: "TENANG", color: "#2276a8" },
-  balanced: { en: "STEADY", id: "STABIL", color: "#745bc7" },
-  drained: { en: "DRAINED", id: "DERAS", color: "#c837a5" },
-  quiet: { en: "QUIET", id: "SEPI", color: "#5d5370" },
+  calm: { en: "HEALTHY", id: "AMAN", color: "#2276a8" },
+  balanced: { en: "MODERATE", id: "CUKUP", color: "#745bc7" },
+  drained: { en: "TIGHT", id: "MENIPIS", color: "#c837a5" },
+  quiet: { en: "EMPTY", id: "KOSONG", color: "#5d5370" },
 };
 
 export const VnDialogueBox: React.FC<VnDialogueBoxProps> = ({

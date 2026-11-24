@@ -1,18 +1,21 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef } from "react";
 import { SHIKAS_ASSETS } from "../../config/assets";
 import type { TxBurstEvent } from "../../context/CashflowContext";
 import type { Locale } from "../../types/cashflow";
+import { formatCompactIdr } from "../../utils/format";
 
 export type VesselMood = "calm" | "balanced" | "drained" | "quiet";
 
 interface RaindropVesselProps {
   savedRatio: number;
+  incomeIdr: number;
+  netCashflowIdr: number;
+  privacyMode: boolean;
   hasData: boolean;
   isDeficit: boolean;
   mood: VesselMood;
   locale: Locale;
   burstEvent: TxBurstEvent | null;
-  onUserRipple?: () => void;
 }
 
 interface DropParticle {
@@ -54,50 +57,56 @@ interface Bubble {
 
 const MOOD_LABELS: Record<
   VesselMood,
-  { en: string; id: string; jp: string; dotColor: string }
+  { en: string; id: string; dotColor: string }
 > = {
   calm: {
-    en: "CALM DRIZZLE",
-    id: "GERIMIS TENANG",
-    jp: "穏",
+    en: "HEALTHY",
+    id: "AMAN",
     dotColor: "#7dd3fc",
   },
   balanced: {
-    en: "STEADY SHOWER",
-    id: "HUJAN TERATUR",
-    jp: "時雨",
+    en: "MODERATE",
+    id: "CUKUP",
     dotColor: "#e5dcfb",
   },
   drained: {
-    en: "MAGENTA DOWNPOUR",
-    id: "HUJAN DERAS",
-    jp: "豪雨",
+    en: "TIGHT",
+    id: "MENIPIS",
     dotColor: "#ff9ef5",
   },
   quiet: {
-    en: "STILL VESSEL",
-    id: "WADAH TENANG",
-    jp: "静",
+    en: "EMPTY",
+    id: "KOSONG",
     dotColor: "#ffffff",
   },
 };
 
+const SKY_TOP_PAD = 88;
+const FLOOR_BOTTOM_PAD = 12;
+
+function pctToCanvasY(pct: number, height: number): number {
+  const usable = Math.max(80, height - SKY_TOP_PAD - FLOOR_BOTTOM_PAD);
+  const clamped = Math.max(0, Math.min(100, pct));
+  return height - FLOOR_BOTTOM_PAD - (clamped / 100) * usable;
+}
+
 export const RaindropVessel: React.FC<RaindropVesselProps> = ({
   savedRatio,
+  incomeIdr,
+  netCashflowIdr,
+  privacyMode,
   hasData,
   isDeficit,
   mood,
   locale,
   burstEvent,
-  onUserRipple,
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [rippleCount, setRippleCount] = useState(0);
 
-  // Mutable simulation refs so React re-renders never reset wave motion
-  const targetRatioRef = useRef(0.5);
-  const currentRatioRef = useRef(0.35);
+  // Store exact percentage (0..100) so water crest matches 100%/75%/50%/25% ticks accurately
+  const targetPctRef = useRef(0);
+  const currentPctRef = useRef(0);
   const waveEnergyRef = useRef(0.35);
   const moodRef = useRef<VesselMood>(mood);
   const isDeficitRef = useRef(isDeficit);
@@ -110,17 +119,16 @@ export const RaindropVessel: React.FC<RaindropVesselProps> = ({
   useEffect(() => {
     moodRef.current = mood;
     isDeficitRef.current = isDeficit;
-    if (!hasData) {
-      targetRatioRef.current = 0.14;
+    if (!hasData || incomeIdr <= 0) {
+      targetPctRef.current = 0;
     } else if (isDeficit) {
-      targetRatioRef.current = 0.13;
+      targetPctRef.current = 4;
     } else {
-      // Visual fill gracefully spans 18%..82% so umbrella & sky always have room
-      targetRatioRef.current = 0.18 + (Math.max(0, Math.min(100, savedRatio)) / 100) * 0.64;
+      targetPctRef.current = Math.max(0, Math.min(100, savedRatio));
     }
-  }, [savedRatio, hasData, isDeficit, mood]);
+  }, [savedRatio, incomeIdr, hasData, isDeficit, mood]);
 
-  // Trigger dramatic silent visual droplet burst when user saves/duplicates an entry
+  // Silent visual droplet burst when user saves/duplicates an entry
   useEffect(() => {
     if (!burstEvent || burstEvent.id === lastBurstIdRef.current) return;
     lastBurstIdRef.current = burstEvent.id;
@@ -128,47 +136,45 @@ export const RaindropVessel: React.FC<RaindropVesselProps> = ({
     const canvas = canvasRef.current;
     const width = canvas ? canvas.clientWidth : 300;
     const height = canvas ? canvas.clientHeight : 280;
-    const waterY = height * (1 - currentRatioRef.current);
+    const waterY = pctToCanvasY(currentPctRef.current, height);
 
     if (burstEvent.type === "income") {
-      // Celebratory rain-blue drops pouring in
       for (let i = 0; i < 14; i++) {
         dropsRef.current.push({
           x: width * (0.14 + Math.random() * 0.72),
-          y: -10 - Math.random() * 90,
-          vy: 4.2 + Math.random() * 2.8,
+          y: -10 - Math.random() * 80,
+          vy: 4.2 + Math.random() * 2.6,
           vx: 0,
-          len: 14 + Math.random() * 12,
+          len: 14 + Math.random() * 10,
           color: i % 2 === 0 ? "#2276a8" : "#569fd4",
           alpha: 0.9,
           isBurst: true,
         });
       }
-      waveEnergyRef.current = Math.min(2.6, waveEnergyRef.current + 1.3);
+      waveEnergyRef.current = Math.min(2.5, waveEnergyRef.current + 1.25);
     } else {
-      // Vivid magenta splash rising from the water surface
       for (let i = 0; i < 14; i++) {
         const sx = width * (0.18 + Math.random() * 0.64);
         splashesRef.current.push({
           x: sx,
           y: waterY,
           vx: (Math.random() - 0.5) * 2.8,
-          vy: -(1.8 + Math.random() * 2.6),
-          r: 2 + Math.random() * 2.2,
+          vy: -(1.8 + Math.random() * 2.4),
+          r: 2 + Math.random() * 2,
           color: i % 2 === 0 ? "#d749d5" : "#ef85e8",
-          alpha: 0.92,
+          alpha: 0.9,
         });
       }
       for (let i = 0; i < 3; i++) {
         ripplesRef.current.push({
           x: width * (0.25 + i * 0.25),
           rx: 6,
-          maxRx: 52 + Math.random() * 24,
+          maxRx: 50 + Math.random() * 22,
           color: "#d749d5",
-          alpha: 0.85,
+          alpha: 0.82,
         });
       }
-      waveEnergyRef.current = Math.min(2.8, waveEnergyRef.current + 1.5);
+      waveEnergyRef.current = Math.min(2.6, waveEnergyRef.current + 1.4);
     }
   }, [burstEvent]);
 
@@ -191,7 +197,7 @@ export const RaindropVessel: React.FC<RaindropVesselProps> = ({
     const resize = () => {
       const rect = container.getBoundingClientRect();
       width = Math.max(180, Math.floor(rect.width));
-      height = Math.max(220, Math.floor(rect.height));
+      height = Math.max(230, Math.floor(rect.height));
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       canvas.width = Math.floor(width * dpr);
       canvas.height = Math.floor(height * dpr);
@@ -204,15 +210,14 @@ export const RaindropVessel: React.FC<RaindropVesselProps> = ({
     const ro = new ResizeObserver(resize);
     ro.observe(container);
 
-    // Seed gentle bubbles
     if (bubblesRef.current.length === 0) {
-      for (let i = 0; i < 10; i++) {
+      for (let i = 0; i < 9; i++) {
         bubblesRef.current.push({
           x: Math.random() * width,
-          y: height * (0.55 + Math.random() * 0.42),
-          r: 1.2 + Math.random() * 2.2,
-          vy: 0.22 + Math.random() * 0.38,
-          alpha: 0.2 + Math.random() * 0.35,
+          y: height * (0.6 + Math.random() * 0.36),
+          r: 1.2 + Math.random() * 2,
+          vy: 0.22 + Math.random() * 0.34,
+          alpha: 0.2 + Math.random() * 0.3,
         });
       }
     }
@@ -224,33 +229,32 @@ export const RaindropVessel: React.FC<RaindropVesselProps> = ({
     const drawFrame = () => {
       ctx.clearRect(0, 0, width, height);
 
-      // Smoothly interpolate fill level & wave energy
-      currentRatioRef.current +=
-        (targetRatioRef.current - currentRatioRef.current) * (reducedMotion ? 0.25 : 0.045);
-      waveEnergyRef.current += (0.45 - waveEnergyRef.current) * 0.025;
+      currentPctRef.current +=
+        (targetPctRef.current - currentPctRef.current) * (reducedMotion ? 0.3 : 0.05);
+      waveEnergyRef.current += (0.4 - waveEnergyRef.current) * 0.025;
 
-      const waterY = height * (1 - currentRatioRef.current);
+      const waterY = pctToCanvasY(currentPctRef.current, height);
       const currentMood = moodRef.current;
       const deficit = isDeficitRef.current;
 
-      // Subtle atmospheric inner sky wash (matches SHIZUKU lavender/pink watercolor)
+      // Atmospheric lavender sky backdrop inside the tank
       const skyGrad = ctx.createLinearGradient(0, 0, 0, height);
-      skyGrad.addColorStop(0, "rgba(239, 233, 253, 0.52)");
-      skyGrad.addColorStop(0.65, "rgba(253, 244, 252, 0.25)");
-      skyGrad.addColorStop(1, "rgba(229, 220, 251, 0.4)");
+      skyGrad.addColorStop(0, "rgba(239, 233, 253, 0.5)");
+      skyGrad.addColorStop(0.65, "rgba(253, 244, 252, 0.22)");
+      skyGrad.addColorStop(1, "rgba(229, 220, 251, 0.35)");
       ctx.fillStyle = skyGrad;
       ctx.fillRect(0, 0, width, height);
 
-      // Spawn ambient falling raindrop streaks based on current mood
+      // Ambient falling rain streaks
       if (!reducedMotion) {
         const spawnRate =
           currentMood === "drained"
-            ? 0.24
+            ? 0.22
             : currentMood === "balanced"
-              ? 0.12
+              ? 0.11
               : currentMood === "calm"
-                ? 0.075
-                : 0.04;
+                ? 0.07
+                : 0.035;
         spawnAccumulator += spawnRate;
         while (spawnAccumulator >= 1) {
           spawnAccumulator -= 1;
@@ -259,10 +263,10 @@ export const RaindropVessel: React.FC<RaindropVesselProps> = ({
             y: -16,
             vy:
               currentMood === "drained"
-                ? 5.0 + Math.random() * 2.4
-                : 3.0 + Math.random() * 1.8,
-            vx: currentMood === "drained" ? -0.65 : 0,
-            len: currentMood === "drained" ? 18 + Math.random() * 10 : 12 + Math.random() * 9,
+                ? 4.8 + Math.random() * 2.2
+                : 2.9 + Math.random() * 1.7,
+            vx: currentMood === "drained" ? -0.55 : 0,
+            len: currentMood === "drained" ? 16 + Math.random() * 9 : 11 + Math.random() * 8,
             color:
               currentMood === "drained"
                 ? Math.random() > 0.35
@@ -271,12 +275,12 @@ export const RaindropVessel: React.FC<RaindropVesselProps> = ({
                 : Math.random() > 0.3
                   ? "#2276a8"
                   : "#745bc7",
-            alpha: currentMood === "drained" ? 0.62 : 0.5,
+            alpha: currentMood === "drained" ? 0.6 : 0.48,
           });
         }
       }
 
-      // Draw & update falling raindrops
+      // Update & draw falling raindrops
       const nextDrops: DropParticle[] = [];
       for (const drop of dropsRef.current) {
         if (!reducedMotion) {
@@ -285,35 +289,21 @@ export const RaindropVessel: React.FC<RaindropVesselProps> = ({
         }
 
         if (drop.y >= waterY) {
-          // Spawn surface ripple + subtle beads
           ripplesRef.current.push({
             x: drop.x,
             rx: 2,
-            maxRx: drop.isBurst ? 34 : 20,
+            maxRx: drop.isBurst ? 34 : 18,
             color: drop.color,
-            alpha: drop.isBurst ? 0.78 : 0.52,
+            alpha: drop.isBurst ? 0.78 : 0.48,
           });
-          if (drop.isBurst) {
-            for (let b = 0; b < 2; b++) {
-              splashesRef.current.push({
-                x: drop.x,
-                y: waterY,
-                vx: (Math.random() - 0.5) * 2.1,
-                vy: -(1.2 + Math.random() * 1.6),
-                r: 1.6,
-                color: drop.color,
-                alpha: 0.85,
-              });
-            }
-          }
-          waveEnergyRef.current = Math.min(2.4, waveEnergyRef.current + (drop.isBurst ? 0.08 : 0.02));
+          waveEnergyRef.current = Math.min(2.3, waveEnergyRef.current + (drop.isBurst ? 0.08 : 0.018));
           continue;
         }
 
         ctx.save();
         ctx.strokeStyle = drop.color;
         ctx.globalAlpha = drop.alpha;
-        ctx.lineWidth = drop.isBurst ? 1.6 : 1.1;
+        ctx.lineWidth = drop.isBurst ? 1.5 : 1.05;
         ctx.beginPath();
         ctx.moveTo(drop.x, drop.y - drop.len);
         ctx.lineTo(drop.x + drop.vx * 2, drop.y);
@@ -324,29 +314,35 @@ export const RaindropVessel: React.FC<RaindropVesselProps> = ({
           nextDrops.push(drop);
         }
       }
-      dropsRef.current = nextDrops.slice(-70);
+      dropsRef.current = nextDrops.slice(-65);
 
-      // Wave helper
-      const ampBase = (reducedMotion ? 2.5 : 3.2 + waveEnergyRef.current * 2.8);
+      // Wave helper anchored precisely at waterY
+      const ampBase =
+        currentPctRef.current <= 0.5
+          ? 0.8
+          : reducedMotion
+            ? 2.0
+            : 2.6 + waveEnergyRef.current * 2.4;
+
       const getWaveY = (x: number, phaseOffset: number, freq: number, ampScale: number) =>
         waterY +
-        Math.sin(x * freq + t * 0.032 + phaseOffset) * (ampBase * ampScale) +
-        Math.cos(x * freq * 1.7 - t * 0.021 + phaseOffset) * (ampBase * 0.42 * ampScale);
+        Math.sin(x * freq + t * 0.03 + phaseOffset) * (ampBase * ampScale) +
+        Math.cos(x * freq * 1.65 - t * 0.02 + phaseOffset) * (ampBase * 0.4 * ampScale);
 
-      // Back translucent iris/lavender wave
+      // Back translucent wave
       ctx.beginPath();
       ctx.moveTo(0, height);
       for (let x = 0; x <= width; x += 6) {
-        ctx.lineTo(x, getWaveY(x, 2.1, 0.022, 0.85));
+        ctx.lineTo(x, getWaveY(x, 2.0, 0.022, 0.85));
       }
       ctx.lineTo(width, height);
       ctx.closePath();
       ctx.fillStyle = deficit
-        ? "rgba(215, 73, 213, 0.26)"
-        : "rgba(116, 91, 199, 0.28)";
+        ? "rgba(215, 73, 213, 0.25)"
+        : "rgba(116, 91, 199, 0.25)";
       ctx.fill();
 
-      // Front primary SHIZUKU gradient water body
+      // Primary gradient water fill
       ctx.beginPath();
       ctx.moveTo(0, height);
       for (let x = 0; x <= width; x += 5) {
@@ -355,39 +351,39 @@ export const RaindropVessel: React.FC<RaindropVesselProps> = ({
       ctx.lineTo(width, height);
       ctx.closePath();
 
-      const waterGrad = ctx.createLinearGradient(0, waterY - 8, 0, height);
+      const waterGrad = ctx.createLinearGradient(0, waterY - 6, 0, height);
       if (deficit) {
-        waterGrad.addColorStop(0, "rgba(239, 133, 232, 0.68)");
-        waterGrad.addColorStop(0.5, "rgba(215, 73, 213, 0.62)");
-        waterGrad.addColorStop(1, "rgba(116, 91, 199, 0.72)");
+        waterGrad.addColorStop(0, "rgba(239, 133, 232, 0.66)");
+        waterGrad.addColorStop(0.55, "rgba(215, 73, 213, 0.6)");
+        waterGrad.addColorStop(1, "rgba(116, 91, 199, 0.7)");
       } else if (currentMood === "calm") {
-        waterGrad.addColorStop(0, "rgba(56, 152, 204, 0.56)");
-        waterGrad.addColorStop(0.48, "rgba(116, 91, 199, 0.58)");
-        waterGrad.addColorStop(1, "rgba(192, 92, 230, 0.52)");
+        waterGrad.addColorStop(0, "rgba(56, 152, 204, 0.54)");
+        waterGrad.addColorStop(0.5, "rgba(116, 91, 199, 0.56)");
+        waterGrad.addColorStop(1, "rgba(192, 92, 230, 0.5)");
       } else {
-        waterGrad.addColorStop(0, "rgba(116, 91, 199, 0.54)");
-        waterGrad.addColorStop(0.55, "rgba(192, 92, 230, 0.58)");
-        waterGrad.addColorStop(1, "rgba(215, 73, 213, 0.55)");
+        waterGrad.addColorStop(0, "rgba(116, 91, 199, 0.52)");
+        waterGrad.addColorStop(0.55, "rgba(192, 92, 230, 0.56)");
+        waterGrad.addColorStop(1, "rgba(215, 73, 213, 0.54)");
       }
       ctx.fillStyle = waterGrad;
       ctx.fill();
 
-      // Shimmering water surface crest line
+      // Shimmering surface crest line
       ctx.beginPath();
       for (let x = 0; x <= width; x += 5) {
         const y = getWaveY(x, 0, 0.026, 1);
         if (x === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.82)";
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
       ctx.lineWidth = 1.6;
       ctx.stroke();
 
-      // Subtle rising bubbles inside water
+      // Subtle rising bubbles
       for (const b of bubblesRef.current) {
         if (!reducedMotion) {
           b.y -= b.vy;
-          b.x += Math.sin(t * 0.02 + b.y * 0.05) * 0.18;
+          b.x += Math.sin(t * 0.02 + b.y * 0.05) * 0.16;
         }
         if (b.y < waterY + 8) {
           b.y = height - 4;
@@ -395,7 +391,7 @@ export const RaindropVessel: React.FC<RaindropVesselProps> = ({
         }
         if (b.y > waterY + 6 && b.y < height) {
           ctx.save();
-          ctx.strokeStyle = "rgba(255, 255, 255, 0.75)";
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.72)";
           ctx.globalAlpha = b.alpha;
           ctx.lineWidth = 1;
           ctx.beginPath();
@@ -405,7 +401,7 @@ export const RaindropVessel: React.FC<RaindropVesselProps> = ({
         }
       }
 
-      // Expanding water surface ripples
+      // Surface ripples
       const nextRipples: SurfaceRipple[] = [];
       for (const rip of ripplesRef.current) {
         if (!reducedMotion) {
@@ -425,7 +421,7 @@ export const RaindropVessel: React.FC<RaindropVesselProps> = ({
           nextRipples.push(rip);
         }
       }
-      ripplesRef.current = nextRipples.slice(-30);
+      ripplesRef.current = nextRipples.slice(-28);
 
       // Splash beads
       const nextSplashes: SplashBead[] = [];
@@ -447,27 +443,21 @@ export const RaindropVessel: React.FC<RaindropVesselProps> = ({
           nextSplashes.push(sp);
         }
       }
-      splashesRef.current = nextSplashes.slice(-40);
+      splashesRef.current = nextSplashes.slice(-36);
 
-      // Beaker graduation marks along right inner wall
+      // Accurate percentage scale ticks along right wall (100% / 75% / 50% / 25%)
       ctx.save();
-      ctx.strokeStyle = "rgba(116, 91, 199, 0.42)";
-      ctx.fillStyle = "rgba(93, 83, 112, 0.72)";
+      ctx.strokeStyle = "rgba(116, 91, 199, 0.36)";
+      ctx.fillStyle = "rgba(74, 62, 99, 0.78)";
       ctx.font = '500 9px "JetBrains Mono", monospace';
       ctx.textAlign = "right";
-      const ticks = [
-        { pct: 0.82, label: "100" },
-        { pct: 0.61, label: "75" },
-        { pct: 0.45, label: "50" },
-        { pct: 0.28, label: "25" },
-      ];
-      for (const tick of ticks) {
-        const ty = Math.round(height * (1 - tick.pct));
+      for (const pct of [100, 75, 50, 25]) {
+        const ty = Math.round(pctToCanvasY(pct, height));
         ctx.beginPath();
-        ctx.moveTo(width - 10, ty);
+        ctx.moveTo(width - 9, ty);
         ctx.lineTo(width, ty);
         ctx.stroke();
-        ctx.fillText(tick.label, width - 13, ty + 3);
+        ctx.fillText(`${pct}%`, width - 12, ty + 3);
       }
       ctx.restore();
 
@@ -491,14 +481,13 @@ export const RaindropVessel: React.FC<RaindropVesselProps> = ({
     const rect = container.getBoundingClientRect();
     const clickX = Math.max(14, Math.min(rect.width - 14, e.clientX - rect.left));
     const clickY = Math.max(8, e.clientY - rect.top);
-    const waterY = rect.height * (1 - currentRatioRef.current);
+    const waterY = pctToCanvasY(currentPctRef.current, rect.height);
 
     if (clickY < waterY) {
-      // Drop from tap point down into water
       dropsRef.current.push({
         x: clickX,
         y: clickY,
-        vy: 5.4,
+        vy: 5.2,
         vx: 0,
         len: 16,
         color: isDeficit ? "#d749d5" : "#2276a8",
@@ -506,40 +495,54 @@ export const RaindropVessel: React.FC<RaindropVesselProps> = ({
         isBurst: true,
       });
     } else {
-      // Direct water surface ripple + splashes
       ripplesRef.current.push({
         x: clickX,
         rx: 4,
-        maxRx: 52,
+        maxRx: 48,
         color: isDeficit ? "#d749d5" : "#2276a8",
         alpha: 0.9,
       });
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < 4; i++) {
         splashesRef.current.push({
           x: clickX,
           y: waterY,
-          vx: (Math.random() - 0.5) * 2.6,
-          vy: -(1.4 + Math.random() * 2.2),
-          r: 1.8,
+          vx: (Math.random() - 0.5) * 2.4,
+          vy: -(1.3 + Math.random() * 2),
+          r: 1.7,
           color: i % 2 === 0 ? "#745bc7" : "#ef85e8",
-          alpha: 0.9,
+          alpha: 0.88,
         });
       }
     }
 
-    waveEnergyRef.current = Math.min(2.5, waveEnergyRef.current + 0.95);
-    setRippleCount((c) => c + 1);
-    onUserRipple?.();
+    waveEnergyRef.current = Math.min(2.4, waveEnergyRef.current + 0.9);
   };
 
   const moodMeta = MOOD_LABELS[mood];
+
+  const compactDetail = (() => {
+    if (!hasData || incomeIdr <= 0) {
+      return locale === "id" ? "Belum ada pemasukan" : "No income recorded yet";
+    }
+    if (privacyMode) {
+      return locale === "id" ? "Nominal disembunyikan" : "Amounts hidden";
+    }
+    if (isDeficit) {
+      return locale === "id"
+        ? `Lebih ${formatCompactIdr(Math.abs(netCashflowIdr), locale)} dari masuk`
+        : `Over income by ${formatCompactIdr(Math.abs(netCashflowIdr), locale)}`;
+    }
+    return locale === "id"
+      ? `${formatCompactIdr(netCashflowIdr, locale)} dari ${formatCompactIdr(incomeIdr, locale)}`
+      : `${formatCompactIdr(netCashflowIdr, locale)} of ${formatCompactIdr(incomeIdr, locale)}`;
+  })();
 
   return (
     <div className="vn-frame flex h-full flex-col overflow-hidden">
       {/* Vivid SHIZUKU Watercolor Band Header Strip */}
       <div className="shikas-band-strip flex items-center justify-between px-3.5 py-2 text-white">
-        <span className="font-mono text-[10px] font-semibold tracking-[0.2em] uppercase drop-shadow-2xs">
-          VESSEL // 雫
+        <span className="font-mono text-[10px] font-semibold tracking-[0.18em] uppercase drop-shadow-2xs">
+          {locale === "id" ? "SISA BULAN INI // 雫" : "SAVINGS LEVEL // 雫"}
         </span>
         <span className="inline-flex items-center gap-1.5 font-mono text-[10px] tracking-[0.14em] uppercase drop-shadow-2xs">
           <span
@@ -550,82 +553,46 @@ export const RaindropVessel: React.FC<RaindropVesselProps> = ({
         </span>
       </div>
 
-      {/* Interactive Canvas Chamber */}
+      {/* Interactive Water Tank Chamber */}
       <div
         ref={containerRef}
         onClick={handleVesselClick}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === " " || e.key === "Enter") {
-            e.preventDefault();
-            const w = containerRef.current?.clientWidth ?? 260;
-            dropsRef.current.push({
-              x: w * (0.25 + Math.random() * 0.5),
-              y: 20,
-              vy: 5.2,
-              vx: 0,
-              len: 16,
-              color: isDeficit ? "#d749d5" : "#2276a8",
-              alpha: 0.95,
-              isBurst: true,
-            });
-            waveEnergyRef.current = Math.min(2.5, waveEnergyRef.current + 0.9);
-            setRippleCount((c) => c + 1);
-            onUserRipple?.();
-          }
-        }}
-        aria-label={
+        className="group relative min-h-[250px] w-full flex-1 cursor-pointer select-none overflow-hidden sm:min-h-[290px]"
+        title={
           locale === "id"
-            ? "Wadah hujan interaktif — klik untuk menjatuhkan tetesan"
-            : "Interactive raindrop vessel — click to drop a ripple"
+            ? "Tinggi air menunjukkan sisa pemasukan bulan ini"
+            : "Water height shows how much of this month's income remains"
         }
-        className="relative min-h-[250px] w-full flex-1 cursor-crosshair select-none overflow-hidden sm:min-h-[300px]"
       >
         <canvas ref={canvasRef} className="block h-full w-full" />
 
-        {/* Gently Floating SHIZUKU Watercolor Umbrella */}
-        <div className="pointer-events-none absolute inset-x-0 top-5 flex justify-center">
+        {/* Gently Floating SHIZUKU Watercolor Umbrella in dedicated sky zone */}
+        <div className="pointer-events-none absolute inset-x-0 top-3 flex justify-center">
           <img
             src={SHIKAS_ASSETS.umbrella}
             alt="SHIZUKU umbrella"
-            className="animate-umbrella-float h-20 w-auto opacity-90 drop-shadow-[0_6px_14px_rgba(116,91,199,0.22)] sm:h-24"
+            className="animate-umbrella-float h-16 w-auto opacity-92 drop-shadow-[0_6px_12px_rgba(116,91,199,0.2)] sm:h-[72px]"
           />
         </div>
 
-        {/* Crisp Corner Reserve Readout */}
-        <div className="pointer-events-none absolute bottom-3 left-3 border border-[#745bc7]/50 bg-[#fdf9ff]/88 px-2.5 py-1 backdrop-blur-xs">
-          <p className="font-mono text-[9px] tracking-[0.16em] text-[#5d5370] uppercase">
-            {isDeficit
-              ? locale === "id"
-                ? "STATUS"
-                : "STATUS"
-              : locale === "id"
-                ? "CADANGAN"
-                : "RESERVE"}
-          </p>
+        {/* Crystal-Clear Human-Readable Savings Readout */}
+        <div className="pointer-events-none absolute bottom-3 left-3 max-w-[calc(100%-24px)] border border-[#745bc7]/50 bg-[#fdf9ff]/92 px-3 py-1.5 backdrop-blur-xs">
           <p
             className={`font-mono-num text-sm font-bold leading-tight ${
-              isDeficit ? "text-[#c837a5]" : "text-[#745bc7]"
+              isDeficit ? "text-[#c837a5]" : "text-[#14100e]"
             }`}
           >
             {isDeficit
               ? locale === "id"
                 ? "DEFISIT"
                 : "DEFICIT"
-              : `${savedRatio.toFixed(0)}%`}
+              : !hasData || incomeIdr <= 0
+                ? "0%"
+                : `${savedRatio.toFixed(0)}% ${locale === "id" ? "TERSISA" : "SAVED"}`}
           </p>
-        </div>
-
-        {/* Subtle Interactive Hint */}
-        <div className="pointer-events-none absolute right-3 bottom-3 bg-[#14100e]/65 px-2 py-0.5 font-mono text-[9px] tracking-[0.14em] text-white/95 uppercase">
-          {rippleCount > 0
-            ? locale === "id"
-              ? `RIAK ×${rippleCount}`
-              : `RIPPLE ×${rippleCount}`
-            : locale === "id"
-              ? "KLIK AIR"
-              : "TAP WATER"}
+          <p className="mt-0.5 font-mono text-[10px] text-[#5d5370]">
+            {compactDetail}
+          </p>
         </div>
       </div>
     </div>

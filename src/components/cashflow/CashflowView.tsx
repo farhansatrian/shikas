@@ -79,9 +79,6 @@ export const CashflowView: React.FC = () => {
     openEditTxModal,
     duplicateTransaction,
     deleteTransaction,
-    isTxModalOpen,
-    isAuthModalOpen,
-    isAccountPanelOpen,
     lastTxEvent,
   } = useCashflow();
 
@@ -89,7 +86,6 @@ export const CashflowView: React.FC = () => {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [isCatMenuOpen, setCatMenuOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [selectedCmd, setSelectedCmd] = useState(0);
   const [dialogueIdx, setDialogueIdx] = useState(0);
   const catMenuRef = useRef<HTMLDivElement | null>(null);
 
@@ -213,14 +209,14 @@ export const CashflowView: React.FC = () => {
       if (lastTxEvent.type === "income") {
         lines.push(
           locale === "id"
-            ? `Tetesan baru tertangkap: +${mask(lastTxEvent.amountIdr)} (${lastTxEvent.note}). Permukaan air di wadah kembali naik.`
-            : `Raindrop caught: +${mask(lastTxEvent.amountIdr)} (${lastTxEvent.note}). The vessel rises calmly.`
+            ? `Pemasukan baru dicatat: +${mask(lastTxEvent.amountIdr)} (${lastTxEvent.note}). Sisa bulan ini bertambah.`
+            : `Income recorded: +${mask(lastTxEvent.amountIdr)} (${lastTxEvent.note}). Monthly savings level rose.`
         );
       } else {
         lines.push(
           locale === "id"
-            ? `Riak magenta tercatat: -${mask(lastTxEvent.amountIdr)} untuk "${lastTxEvent.note}". Arus kas bulan ini langsung diperbarui.`
-            : `Magenta ripple logged: -${mask(lastTxEvent.amountIdr)} for "${lastTxEvent.note}". Monthly reserve updated.`
+            ? `Pengeluaran dicatat: -${mask(lastTxEvent.amountIdr)} untuk "${lastTxEvent.note}".`
+            : `Expense recorded: -${mask(lastTxEvent.amountIdr)} for "${lastTxEvent.note}".`
         );
       }
     }
@@ -228,20 +224,20 @@ export const CashflowView: React.FC = () => {
     if (!hasData) {
       lines.push(
         locale === "id"
-          ? `Wadah ${monthLabel} masih hening. Pilih perintah [+ INCOME] atau [- EXPENSE] untuk mulai menampung arus kas.`
-          : `${monthLabel}'s vessel is completely still. Pick [+ INCOME] or [- EXPENSE] from the command menu to begin.`
+          ? `Belum ada transaksi di ${monthLabel}. Klik "+ Catat Pemasukan" atau "- Catat Pengeluaran" untuk mulai.`
+          : `No entries in ${monthLabel} yet. Click "+ Add Income" or "- Add Expense" to start tracking.`
       );
     } else if (isDeficit) {
       lines.push(
         locale === "id"
-          ? `Hujan di ${monthLabel} cukup deras — pengeluaran melebihi pemasukan sebesar ${mask(Math.abs(monthSummary.netCashflowIdr))}.`
-          : `Heavy magenta downpour in ${monthLabel} — spending outpaced income by ${mask(Math.abs(monthSummary.netCashflowIdr))}.`
+          ? `Pengeluaran ${monthLabel} melebihi pemasukan sebesar ${mask(Math.abs(monthSummary.netCashflowIdr))}.`
+          : `${monthLabel} expenses exceeded income by ${mask(Math.abs(monthSummary.netCashflowIdr))}.`
       );
     } else {
       lines.push(
         locale === "id"
-          ? `Arus ${monthLabel} terkendali: ${mask(monthSummary.netCashflowIdr)} tersimpan di wadah (${savedRatio.toFixed(0)}% dari total pemasukan).`
-          : `${monthLabel}'s rain holds steady — ${mask(monthSummary.netCashflowIdr)} remains in the vessel (${savedRatio.toFixed(0)}% of monthly inflow).`
+          ? `Bulan ${monthLabel}: ${savedRatio.toFixed(0)}% dari pemasukan masih tersisa (${mask(monthSummary.netCashflowIdr)}).`
+          : `${monthLabel}: you've kept ${savedRatio.toFixed(0)}% of your income (${mask(monthSummary.netCashflowIdr)} left).`
       );
     }
 
@@ -249,8 +245,8 @@ export const CashflowView: React.FC = () => {
       const catName = getCategoryLabel(topExpenseCat.categoryId, locale);
       lines.push(
         locale === "id"
-          ? `Riak pengeluaran terbesar bulan ini berasal dari ${catName} (${topExpenseCat.percentage.toFixed(0)}% · ${mask(topExpenseCat.amountIdr)}).`
-          : `Biggest spending ripple this month comes from ${catName} (${topExpenseCat.percentage.toFixed(0)}% · ${mask(topExpenseCat.amountIdr)}).`
+          ? `Pengeluaran terbesar bulan ini ada di kategori ${catName} (${topExpenseCat.percentage.toFixed(0)}% · ${mask(topExpenseCat.amountIdr)}).`
+          : `Top spending category this month is ${catName} (${topExpenseCat.percentage.toFixed(0)}% · ${mask(topExpenseCat.amountIdr)}).`
       );
     }
 
@@ -290,80 +286,6 @@ export const CashflowView: React.FC = () => {
     setCategoryFilter("all");
   };
 
-  const cycleFilter = () => {
-    const order: FilterType[] = ["all", "income", "expense"];
-    const next = order[(order.indexOf(typeFilter) + 1) % order.length];
-    handleSetTypeFilter(next);
-  };
-
-  const commands = useMemo(
-    () => [
-      {
-        id: "income",
-        label: locale === "id" ? "+ CATAT PEMASUKAN" : "+ RECORD INCOME",
-        tag: "IN",
-        accent: "#2276a8",
-        run: () => openNewTxModal("income"),
-      },
-      {
-        id: "expense",
-        label: locale === "id" ? "- CATAT PENGELUARAN" : "- RECORD EXPENSE",
-        tag: "OUT",
-        accent: "#c837a5",
-        run: () => openNewTxModal("expense"),
-      },
-      {
-        id: "filter",
-        label:
-          locale === "id"
-            ? `FILTER: ${typeFilter === "all" ? "SEMUA" : typeFilter === "income" ? "PEMASUKAN" : "PENGELUARAN"}`
-            : `FILTER: ${typeFilter.toUpperCase()}`,
-        tag: "TAB",
-        accent: "#745bc7",
-        run: cycleFilter,
-      },
-      {
-        id: "dialogue",
-        label: locale === "id" ? "CATATAN LANJUT" : "NEXT CHRONICLE",
-        tag: "LOG",
-        accent: "#7650f3",
-        run: () => setDialogueIdx((i) => i + 1),
-      },
-    ],
-    [locale, openNewTxModal, typeFilter]
-  );
-
-  // Silent RPG Keyboard Navigation (↑ ↓ Enter) when modals & inputs are inactive
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (isTxModalOpen || isAuthModalOpen || isAccountPanelOpen) return;
-      const target = e.target as HTMLElement | null;
-      if (
-        target &&
-        (target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.tagName === "SELECT" ||
-          target.isContentEditable)
-      ) {
-        return;
-      }
-
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        setSelectedCmd((prev) => (prev + 1) % commands.length);
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        setSelectedCmd((prev) => (prev - 1 + commands.length) % commands.length);
-      } else if (e.key === "Enter" && document.activeElement === document.body) {
-        e.preventDefault();
-        commands[selectedCmd]?.run();
-      }
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isTxModalOpen, isAuthModalOpen, isAccountPanelOpen, commands, selectedCmd]);
-
   const hasActiveFilter =
     typeFilter !== "all" || categoryFilter !== "all" || query.trim() !== "";
 
@@ -375,10 +297,13 @@ export const CashflowView: React.FC = () => {
           1. INTERACTIVE STAGE: SHIZUKU Raindrop Vessel + Anime RPG Status Menu
          ===================================================================== */}
       <section className="grid grid-cols-1 gap-5 lg:grid-cols-12">
-        {/* Left: Live Interactive Raindrop Vessel */}
+        {/* Left: Live Interactive Savings Level Water Tank */}
         <div className="lg:col-span-5">
           <RaindropVessel
             savedRatio={savedRatio}
+            incomeIdr={monthSummary.incomeIdr}
+            netCashflowIdr={monthSummary.netCashflowIdr}
+            privacyMode={store.settings.privacyMode}
             hasData={hasData}
             isDeficit={isDeficit}
             mood={mood}
@@ -453,12 +378,12 @@ export const CashflowView: React.FC = () => {
               </div>
             </div>
 
-            {/* Notched 20-Segment Anime RPG Gauges */}
+            {/* Notched 20-Segment Gauges with Plain Clear Labels */}
             <div className="space-y-2.5">
               <div>
                 <div className="mb-1 flex items-center justify-between font-mono text-[10px] tracking-[0.14em] uppercase">
                   <span className="font-semibold text-[#2276a8]">
-                    HP // {locale === "id" ? "CADANGAN" : "RESERVE"}
+                    {locale === "id" ? "TERSISA" : "SAVED"}
                   </span>
                   <span className="font-semibold text-[#14100e]">
                     {savedRatio.toFixed(0)}%
@@ -470,7 +395,7 @@ export const CashflowView: React.FC = () => {
               <div>
                 <div className="mb-1 flex items-center justify-between font-mono text-[10px] tracking-[0.14em] uppercase">
                   <span className="font-semibold text-[#c837a5]">
-                    SP // {locale === "id" ? "TERPAKAI" : "SPENT"}
+                    {locale === "id" ? "TERPAKAI" : "SPENT"}
                   </span>
                   <span className="font-semibold text-[#14100e]">
                     {spentRatio.toFixed(0)}%
@@ -480,7 +405,7 @@ export const CashflowView: React.FC = () => {
               </div>
             </div>
 
-            {/* Inline Interactive IN / OUT Stat Strip (No Bento Cards) */}
+            {/* Inline Interactive IN / OUT Stat Strip */}
             <div className="grid grid-cols-2 border border-[#745bc7]/30 bg-white/60">
               <button
                 type="button"
@@ -529,48 +454,24 @@ export const CashflowView: React.FC = () => {
               </button>
             </div>
 
-            {/* Interactive RPG Command Menu (Keyboard ↑↓ Enter + Click) */}
-            <div>
-              <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-                {commands.map((cmd, idx) => {
-                  const selected = selectedCmd === idx;
-                  return (
-                    <button
-                      key={cmd.id}
-                      type="button"
-                      data-selected={selected}
-                      onMouseEnter={() => setSelectedCmd(idx)}
-                      onFocus={() => setSelectedCmd(idx)}
-                      onClick={cmd.run}
-                      className="vn-cmd px-3 py-2 text-left font-mono text-[11px] font-semibold tracking-[0.08em]"
-                    >
-                      <span className="flex min-w-0 items-center gap-2">
-                        <span
-                          className={`w-3 shrink-0 ${selected ? "animate-vn-cursor opacity-100" : "opacity-0"}`}
-                          style={{ color: cmd.accent }}
-                        >
-                          ▶
-                        </span>
-                        <span
-                          className="truncate"
-                          style={{ color: selected ? cmd.accent : "#14100e" }}
-                        >
-                          {cmd.label}
-                        </span>
-                      </span>
-                      <span className="ml-2 shrink-0 border border-[#745bc7]/30 px-1.5 py-0.5 text-[9px] text-[#5d5370]">
-                        {cmd.tag}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <p className="mt-2 font-mono text-[9px] tracking-[0.14em] text-[#5d5370]/85 uppercase">
-                {locale === "id"
-                  ? `↑↓ PILIH PERINTAH · ENTER JALANKAN · ${monthSummary.txCount} CATATAN BULAN INI`
-                  : `↑↓ MOVE CURSOR · ENTER SELECT · ${monthSummary.txCount} ENTRIES THIS MONTH`}
-              </p>
+            {/* 2 Clear Primary Action Buttons (Zero Clutter) */}
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => openNewTxModal("income")}
+                className="inline-flex items-center justify-center gap-1.5 border-[1.5px] border-[#2276a8] bg-white px-4 py-2.5 font-mono text-[11px] font-bold tracking-[0.12em] text-[#2276a8] uppercase shadow-[2px_2px_0_0_rgba(34,118,168,0.22)] transition hover:-translate-x-0.5 hover:-translate-y-0.5 hover:bg-[#2276a8] hover:text-white"
+              >
+                <span>+</span>
+                <span>{t.actions.addIncome}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => openNewTxModal("expense")}
+                className="vn-btn-band px-4 py-2.5"
+              >
+                <span>-</span>
+                <span>{t.actions.addExpense}</span>
+              </button>
             </div>
           </div>
         </div>
