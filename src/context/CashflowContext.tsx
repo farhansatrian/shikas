@@ -8,20 +8,17 @@ import React, {
 } from "react";
 import type {
   AppSettings,
-  Budget,
   CashflowStoreData,
   Locale,
   NavTab,
-  RecurringItem,
-  SavingsGoal,
   Transaction,
-  Wallet,
+  TransactionType,
 } from "../types/cashflow";
 import { createDemoSeedData, createFreshEmptyData } from "../data/seedData";
-import { getMonthKey, shiftMonthKey } from "../utils/format";
+import { getMonthKey } from "../utils/format";
 import { TRANSLATIONS, type TranslationDict } from "../i18n/translations";
 
-const STORE_KEY = "shikas_store_v3";
+const STORE_KEY = "shikas_store_v4";
 
 function generateId(prefix: string): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -35,17 +32,11 @@ function loadStoreFromStorage(): CashflowStoreData {
     const raw = localStorage.getItem(STORE_KEY);
     if (!raw) return createDemoSeedData();
     const parsed = JSON.parse(raw) as Partial<CashflowStoreData>;
-    if (!Array.isArray(parsed.wallets) || !Array.isArray(parsed.transactions)) {
-      return createDemoSeedData();
-    }
+    if (!Array.isArray(parsed.transactions)) return createDemoSeedData();
     const defaults = createDemoSeedData().settings;
     return {
-      version: 3,
-      wallets: parsed.wallets,
+      version: 4,
       transactions: parsed.transactions,
-      budgets: Array.isArray(parsed.budgets) ? parsed.budgets : [],
-      recurring: Array.isArray(parsed.recurring) ? parsed.recurring : [],
-      goals: Array.isArray(parsed.goals) ? parsed.goals : [],
       settings: {
         ...defaults,
         ...(parsed.settings ?? {}),
@@ -70,31 +61,20 @@ interface CashflowContextValue {
   setSelectedMonth: (month: string) => void;
   t: TranslationDict;
   locale: Locale;
-  // Transaction Modal
+  // Modal
   isTxModalOpen: boolean;
   editingTx: Transaction | null;
-  defaultTxType: "income" | "expense" | "transfer";
-  openNewTxModal: (type?: "income" | "expense" | "transfer") => void;
+  defaultTxType: TransactionType;
+  openNewTxModal: (type?: TransactionType) => void;
   openEditTxModal: (tx: Transaction) => void;
   closeTxModal: () => void;
-  // CRUD Actions
+  // CRUD
   saveTransaction: (
     payload: Omit<Transaction, "id" | "createdAt">,
     existingId?: string
   ) => void;
   deleteTransaction: (id: string) => void;
   duplicateTransaction: (tx: Transaction) => void;
-  saveWallet: (payload: Omit<Wallet, "id">, existingId?: string) => void;
-  archiveWallet: (id: string) => void;
-  upsertBudget: (month: string, categoryId: string, limitIdr: number) => void;
-  deleteBudget: (id: string) => void;
-  copyBudgetsFromPreviousMonth: (targetMonth: string) => boolean;
-  saveRecurring: (payload: Omit<RecurringItem, "id">, existingId?: string) => void;
-  deleteRecurring: (id: string) => void;
-  logRecurringForMonth: (item: RecurringItem, monthKey: string) => void;
-  saveGoal: (payload: Omit<SavingsGoal, "id">, existingId?: string) => void;
-  contributeGoal: (goalId: string, addIdr: number) => void;
-  deleteGoal: (id: string) => void;
   // Settings & Data
   updateSettings: (patch: Partial<AppSettings>) => void;
   setLocale: (locale: Locale) => void;
@@ -117,7 +97,7 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
   const [selectedMonth, setSelectedMonth] = useState<string>(() => getMonthKey());
   const [isTxModalOpen, setTxModalOpen] = useState(false);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
-  const [defaultTxType, setDefaultTxType] = useState<"income" | "expense" | "transfer">("expense");
+  const [defaultTxType, setDefaultTxType] = useState<TransactionType>("expense");
   const [toasts, setToasts] = useState<ToastNotice[]>([]);
 
   const notify = useCallback((message: string, tone: ToastNotice["tone"] = "iris") => {
@@ -140,7 +120,7 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
     document.documentElement.lang = store.settings.locale;
   }, [store.settings.locale]);
 
-  const openNewTxModal = useCallback((type: "income" | "expense" | "transfer" = "expense") => {
+  const openNewTxModal = useCallback((type: TransactionType = "expense") => {
     setEditingTx(null);
     setDefaultTxType(type);
     setTxModalOpen(true);
@@ -181,11 +161,11 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
       notify(
         store.settings.locale === "id"
           ? existingId
-            ? "Transaksi diperbarui."
-            : "Transaksi berhasil dicatat."
+            ? "Catatan diperbarui."
+            : "Berhasil dicatat."
           : existingId
-            ? "Transaction updated."
-            : "Transaction recorded.",
+            ? "Entry updated."
+            : "Entry recorded.",
         "success"
       );
     },
@@ -199,7 +179,7 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
         transactions: prev.transactions.filter((tx) => tx.id !== id),
       }));
       notify(
-        store.settings.locale === "id" ? "Transaksi dihapus." : "Transaction deleted.",
+        store.settings.locale === "id" ? "Catatan dihapus." : "Entry deleted.",
         "iris"
       );
     },
@@ -218,224 +198,12 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
         transactions: [copy, ...prev.transactions],
       }));
       notify(
-        store.settings.locale === "id" ? "Transaksi diduplikasi." : "Transaction duplicated.",
+        store.settings.locale === "id" ? "Catatan diduplikasi." : "Entry duplicated.",
         "success"
       );
     },
     [notify, store.settings.locale]
   );
-
-  const saveWallet = useCallback(
-    (payload: Omit<Wallet, "id">, existingId?: string) => {
-      setStore((prev) => {
-        if (existingId) {
-          return {
-            ...prev,
-            wallets: prev.wallets.map((w) => (w.id === existingId ? { ...w, ...payload } : w)),
-          };
-        }
-        return {
-          ...prev,
-          wallets: [...prev.wallets, { ...payload, id: generateId("w") }],
-        };
-      });
-      notify(
-        store.settings.locale === "id" ? "Dompet disimpan." : "Wallet saved.",
-        "success"
-      );
-    },
-    [notify, store.settings.locale]
-  );
-
-  const archiveWallet = useCallback(
-    (id: string) => {
-      setStore((prev) => ({
-        ...prev,
-        wallets: prev.wallets.map((w) => (w.id === id ? { ...w, isArchived: true } : w)),
-      }));
-      notify(
-        store.settings.locale === "id" ? "Dompet diarsipkan." : "Wallet archived.",
-        "iris"
-      );
-    },
-    [notify, store.settings.locale]
-  );
-
-  const upsertBudget = useCallback(
-    (month: string, categoryId: string, limitIdr: number) => {
-      setStore((prev) => {
-        const existing = prev.budgets.find(
-          (b) => b.month === month && b.categoryId === categoryId
-        );
-        if (existing) {
-          return {
-            ...prev,
-            budgets: prev.budgets.map((b) =>
-              b.id === existing.id ? { ...b, limitIdr } : b
-            ),
-          };
-        }
-        const created: Budget = {
-          id: generateId("b"),
-          month,
-          categoryId,
-          limitIdr,
-        };
-        return {
-          ...prev,
-          budgets: [...prev.budgets, created],
-        };
-      });
-      notify(
-        store.settings.locale === "id" ? "Anggaran diperbarui." : "Budget saved.",
-        "success"
-      );
-    },
-    [notify, store.settings.locale]
-  );
-
-  const deleteBudget = useCallback((id: string) => {
-    setStore((prev) => ({
-      ...prev,
-      budgets: prev.budgets.filter((b) => b.id !== id),
-    }));
-  }, []);
-
-  const copyBudgetsFromPreviousMonth = useCallback((targetMonth: string): boolean => {
-    const prevMonth = shiftMonthKey(targetMonth, -1);
-    let copied = false;
-    setStore((prev) => {
-      const prevBudgets = prev.budgets.filter((b) => b.month === prevMonth);
-      if (prevBudgets.length === 0) return prev;
-      copied = true;
-      const existingCats = new Set(
-        prev.budgets.filter((b) => b.month === targetMonth).map((b) => b.categoryId)
-      );
-      const toAdd: Budget[] = prevBudgets
-        .filter((b) => !existingCats.has(b.categoryId))
-        .map((b) => ({
-          id: generateId("b"),
-          month: targetMonth,
-          categoryId: b.categoryId,
-          limitIdr: b.limitIdr,
-        }));
-      return {
-        ...prev,
-        budgets: [...prev.budgets, ...toAdd],
-      };
-    });
-    return copied;
-  }, []);
-
-  const saveRecurring = useCallback(
-    (payload: Omit<RecurringItem, "id">, existingId?: string) => {
-      setStore((prev) => {
-        if (existingId) {
-          return {
-            ...prev,
-            recurring: prev.recurring.map((r) =>
-              r.id === existingId ? { ...r, ...payload } : r
-            ),
-          };
-        }
-        return {
-          ...prev,
-          recurring: [...prev.recurring, { ...payload, id: generateId("rec") }],
-        };
-      });
-      notify(
-        store.settings.locale === "id" ? "Item rutin disimpan." : "Recurring item saved.",
-        "success"
-      );
-    },
-    [notify, store.settings.locale]
-  );
-
-  const deleteRecurring = useCallback((id: string) => {
-    setStore((prev) => ({
-      ...prev,
-      recurring: prev.recurring.filter((r) => r.id !== id),
-    }));
-  }, []);
-
-  const logRecurringForMonth = useCallback(
-    (item: RecurringItem, monthKey: string) => {
-      const [y, m] = monthKey.split("-").map(Number);
-      const maxDay = new Date(y, m, 0).getDate();
-      const day = String(Math.min(item.dayOfMonth, maxDay)).padStart(2, "0");
-      const date = `${monthKey}-${day}`;
-
-      const tx: Transaction = {
-        id: generateId("tx"),
-        type: item.type,
-        date,
-        amountIdr: Math.round(item.amountIdr),
-        categoryId: item.categoryId,
-        walletId: item.walletId,
-        note: item.title,
-        merchant: item.note,
-        recurringId: item.id,
-        createdAt: new Date().toISOString(),
-      };
-
-      setStore((prev) => ({
-        ...prev,
-        transactions: [tx, ...prev.transactions],
-      }));
-      notify(
-        store.settings.locale === "id"
-          ? `"${item.title}" dicatat ke buku kas.`
-          : `"${item.title}" logged to ledger.`,
-        "success"
-      );
-    },
-    [notify, store.settings.locale]
-  );
-
-  const saveGoal = useCallback(
-    (payload: Omit<SavingsGoal, "id">, existingId?: string) => {
-      setStore((prev) => {
-        if (existingId) {
-          return {
-            ...prev,
-            goals: prev.goals.map((g) => (g.id === existingId ? { ...g, ...payload } : g)),
-          };
-        }
-        return {
-          ...prev,
-          goals: [...prev.goals, { ...payload, id: generateId("goal") }],
-        };
-      });
-      notify(
-        store.settings.locale === "id" ? "Target tabungan disimpan." : "Savings goal saved.",
-        "success"
-      );
-    },
-    [notify, store.settings.locale]
-  );
-
-  const contributeGoal = useCallback(
-    (goalId: string, addIdr: number) => {
-      setStore((prev) => ({
-        ...prev,
-        goals: prev.goals.map((g) =>
-          g.id === goalId ? { ...g, savedIdr: Math.max(0, g.savedIdr + addIdr) } : g
-        ),
-      }));
-      notify(
-        store.settings.locale === "id" ? "Progres target diperbarui!" : "Goal progress updated!",
-        "success"
-      );
-    },
-    [notify, store.settings.locale]
-  );
-
-  const deleteGoal = useCallback((id: string) => {
-    setStore((prev) => ({
-      ...prev,
-      goals: prev.goals.filter((g) => g.id !== id),
-    }));
-  }, []);
 
   const updateSettings = useCallback((patch: Partial<AppSettings>) => {
     setStore((prev) => ({
@@ -465,7 +233,7 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
     notify(
       store.settings.locale === "id"
         ? "Dataset demo 6 bulan dimuat."
-        : "6-month realistic demo dataset loaded.",
+        : "6-month demo dataset loaded.",
       "success"
     );
   }, [notify, store.settings.locale, store.settings.shizukuWebsiteUrl]);
@@ -478,8 +246,8 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
     setSelectedMonth(getMonthKey());
     notify(
       store.settings.locale === "id"
-        ? "Buku kas direset ke kondisi kosong."
-        : "Ledger cleared to a fresh start.",
+        ? "Semua catatan dikosongkan."
+        : "Cashflow cleared to a fresh start.",
       "iris"
     );
   }, [notify, store.settings.locale, store.settings.shizukuWebsiteUrl]);
@@ -510,17 +278,6 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
       saveTransaction,
       deleteTransaction,
       duplicateTransaction,
-      saveWallet,
-      archiveWallet,
-      upsertBudget,
-      deleteBudget,
-      copyBudgetsFromPreviousMonth,
-      saveRecurring,
-      deleteRecurring,
-      logRecurringForMonth,
-      saveGoal,
-      contributeGoal,
-      deleteGoal,
       updateSettings,
       setLocale,
       togglePrivacyMode,
@@ -543,17 +300,6 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
       saveTransaction,
       deleteTransaction,
       duplicateTransaction,
-      saveWallet,
-      archiveWallet,
-      upsertBudget,
-      deleteBudget,
-      copyBudgetsFromPreviousMonth,
-      saveRecurring,
-      deleteRecurring,
-      logRecurringForMonth,
-      saveGoal,
-      contributeGoal,
-      deleteGoal,
       updateSettings,
       setLocale,
       togglePrivacyMode,

@@ -36,11 +36,11 @@ export const AnalyticsView: React.FC = () => {
 
   const sixMonthData = useMemo(
     () =>
-      computeMultiMonthSeries(store.wallets, store.transactions, selectedMonth, 6).map((item) => ({
+      computeMultiMonthSeries(store.transactions, selectedMonth, 6).map((item) => ({
         ...item,
         label: formatMonthLabel(item.month, locale, true),
       })),
-    [store.wallets, store.transactions, selectedMonth, locale]
+    [store.transactions, selectedMonth, locale]
   );
 
   const expenseBreakdown = useMemo(
@@ -166,7 +166,7 @@ export const AnalyticsView: React.FC = () => {
         </div>
       </section>
 
-      {/* Donut Breakdown + Net Balance Growth */}
+      {/* Donut Breakdown + Cumulative Balance Growth */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
         <section className="gallery-sheet p-5 lg:col-span-6">
           <h2 className="font-nav text-base font-medium tracking-[0.15em] text-[#14100e] uppercase">
@@ -280,7 +280,7 @@ export const AnalyticsView: React.FC = () => {
                 />
                 <Area
                   type="monotone"
-                  dataKey="endingBalanceIdr"
+                  dataKey="cumulativeBalanceIdr"
                   stroke="#14100e"
                   strokeWidth={2}
                   animationDuration={420}

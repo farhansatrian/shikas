@@ -5,9 +5,7 @@ import { MinimalNav } from "./components/layout/MinimalNav";
 import { Footer } from "./components/layout/Footer";
 import { TransactionModal } from "./components/common/TransactionModal";
 import { DashboardView } from "./components/dashboard/DashboardView";
-import { LedgerView } from "./components/ledger/LedgerView";
-import { WalletsView } from "./components/wallets/WalletsView";
-import { PlanView } from "./components/planning/PlanView";
+import { CashflowView } from "./components/cashflow/CashflowView";
 import { AnalyticsView } from "./components/analytics/AnalyticsView";
 import { SettingsView } from "./components/settings/SettingsView";
 
@@ -48,9 +46,7 @@ const ShiKasShell: React.FC = () => {
 
       <main className="relative z-10 mx-auto w-full max-w-[960px] flex-1 px-5 pt-2 pb-10 sm:px-8">
         {activeTab === "home" && <DashboardView />}
-        {activeTab === "ledger" && <LedgerView />}
-        {activeTab === "wallets" && <WalletsView />}
-        {activeTab === "plan" && <PlanView />}
+        {activeTab === "cashflow" && <CashflowView />}
         {activeTab === "analytics" && <AnalyticsView />}
         {activeTab === "data" && <SettingsView />}
       </main>

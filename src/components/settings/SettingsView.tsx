@@ -143,9 +143,7 @@ export const SettingsView: React.FC = () => {
               </div>
               <button
                 type="button"
-                onClick={() =>
-                  exportTransactionsToCsv(store.transactions, store.wallets, locale)
-                }
+                onClick={() => exportTransactionsToCsv(store.transactions, locale)}
                 className="gallery-btn-solid shrink-0 px-3.5 py-2 text-xs"
               >
                 <FileSpreadsheet className="h-3.5 w-3.5" />

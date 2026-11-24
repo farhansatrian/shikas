@@ -4,7 +4,7 @@ import { useCashflow } from "../../context/CashflowContext";
 import type { NavTab } from "../../types/cashflow";
 import { formatMonthLabel, shiftMonthKey } from "../../utils/format";
 
-const NAV_TABS: NavTab[] = ["home", "ledger", "wallets", "plan", "analytics", "data"];
+const NAV_TABS: NavTab[] = ["home", "cashflow", "analytics", "data"];
 
 function ShizukuUmbrellaMark({ className = "h-5 w-5" }: { className?: string }) {
   return (
@@ -41,19 +41,18 @@ export const MinimalNav: React.FC = () => {
     locale,
   } = useCashflow();
 
-  const isHome = activeTab === "home";
+  const showMonthBar = activeTab === "cashflow" || activeTab === "analytics";
 
   return (
     <header className="relative z-20 w-full">
-      {/* Desktop: exact mathematical 1fr | auto | 1fr centering so nav aligns 100% with hero center */}
       <div className="mx-auto w-full max-w-[1440px] px-5 pt-6 pb-4 sm:px-10 sm:pt-8">
         <div className="flex flex-col gap-4 md:grid md:grid-cols-[1fr_auto_1fr] md:items-center md:gap-4">
-          {/* Top row on mobile (Logo left + EN|ID right); Col 1 on desktop */}
+          {/* Left: SHIKAS + Shizuku Umbrella logo */}
           <div className="flex items-center justify-between md:justify-start">
             <button
               type="button"
               onClick={() => setActiveTab("home")}
-              aria-label="SHIKAS Home"
+              aria-label="shikas Home"
               className="group inline-flex items-center gap-2 text-[#745bc7] transition-opacity hover:opacity-75 focus:outline-none"
             >
               <span className="font-editorial text-[20px] font-medium tracking-[0.28em] uppercase sm:text-[23px]">
@@ -94,9 +93,9 @@ export const MinimalNav: React.FC = () => {
             </div>
           </div>
 
-          {/* Center Nav: Dead-center of viewport on both Desktop & Mobile */}
+          {/* Dead-Center 4-Tab Nav */}
           <nav aria-label="Primary navigation" className="flex justify-center">
-            <ul className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 sm:gap-x-8">
+            <ul className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1.5 sm:gap-x-10">
               {NAV_TABS.map((tab) => {
                 const active = activeTab === tab;
                 return (
@@ -104,7 +103,7 @@ export const MinimalNav: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setActiveTab(tab)}
-                      className={`font-nav pb-0.5 text-[14px] tracking-[0.12em] uppercase transition sm:text-[16px] sm:tracking-[0.14em] ${
+                      className={`font-nav pb-0.5 text-[15px] tracking-[0.12em] uppercase transition sm:text-[16px] sm:tracking-[0.14em] ${
                         active
                           ? "border-b-[1.5px] border-[#14100e] font-medium text-[#14100e]"
                           : "border-b-[1.5px] border-transparent font-normal text-[#14100e]/65 hover:text-[#14100e]"
@@ -118,7 +117,7 @@ export const MinimalNav: React.FC = () => {
             </ul>
           </nav>
 
-          {/* Desktop Right: Quiet SHIZUKU EN | ID switcher (balances 1fr right column) */}
+          {/* Desktop Right: EN | ID switcher */}
           <div
             role="group"
             aria-label="Language switcher"
@@ -151,8 +150,8 @@ export const MinimalNav: React.FC = () => {
         </div>
       </div>
 
-      {/* Minimal Month Bar on Workspace Pages (hidden on HOME) */}
-      {!isHome && (
+      {/* Month Switcher Strip on CASHFLOW and ANALYTICS */}
+      {showMonthBar && (
         <div className="mx-auto w-full max-w-[960px] px-5 pt-2 pb-4 sm:px-8">
           <div className="flex items-center justify-between border-b border-[#14100e]/12 pb-2.5 font-mono text-[11px] text-[#5f5368]">
             <div className="flex items-center gap-2 text-[#14100e]">
