@@ -1,15 +1,15 @@
 import React, { useRef, useState } from "react";
 import {
   Calculator,
-  CloudRain,
   Download,
-  EyeOff,
   FileSpreadsheet,
+  FolderOpen,
   RefreshCw,
   RotateCcw,
   Trash2,
   Upload,
 } from "lucide-react";
+import { SHIKAS_ASSETS } from "../../config/assets";
 import { useCashflow } from "../../context/CashflowContext";
 import {
   exportBackupJson,
@@ -17,6 +17,7 @@ import {
   parseBackupJson,
 } from "../../services/exportService";
 import { idrToUsd } from "../../services/fxService";
+import type { DisplayCurrencyMode } from "../../types/cashflow";
 import { formatFxTimestamp, formatIdr, formatUsd } from "../../utils/format";
 
 export const SettingsView: React.FC = () => {
@@ -27,6 +28,8 @@ export const SettingsView: React.FC = () => {
     t,
     locale,
     updateSettings,
+    setDisplayCurrency,
+    setLocale,
     setFxModalOpen,
     resetToDemoData,
     resetToFreshEmpty,
@@ -59,31 +62,36 @@ export const SettingsView: React.FC = () => {
     e.target.value = "";
   };
 
+  const currencyModes: Array<{ value: DisplayCurrencyMode; label: string }> = [
+    { value: "IDR", label: "IDR" },
+    { value: "USD", label: "USD" },
+    { value: "DUAL", label: "IDR + USD" },
+  ];
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-7">
       <div>
-        <p className="font-mono text-[11px] tracking-[0.22em] text-[#745bc7] uppercase">
-          LOCAL-FIRST STORAGE · LIVE FX · BACKUP
+        <p className="font-mono text-[10px] tracking-[0.2em] text-[#5f5368] uppercase">
+          FX FEED · PREFERENCES · BACKUP · ASSETS
         </p>
-        <h1 className="font-editorial mt-1.5 text-[30px] font-normal leading-none tracking-[7px] text-[#745bc7] uppercase sm:text-[36px] sm:tracking-[9px]">
+        <h1 className="font-nav mt-1 text-2xl font-medium tracking-[0.16em] text-[#14100e] uppercase sm:text-3xl">
           {t.settings.title}
         </h1>
-        <p className="mt-2 text-sm text-[#5d5370]">{t.settings.subtitle}</p>
       </div>
 
-      {/* Live FX Diagnostics Card */}
-      <section className="twilight-card rounded-2xl p-6 text-white">
+      {/* Live FX Diagnostics */}
+      <section className="gallery-dark p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="font-mono text-[10px] tracking-[0.18em] text-[#e5dcfb]/75 uppercase">
+            <p className="font-mono text-[10px] tracking-[0.18em] text-white/55 uppercase">
               {t.settings.fxCardTitle}
             </p>
-            <p className="font-mono-num mt-2 text-2xl font-bold text-white sm:text-3xl">
+            <p className="font-mono-num mt-2 text-2xl font-semibold text-white">
               1 USD = {formatIdr(fx.usdToIdr)}
             </p>
-            <p className="mt-1 font-mono text-xs text-[#e5dcfb]/80">
-              Rp 1.000.000 = {formatUsd(idrToUsd(1_000_000, fx.usdToIdr))} · {t.fx.source}:{" "}
-              {fx.source} · {t.fx.updated}: {formatFxTimestamp(fx.updatedAt, locale)}
+            <p className="mt-1.5 font-mono text-[11px] text-white/65">
+              Rp 1.000.000 = {formatUsd(idrToUsd(1_000_000, fx.usdToIdr))} · {fx.source} ·{" "}
+              {formatFxTimestamp(fx.updatedAt, locale)}
             </p>
           </div>
 
@@ -91,7 +99,7 @@ export const SettingsView: React.FC = () => {
             <button
               type="button"
               onClick={handleRefresh}
-              className="inline-flex items-center gap-1.5 rounded-full border border-white/25 bg-white/12 px-4 py-2 text-xs font-semibold text-white transition hover:bg-white/22"
+              className="inline-flex items-center gap-1.5 border border-white/30 px-4 py-2 font-nav text-xs tracking-[0.14em] text-white uppercase transition hover:bg-white hover:text-[#111015]"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
               {t.actions.refreshRate}
@@ -99,7 +107,7 @@ export const SettingsView: React.FC = () => {
             <button
               type="button"
               onClick={() => setFxModalOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-full border border-white/25 bg-white/12 px-4 py-2 text-xs font-semibold text-white transition hover:bg-white/22"
+              className="inline-flex items-center gap-1.5 border border-white/30 px-4 py-2 font-nav text-xs tracking-[0.14em] text-white uppercase transition hover:bg-white hover:text-[#111015]"
             >
               <Calculator className="h-3.5 w-3.5" />
               {t.actions.fxConverter}
@@ -108,105 +116,138 @@ export const SettingsView: React.FC = () => {
         </div>
       </section>
 
-      {/* Preferences + Data Management Grid */}
+      {/* Preferences + Data Backup Grid */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         {/* Display Preferences */}
-        <section className="tuyu-sheet rounded-2xl p-5 sm:p-6">
-          <h2 className="font-editorial text-lg font-semibold tracking-[0.18em] text-[#745bc7] uppercase">
+        <section className="gallery-sheet p-6">
+          <h2 className="font-nav text-base font-medium tracking-[0.15em] text-[#14100e] uppercase">
             {t.settings.preferencesTitle}
           </h2>
 
-          <div className="mt-5 space-y-4">
-            {/* Privacy toggle */}
-            <label className="flex cursor-pointer items-start justify-between gap-4 rounded-xl border border-[#745bc7]/18 bg-white/70 p-3.5">
-              <div className="flex items-start gap-3">
-                <EyeOff className="mt-0.5 h-4 w-4 text-[#745bc7]" />
-                <div>
-                  <p className="text-sm font-semibold text-[#14100e]">{t.settings.privacyLabel}</p>
-                  <p className="text-xs text-[#5d5370]">{t.settings.privacyDesc}</p>
+          <div className="mt-5 space-y-5">
+            {/* Currency & Language */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="font-mono text-[10px] tracking-[0.14em] text-[#5f5368] uppercase">
+                  {locale === "id" ? "Tampilan Mata Uang" : "Display Currency"}
+                </p>
+                <div className="mt-2 flex gap-1.5">
+                  {currencyModes.map((m) => (
+                    <button
+                      key={m.value}
+                      type="button"
+                      onClick={() => setDisplayCurrency(m.value)}
+                      className={`border px-2.5 py-1 font-mono text-[10px] transition ${
+                        store.settings.displayCurrency === m.value
+                          ? "border-[#14100e] bg-[#14100e] text-white"
+                          : "border-[#14100e]/20 bg-white text-[#5f5368] hover:text-[#14100e]"
+                      }`}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
                 </div>
+              </div>
+
+              <div>
+                <p className="font-mono text-[10px] tracking-[0.14em] text-[#5f5368] uppercase">
+                  {locale === "id" ? "Bahasa" : "Language"}
+                </p>
+                <div className="mt-2 flex gap-1.5">
+                  {(["id", "en"] as const).map((lg) => (
+                    <button
+                      key={lg}
+                      type="button"
+                      onClick={() => setLocale(lg)}
+                      className={`border px-3 py-1 font-mono text-[10px] uppercase transition ${
+                        locale === lg
+                          ? "border-[#14100e] bg-[#14100e] text-white"
+                          : "border-[#14100e]/20 bg-white text-[#5f5368] hover:text-[#14100e]"
+                      }`}
+                    >
+                      {lg}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <label className="flex cursor-pointer items-start justify-between gap-4 border-t border-[#14100e]/10 pt-4">
+              <div>
+                <p className="text-sm font-medium text-[#14100e]">{t.settings.privacyLabel}</p>
+                <p className="mt-0.5 text-xs text-[#5f5368]">{t.settings.privacyDesc}</p>
               </div>
               <input
                 type="checkbox"
                 checked={store.settings.privacyMode}
                 onChange={(e) => updateSettings({ privacyMode: e.target.checked })}
-                className="mt-1 h-4 w-4 accent-[#745bc7]"
+                className="mt-1 h-4 w-4 accent-[#14100e]"
               />
             </label>
 
-            {/* Rain layer toggle */}
-            <label className="flex cursor-pointer items-start justify-between gap-4 rounded-xl border border-[#745bc7]/18 bg-white/70 p-3.5">
-              <div className="flex items-start gap-3">
-                <CloudRain className="mt-0.5 h-4 w-4 text-[#2276a8]" />
-                <div>
-                  <p className="text-sm font-semibold text-[#14100e]">{t.settings.rainLabel}</p>
-                  <p className="text-xs text-[#5d5370]">{t.settings.rainDesc}</p>
-                </div>
+            <label className="flex cursor-pointer items-start justify-between gap-4 border-t border-[#14100e]/10 pt-4">
+              <div>
+                <p className="text-sm font-medium text-[#14100e]">{t.settings.rainLabel}</p>
+                <p className="mt-0.5 text-xs text-[#5f5368]">{t.settings.rainDesc}</p>
               </div>
               <input
                 type="checkbox"
                 checked={store.settings.rainEnabled}
                 onChange={(e) => updateSettings({ rainEnabled: e.target.checked })}
-                className="mt-1 h-4 w-4 accent-[#745bc7]"
+                className="mt-1 h-4 w-4 accent-[#14100e]"
               />
             </label>
 
-            {/* Portfolio URL */}
-            <div>
-              <label className="block font-mono text-[11px] font-semibold tracking-wider text-[#5d5370] uppercase">
+            <div className="border-t border-[#14100e]/10 pt-4">
+              <label className="block font-mono text-[10px] tracking-[0.14em] text-[#5f5368] uppercase">
                 {t.settings.portfolioUrlLabel}
               </label>
               <input
                 type="url"
                 value={store.settings.shizukuPortfolioUrl}
                 onChange={(e) => updateSettings({ shizukuPortfolioUrl: e.target.value })}
-                className="mt-1.5 w-full rounded-xl border border-[#745bc7]/28 bg-white px-3.5 py-2 font-mono text-xs text-[#14100e] outline-none focus:border-[#7650f3]"
+                className="mt-1.5 w-full border border-[#14100e]/22 bg-white px-3 py-2 font-mono text-xs text-[#14100e] outline-none focus:border-[#14100e]"
               />
             </div>
           </div>
         </section>
 
-        {/* Export / Backup / Demo Mode */}
-        <section className="tuyu-sheet rounded-2xl p-5 sm:p-6">
-          <h2 className="font-editorial text-lg font-semibold tracking-[0.18em] text-[#745bc7] uppercase">
+        {/* Export / Backup / Demo */}
+        <section className="gallery-sheet p-6">
+          <h2 className="font-nav text-base font-medium tracking-[0.15em] text-[#14100e] uppercase">
             {t.settings.dataCardTitle}
           </h2>
 
-          <div className="mt-5 space-y-3.5">
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#745bc7]/18 bg-white/70 p-3.5">
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-[#14100e]">{t.actions.exportCsv}</p>
-                <p className="text-xs text-[#5d5370]">{t.settings.exportCsvDesc}</p>
+          <div className="mt-5 divide-y divide-[#14100e]/10">
+            <div className="flex items-center justify-between gap-4 pb-4">
+              <div>
+                <p className="text-sm font-medium text-[#14100e]">{t.actions.exportCsv}</p>
+                <p className="mt-0.5 text-xs text-[#5f5368]">{t.settings.exportCsvDesc}</p>
               </div>
               <button
                 type="button"
                 onClick={() =>
-                  exportTransactionsToCsv(
-                    store.transactions,
-                    store.wallets,
-                    fx.usdToIdr,
-                    locale
-                  )
+                  exportTransactionsToCsv(store.transactions, store.wallets, fx.usdToIdr, locale)
                 }
-                className="tuyu-primary-btn shrink-0 px-3.5 py-2 text-xs"
+                className="gallery-btn-solid shrink-0 px-3.5 py-2 text-xs"
               >
                 <FileSpreadsheet className="h-3.5 w-3.5" />
                 CSV
               </button>
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#745bc7]/18 bg-white/70 p-3.5">
+            <div className="flex flex-wrap items-center justify-between gap-4 py-4">
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-[#14100e]">
+                <p className="text-sm font-medium text-[#14100e]">
                   {t.actions.exportJson} / {t.actions.importJson}
                 </p>
-                <p className="text-xs text-[#5d5370]">{t.settings.exportJsonDesc}</p>
+                <p className="mt-0.5 text-xs text-[#5f5368]">{t.settings.exportJsonDesc}</p>
               </div>
               <div className="flex shrink-0 gap-2">
                 <button
                   type="button"
                   onClick={() => exportBackupJson(store)}
-                  className="tuyu-pill-btn px-3 py-1.5 text-[10px]"
+                  className="gallery-btn px-3 py-1.5 text-xs"
                 >
                   <Download className="h-3.5 w-3.5" />
                   JSON
@@ -214,7 +255,7 @@ export const SettingsView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="tuyu-pill-btn px-3 py-1.5 text-[10px]"
+                  className="gallery-btn px-3 py-1.5 text-xs"
                 >
                   <Upload className="h-3.5 w-3.5" />
                   RESTORE
@@ -229,15 +270,15 @@ export const SettingsView: React.FC = () => {
               </div>
             </div>
 
-            <div className="rounded-xl border border-[#745bc7]/18 bg-white/70 p-3.5">
-              <p className="text-xs text-[#5d5370]">{t.settings.demoCardDesc}</p>
+            <div className="pt-4">
+              <p className="text-xs text-[#5f5368]">{t.settings.demoCardDesc}</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => {
                     if (window.confirm(t.settings.confirmDemo)) resetToDemoData();
                   }}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-[#745bc7]/35 bg-white px-3.5 py-1.5 text-xs font-semibold text-[#745bc7] hover:bg-[#745bc7]/10"
+                  className="gallery-btn px-3.5 py-1.5 text-xs"
                 >
                   <RotateCcw className="h-3.5 w-3.5" />
                   {t.actions.loadDemo}
@@ -247,7 +288,7 @@ export const SettingsView: React.FC = () => {
                   onClick={() => {
                     if (window.confirm(t.settings.confirmFresh)) resetToFreshEmpty();
                   }}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-[#c23b7b]/35 bg-white px-3.5 py-1.5 text-xs font-semibold text-[#c23b7b] hover:bg-[#c23b7b]/10"
+                  className="inline-flex items-center gap-1.5 border border-[#b42e69]/50 bg-white/70 px-3.5 py-1.5 font-nav text-xs tracking-[0.14em] text-[#b42e69] uppercase transition hover:bg-[#b42e69] hover:text-white"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   {t.actions.freshStart}
@@ -258,30 +299,31 @@ export const SettingsView: React.FC = () => {
         </section>
       </div>
 
-      {/* SHIZUKU Workspace Card Metadata Helper */}
-      <section className="tuyu-sheet rounded-2xl p-5 sm:p-6">
-        <h2 className="font-editorial text-lg font-semibold tracking-[0.18em] text-[#745bc7] uppercase">
-          {t.settings.integrationTitle}
-        </h2>
-        <p className="mt-1.5 text-sm text-[#5d5370]">{t.settings.integrationDesc}</p>
-        <div className="mt-4 grid grid-cols-1 gap-2 rounded-xl border border-[#745bc7]/20 bg-white/80 p-4 font-mono text-xs text-[#14100e] sm:grid-cols-2">
+      {/* Assets Path Reference Card */}
+      <section className="gallery-sheet p-6">
+        <div className="flex items-center gap-2">
+          <FolderOpen className="h-4 w-4 text-[#14100e]" />
+          <h2 className="font-nav text-base font-medium tracking-[0.15em] text-[#14100e] uppercase">
+            {locale === "id" ? "FOLDER ASSET & RUJUKAN PATH" : "ASSETS FOLDER & PATH REGISTRY"}
+          </h2>
+        </div>
+        <p className="mt-1.5 text-xs text-[#5f5368]">
+          {locale === "id"
+            ? "Taruh gambar ilustrasi kamu ke folder public/assets/, lalu path-nya terdaftar di src/config/assets.ts:"
+            : "Place custom artwork inside public/assets/ and reference paths in src/config/assets.ts:"}
+        </p>
+        <div className="mt-4 grid grid-cols-1 gap-2 border border-[#14100e]/12 bg-white/80 p-4 font-mono text-xs text-[#14100e] sm:grid-cols-2">
           <div>
-            <span className="text-[#745bc7]">Name:</span> ShiKas
+            <span className="text-[#5f5368]">Desktop BG:</span> {SHIKAS_ASSETS.bgWatercolorPc}
           </div>
           <div>
-            <span className="text-[#745bc7]">Badge:</span> APP
+            <span className="text-[#5f5368]">Mobile BG:</span> {SHIKAS_ASSETS.bgWatercolorSp}
           </div>
           <div>
-            <span className="text-[#745bc7]">Category:</span> Finance
+            <span className="text-[#5f5368]">Home Left Art:</span> {SHIKAS_ASSETS.heroLeft}
           </div>
           <div>
-            <span className="text-[#745bc7]">Repository:</span> github.com/farhansatrian/shikas
-          </div>
-          <div className="sm:col-span-2">
-            <span className="text-[#745bc7]">Description (ID):</span> Aplikasi arus kas pribadi dengan dompet multi-akun, anggaran, dan konversi kurs real-time IDR ↔ USD.
-          </div>
-          <div className="sm:col-span-2">
-            <span className="text-[#745bc7]">Description (EN):</span> Personal cashflow ledger, multi-wallet tracker, monthly budgets, and live IDR ↔ USD exchange rate analytics.
+            <span className="text-[#5f5368]">Home Right Art:</span> /assets/hero-right.jpg (optional)
           </div>
         </div>
       </section>

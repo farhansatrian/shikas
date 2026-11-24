@@ -75,7 +75,6 @@ export const TransactionModal: React.FC = () => {
     return CATEGORIES.filter((c) => c.type === type);
   }, [type]);
 
-  // Keep categoryId valid when switching type
   useEffect(() => {
     if (!filteredCategories.some((c) => c.id === categoryId)) {
       setCategoryId(filteredCategories[0]?.id ?? "other_expense");
@@ -133,19 +132,19 @@ export const TransactionModal: React.FC = () => {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-[#1b1530]/55 p-4 backdrop-blur-xs"
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-[#111015]/55 p-4 backdrop-blur-xs"
       onClick={closeTxModal}
     >
       <div
-        className="my-auto w-full max-w-lg rounded-2xl border border-[#745bc7]/30 bg-[#f8f5ff] p-6 shadow-2xl"
+        className="my-auto w-full max-w-lg border border-[#14100e]/25 bg-[#fdfbfd] p-6 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between border-b border-[#14100e]/12 pb-3">
           <div>
-            <p className="font-mono text-[10px] tracking-[0.2em] text-[#745bc7] uppercase">
+            <p className="font-mono text-[10px] tracking-[0.18em] text-[#5f5368] uppercase">
               SHIKAS LEDGER ENTRY
             </p>
-            <h2 className="mt-0.5 font-editorial text-xl font-semibold tracking-[0.16em] text-[#745bc7] uppercase">
+            <h2 className="font-nav mt-0.5 text-lg font-medium tracking-[0.15em] text-[#14100e] uppercase">
               {editingTx ? t.txModal.editTitle : t.txModal.newTitle}
             </h2>
           </div>
@@ -153,30 +152,25 @@ export const TransactionModal: React.FC = () => {
             type="button"
             onClick={closeTxModal}
             aria-label={t.actions.close}
-            className="rounded-full p-1.5 text-[#5d5370] transition hover:bg-[#745bc7]/12 hover:text-[#745bc7]"
+            className="p-1 text-[#5f5368] hover:text-[#14100e]"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="mt-5 space-y-4">
-          {/* Type segmented tabs */}
-          <div className="grid grid-cols-3 gap-1.5 rounded-xl border border-[#745bc7]/22 bg-white/75 p-1">
+          <div className="grid grid-cols-3 gap-2">
             {(["expense", "income", "transfer"] as const).map((item) => {
               const active = type === item;
-              const activeCls =
-                item === "income"
-                  ? "bg-[#14866d] text-white"
-                  : item === "expense"
-                    ? "bg-[#c23b7b] text-white"
-                    : "bg-[#2276a8] text-white";
               return (
                 <button
                   key={item}
                   type="button"
                   onClick={() => setType(item)}
-                  className={`rounded-lg py-2 text-xs font-semibold tracking-wider uppercase transition ${
-                    active ? activeCls : "text-[#5d5370] hover:bg-[#745bc7]/8"
+                  className={`border py-2 font-nav text-xs tracking-[0.14em] uppercase transition ${
+                    active
+                      ? "border-[#14100e] bg-[#14100e] text-white"
+                      : "border-[#14100e]/20 bg-white text-[#5f5368] hover:text-[#14100e]"
                   }`}
                 >
                   {t.ledger[item]}
@@ -185,22 +179,21 @@ export const TransactionModal: React.FC = () => {
             })}
           </div>
 
-          {/* Entry currency + amount */}
           <div>
             <div className="flex items-center justify-between">
-              <label className="font-mono text-[11px] font-semibold tracking-wider text-[#5d5370] uppercase">
+              <label className="font-mono text-[10px] tracking-[0.14em] text-[#5f5368] uppercase">
                 {t.txModal.amount}
               </label>
-              <div className="flex items-center gap-1 rounded-full border border-[#745bc7]/25 bg-white p-0.5">
+              <div className="flex items-center gap-1">
                 {(["IDR", "USD"] as const).map((cur) => (
                   <button
                     key={cur}
                     type="button"
                     onClick={() => setEntryCurrency(cur)}
-                    className={`rounded-full px-2.5 py-0.5 font-mono text-[10px] font-semibold transition ${
+                    className={`border px-2.5 py-0.5 font-mono text-[10px] transition ${
                       entryCurrency === cur
-                        ? "bg-[#745bc7] text-white"
-                        : "text-[#5d5370] hover:text-[#745bc7]"
+                        ? "border-[#14100e] bg-[#14100e] text-white"
+                        : "border-[#14100e]/20 bg-white text-[#5f5368]"
                     }`}
                   >
                     {cur}
@@ -209,8 +202,8 @@ export const TransactionModal: React.FC = () => {
               </div>
             </div>
 
-            <div className="mt-1.5 flex items-center rounded-xl border border-[#745bc7]/30 bg-white px-3.5 py-2.5 focus-within:border-[#7650f3]">
-              <span className="font-mono-num mr-2 text-sm font-bold text-[#745bc7]">
+            <div className="mt-1.5 flex items-center border border-[#14100e]/25 bg-white px-3.5 py-2.5 focus-within:border-[#14100e]">
+              <span className="font-mono-num mr-2 text-sm font-semibold text-[#5f5368]">
                 {entryCurrency === "IDR" ? "Rp" : "$"}
               </span>
               <input
@@ -222,14 +215,14 @@ export const TransactionModal: React.FC = () => {
                 placeholder={entryCurrency === "IDR" ? "150000" : "20.00"}
                 value={amountInput}
                 onChange={(e) => setAmountInput(e.target.value)}
-                className="font-mono-num w-full bg-transparent text-lg font-bold text-[#14100e] outline-none"
+                className="font-mono-num w-full bg-transparent text-lg font-semibold text-[#14100e] outline-none"
               />
             </div>
 
             {parsedAmount > 0 && (
-              <div className="mt-1.5 flex flex-wrap items-center justify-between gap-1 rounded-lg bg-[#745bc7]/8 px-3 py-1.5 text-[11px] text-[#5d5370]">
-                <span>{t.txModal.liveConversionPreview}:</span>
-                <span className="font-mono-num font-semibold text-[#745bc7]">
+              <div className="mt-1.5 flex flex-wrap items-center justify-between gap-1 border border-[#14100e]/10 bg-white/80 px-3 py-1.5 font-mono text-[11px] text-[#5f5368]">
+                <span>{t.txModal.liveConversionPreview}</span>
+                <span className="font-semibold text-[#14100e]">
                   {entryCurrency === "USD"
                     ? `${formatUsd(parsedAmount)} → ${formatIdr(computedIdr)}`
                     : `${formatIdr(computedIdr)} ≈ ${formatUsd(computedUsd)}`}
@@ -238,10 +231,9 @@ export const TransactionModal: React.FC = () => {
             )}
           </div>
 
-          {/* Date + Category */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label className="block font-mono text-[11px] font-semibold tracking-wider text-[#5d5370] uppercase">
+              <label className="block font-mono text-[10px] tracking-[0.14em] text-[#5f5368] uppercase">
                 {t.txModal.date}
               </label>
               <input
@@ -249,19 +241,19 @@ export const TransactionModal: React.FC = () => {
                 required
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                className="mt-1 w-full rounded-xl border border-[#745bc7]/28 bg-white px-3 py-2 text-sm text-[#14100e] outline-none focus:border-[#7650f3]"
+                className="mt-1 w-full border border-[#14100e]/22 bg-white px-3 py-2 text-sm text-[#14100e] outline-none focus:border-[#14100e]"
               />
             </div>
 
             {type !== "transfer" ? (
               <div>
-                <label className="block font-mono text-[11px] font-semibold tracking-wider text-[#5d5370] uppercase">
+                <label className="block font-mono text-[10px] tracking-[0.14em] text-[#5f5368] uppercase">
                   {t.txModal.category}
                 </label>
                 <select
                   value={categoryId}
                   onChange={(e) => setCategoryId(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-[#745bc7]/28 bg-white px-3 py-2 text-sm text-[#14100e] outline-none focus:border-[#7650f3]"
+                  className="mt-1 w-full border border-[#14100e]/22 bg-white px-3 py-2 text-sm text-[#14100e] outline-none focus:border-[#14100e]"
                 >
                   {filteredCategories.map((c) => (
                     <option key={c.id} value={c.id}>
@@ -272,7 +264,7 @@ export const TransactionModal: React.FC = () => {
               </div>
             ) : (
               <div>
-                <label className="block font-mono text-[11px] font-semibold tracking-wider text-[#5d5370] uppercase">
+                <label className="block font-mono text-[10px] tracking-[0.14em] text-[#5f5368] uppercase">
                   {t.txModal.fee}
                 </label>
                 <div className="mt-1 flex items-center gap-1.5">
@@ -282,12 +274,12 @@ export const TransactionModal: React.FC = () => {
                     step="500"
                     value={feeInput}
                     onChange={(e) => setFeeInput(e.target.value)}
-                    className="font-mono-num w-full rounded-xl border border-[#745bc7]/28 bg-white px-3 py-2 text-sm text-[#14100e] outline-none focus:border-[#7650f3]"
+                    className="font-mono-num w-full border border-[#14100e]/22 bg-white px-3 py-2 text-sm text-[#14100e] outline-none focus:border-[#14100e]"
                   />
                   <button
                     type="button"
                     onClick={() => setFeeInput("2500")}
-                    className="shrink-0 rounded-lg border border-[#745bc7]/30 bg-white px-2 py-2 font-mono text-[10px] font-semibold text-[#745bc7] hover:bg-[#745bc7]/10"
+                    className="gallery-btn shrink-0 px-2.5 py-2 font-mono text-[10px]"
                     title="BI-FAST Rp 2.500"
                   >
                     2.5k
@@ -297,17 +289,16 @@ export const TransactionModal: React.FC = () => {
             )}
           </div>
 
-          {/* Wallets */}
           {type === "transfer" ? (
             <div className="grid grid-cols-1 items-end gap-2 sm:grid-cols-[1fr_auto_1fr]">
               <div>
-                <label className="block font-mono text-[11px] font-semibold tracking-wider text-[#5d5370] uppercase">
+                <label className="block font-mono text-[10px] tracking-[0.14em] text-[#5f5368] uppercase">
                   {t.txModal.wallet}
                 </label>
                 <select
                   value={walletId}
                   onChange={(e) => setWalletId(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-[#745bc7]/28 bg-white px-3 py-2 text-sm text-[#14100e] outline-none focus:border-[#7650f3]"
+                  className="mt-1 w-full border border-[#14100e]/22 bg-white px-3 py-2 text-sm text-[#14100e] outline-none focus:border-[#14100e]"
                 >
                   {activeWallets.map((w) => (
                     <option key={w.id} value={w.id}>
@@ -316,17 +307,17 @@ export const TransactionModal: React.FC = () => {
                   ))}
                 </select>
               </div>
-              <div className="hidden pb-2.5 text-[#745bc7] sm:block">
+              <div className="hidden pb-2.5 text-[#5f5368] sm:block">
                 <ArrowRight className="h-4 w-4" />
               </div>
               <div>
-                <label className="block font-mono text-[11px] font-semibold tracking-wider text-[#5d5370] uppercase">
+                <label className="block font-mono text-[10px] tracking-[0.14em] text-[#5f5368] uppercase">
                   {t.txModal.toWallet}
                 </label>
                 <select
                   value={toWalletId}
                   onChange={(e) => setToWalletId(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-[#745bc7]/28 bg-white px-3 py-2 text-sm text-[#14100e] outline-none focus:border-[#7650f3]"
+                  className="mt-1 w-full border border-[#14100e]/22 bg-white px-3 py-2 text-sm text-[#14100e] outline-none focus:border-[#14100e]"
                 >
                   {activeWallets.map((w) => (
                     <option key={w.id} value={w.id}>
@@ -339,13 +330,13 @@ export const TransactionModal: React.FC = () => {
           ) : (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
-                <label className="block font-mono text-[11px] font-semibold tracking-wider text-[#5d5370] uppercase">
+                <label className="block font-mono text-[10px] tracking-[0.14em] text-[#5f5368] uppercase">
                   {t.txModal.wallet}
                 </label>
                 <select
                   value={walletId}
                   onChange={(e) => setWalletId(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-[#745bc7]/28 bg-white px-3 py-2 text-sm text-[#14100e] outline-none focus:border-[#7650f3]"
+                  className="mt-1 w-full border border-[#14100e]/22 bg-white px-3 py-2 text-sm text-[#14100e] outline-none focus:border-[#14100e]"
                 >
                   {activeWallets.map((w) => (
                     <option key={w.id} value={w.id}>
@@ -355,7 +346,7 @@ export const TransactionModal: React.FC = () => {
                 </select>
               </div>
               <div>
-                <label className="block font-mono text-[11px] font-semibold tracking-wider text-[#5d5370] uppercase">
+                <label className="block font-mono text-[10px] tracking-[0.14em] text-[#5f5368] uppercase">
                   {t.txModal.merchant}
                 </label>
                 <input
@@ -363,15 +354,14 @@ export const TransactionModal: React.FC = () => {
                   placeholder={t.txModal.merchantPlaceholder}
                   value={merchant}
                   onChange={(e) => setMerchant(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-[#745bc7]/28 bg-white px-3 py-2 text-sm text-[#14100e] outline-none focus:border-[#7650f3]"
+                  className="mt-1 w-full border border-[#14100e]/22 bg-white px-3 py-2 text-sm text-[#14100e] outline-none focus:border-[#14100e]"
                 />
               </div>
             </div>
           )}
 
-          {/* Note */}
           <div>
-            <label className="block font-mono text-[11px] font-semibold tracking-wider text-[#5d5370] uppercase">
+            <label className="block font-mono text-[10px] tracking-[0.14em] text-[#5f5368] uppercase">
               {t.txModal.note}
             </label>
             <input
@@ -379,12 +369,12 @@ export const TransactionModal: React.FC = () => {
               placeholder={t.txModal.notePlaceholder}
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-[#745bc7]/28 bg-white px-3 py-2 text-sm text-[#14100e] outline-none focus:border-[#7650f3]"
+              className="mt-1 w-full border border-[#14100e]/22 bg-white px-3 py-2 text-sm text-[#14100e] outline-none focus:border-[#14100e]"
             />
           </div>
 
           {error && (
-            <p className="rounded-lg bg-[#c23b7b]/12 px-3 py-2 text-xs font-medium text-[#c23b7b]">
+            <p className="border border-[#b42e69]/30 bg-[#b42e69]/8 px-3 py-2 text-xs text-[#b42e69]">
               {error}
             </p>
           )}
@@ -393,11 +383,11 @@ export const TransactionModal: React.FC = () => {
             <button
               type="button"
               onClick={closeTxModal}
-              className="rounded-full border border-[#745bc7]/30 px-4 py-2 text-xs font-semibold text-[#5d5370] transition hover:bg-white"
+              className="gallery-btn px-4 py-2 text-xs"
             >
               {t.actions.cancel}
             </button>
-            <button type="submit" className="tuyu-primary-btn px-5 py-2 text-xs">
+            <button type="submit" className="gallery-btn-solid px-5 py-2 text-xs">
               {t.actions.save}
             </button>
           </div>

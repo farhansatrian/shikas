@@ -126,7 +126,7 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const [store, setStore] = useState<CashflowStoreData>(loadStoreFromStorage);
   const [fx, setFx] = useState<FxRateState>(getInitialFxState);
-  const [activeTab, setActiveTab] = useState<NavTab>("dashboard");
+  const [activeTab, setActiveTab] = useState<NavTab>("home");
   const [selectedMonth, setSelectedMonth] = useState<string>(() => getMonthKey());
   const [isTxModalOpen, setTxModalOpen] = useState(false);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);

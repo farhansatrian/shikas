@@ -9,13 +9,12 @@ export type TransactionType = "income" | "expense" | "transfer";
 export type WalletType = "bank" | "ewallet" | "cash" | "savings";
 
 export type NavTab =
-  | "dashboard"
+  | "home"
   | "ledger"
   | "wallets"
-  | "budgets"
+  | "plan"
   | "analytics"
-  | "planning"
-  | "settings";
+  | "data";
 
 export interface CategoryDefinition {
   id: string;

@@ -1,48 +1,32 @@
 import React from "react";
 import { ArrowUpRight } from "lucide-react";
 import { useCashflow } from "../../context/CashflowContext";
-import type { NavTab } from "../../types/cashflow";
 import { formatFxTimestamp, formatIdr } from "../../utils/format";
 
 export const Footer: React.FC = () => {
-  const { setActiveTab, store, fx, t, locale } = useCashflow();
-  const links: NavTab[] = ["dashboard", "ledger", "wallets", "budgets", "analytics", "planning", "settings"];
+  const { store, fx, t, locale } = useCashflow();
 
   return (
-    <footer className="tuyu-footer-band relative z-10 mt-14 pb-20 text-white md:pb-8">
-      <div className="mx-auto flex w-full max-w-[1160px] flex-col items-center gap-4 px-4 py-8 text-center sm:px-6">
-        <nav aria-label="Footer navigation" className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
-          {links.map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              onClick={() => {
-                setActiveTab(tab);
-                window.scrollTo({ top: 0, behavior: "smooth" });
-              }}
-              className="font-editorial text-xs font-semibold tracking-[0.22em] text-white/90 uppercase transition hover:text-white hover:opacity-75"
-            >
-              {t.nav[tab]}
-            </button>
-          ))}
+    <footer className="relative z-10 mx-auto mt-16 w-full max-w-[960px] px-5 pb-12 sm:px-8">
+      <div className="border-t border-[#14100e]/12 pt-6 text-center font-mono text-[11px] text-[#5f5368]">
+        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5">
+          <span>
+            © {new Date().getFullYear()} SHIKAS (雫) · Farhan Satria Nugraha
+          </span>
+          <span className="hidden text-[#14100e]/25 sm:inline">·</span>
           <a
             href={store.settings.shizukuPortfolioUrl}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1 font-editorial text-xs font-semibold tracking-[0.22em] text-white/95 uppercase transition hover:opacity-75"
+            className="inline-flex items-center gap-0.5 text-[#14100e]/80 transition hover:text-[#14100e] hover:underline"
           >
-            SHIZUKU
+            SHIZUKU WORKSPACE
             <ArrowUpRight className="h-3 w-3" />
           </a>
-        </nav>
-
-        <p className="font-mono text-[11px] text-white/85">
+        </div>
+        <p className="mt-2 text-[10px] text-[#5f5368]/80">
           1 USD = {formatIdr(fx.usdToIdr)} · {t.fx.source}: {fx.source}
-          {fx.updatedAt ? ` · ${t.fx.updated}: ${formatFxTimestamp(fx.updatedAt, locale)}` : ""}
-        </p>
-
-        <p className="text-xs tracking-[0.14em] text-white/90">
-          © {new Date().getFullYear()} SHIKAS ( 雫 ) · SHIZUKU Workspace · Farhan Satria Nugraha
+          {fx.updatedAt ? ` · ${formatFxTimestamp(fx.updatedAt, locale)}` : ""}
         </p>
       </div>
     </footer>

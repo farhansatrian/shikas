@@ -1,13 +1,5 @@
 import React, { useMemo, useState } from "react";
-import {
-  ArrowLeftRight,
-  Copy,
-  Pencil,
-  Plus,
-  RotateCcw,
-  Search,
-  Trash2,
-} from "lucide-react";
+import { Copy, Pencil, Plus, RotateCcw, Search, Trash2 } from "lucide-react";
 import { useCashflow } from "../../context/CashflowContext";
 import { CATEGORIES, CATEGORY_MAP, getCategoryLabel } from "../../data/categories";
 import type { Transaction, TransactionType } from "../../types/cashflow";
@@ -17,7 +9,6 @@ import {
   formatMonthLabel,
   formatUsd,
 } from "../../utils/format";
-import { CategoryIcon } from "../common/CategoryIcon";
 import { MoneyDisplay } from "../common/MoneyDisplay";
 
 type FilterType = "all" | TransactionType;
@@ -124,25 +115,24 @@ export const LedgerView: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+    <div className="space-y-7">
+      {/* Header Row */}
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
-          <p className="font-mono text-[11px] tracking-[0.22em] text-[#745bc7] uppercase">
+          <p className="font-mono text-[10px] tracking-[0.2em] text-[#5f5368] uppercase">
             {formatMonthLabel(selectedMonth, locale)} · {filteredTransactions.length}{" "}
             {t.ledger.transactionsCount}
           </p>
-          <h1 className="font-editorial mt-1.5 text-[30px] font-normal leading-none tracking-[7px] text-[#745bc7] uppercase sm:text-[36px] sm:tracking-[9px]">
+          <h1 className="font-nav mt-1 text-2xl font-medium tracking-[0.16em] text-[#14100e] uppercase sm:text-3xl">
             {t.ledger.title}
           </h1>
-          <p className="mt-2 text-sm text-[#5d5370]">{t.ledger.subtitle}</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2.5">
           <button
             type="button"
             onClick={() => openNewTxModal("expense")}
-            className="tuyu-primary-btn px-4 py-2 text-xs"
+            className="gallery-btn-solid px-4 py-2 text-xs"
           >
             <Plus className="h-3.5 w-3.5" />
             {t.actions.addTransaction}
@@ -150,33 +140,29 @@ export const LedgerView: React.FC = () => {
           <button
             type="button"
             onClick={() => openNewTxModal("transfer")}
-            className="tuyu-pill-btn px-3.5 py-2 text-[11px]"
+            className="gallery-btn px-4 py-2 text-xs"
           >
-            <ArrowLeftRight className="h-3.5 w-3.5" />
             {t.actions.transfer}
           </button>
         </div>
       </div>
 
-      {/* Filter Bar */}
-      <div className="tuyu-sheet rounded-2xl p-4 sm:p-5">
+      {/* Minimalist Filter Sheet */}
+      <div className="gallery-sheet p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          {/* SHIZUKU Pipe-Separated Type Tabs */}
-          <ul className="grid w-full grid-cols-4 items-center sm:flex sm:w-auto sm:flex-nowrap">
-            {tabs.map((tab, idx) => {
+          {/* Clean Underline Type Tabs */}
+          <ul className="flex items-center gap-6">
+            {tabs.map((tab) => {
               const active = typeFilter === tab.value;
               return (
-                <li
-                  key={tab.value}
-                  className={`border-r border-[#745bc7]/50 text-center sm:shrink-0 ${idx === 0 ? "border-l" : ""}`}
-                >
+                <li key={tab.value}>
                   <button
                     type="button"
                     onClick={() => setTypeFilter(tab.value)}
-                    className={`w-full px-1.5 py-1.5 font-editorial text-[11px] tracking-[0.11em] uppercase transition sm:w-auto sm:px-3.5 sm:py-1 sm:text-xs sm:tracking-[0.18em] ${
+                    className={`font-nav pb-1 text-sm tracking-[0.14em] uppercase transition ${
                       active
-                        ? "bg-[#745bc7]/14 font-bold text-[#745bc7]"
-                        : "text-[#5d5370] hover:text-[#7650f3]"
+                        ? "border-b-[1.5px] border-[#14100e] font-medium text-[#14100e]"
+                        : "border-b-[1.5px] border-transparent text-[#5f5368] hover:text-[#14100e]"
                     }`}
                   >
                     {tab.label}
@@ -186,16 +172,16 @@ export const LedgerView: React.FC = () => {
             })}
           </ul>
 
-          {/* Search & Dropdown Filters */}
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex min-w-[200px] flex-1 items-center gap-2 rounded-xl border border-[#745bc7]/28 bg-white/90 px-3 py-1.5 sm:flex-initial">
-              <Search className="h-3.5 w-3.5 text-[#745bc7]" />
+          {/* Clean Hairline Inputs */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            <div className="flex min-w-[190px] flex-1 items-center gap-2 border-b border-[#14100e]/25 pb-1 sm:flex-initial">
+              <Search className="h-3.5 w-3.5 text-[#5f5368]" />
               <input
                 type="text"
                 placeholder={t.ledger.searchPlaceholder}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                className="w-full bg-transparent text-xs text-[#14100e] outline-none placeholder:text-[#5d5370]/70"
+                className="w-full bg-transparent text-xs text-[#14100e] outline-none placeholder:text-[#5f5368]/70"
               />
             </div>
 
@@ -203,7 +189,7 @@ export const LedgerView: React.FC = () => {
               aria-label={t.ledger.allCategories}
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="rounded-xl border border-[#745bc7]/28 bg-white/90 px-3 py-1.5 text-xs text-[#14100e] outline-none"
+              className="border-b border-[#14100e]/25 bg-transparent pb-1 text-xs text-[#14100e] outline-none"
             >
               <option value="all">{t.ledger.allCategories}</option>
               {CATEGORIES.map((c) => (
@@ -217,7 +203,7 @@ export const LedgerView: React.FC = () => {
               aria-label={t.ledger.allWallets}
               value={walletFilter}
               onChange={(e) => setWalletFilter(e.target.value)}
-              className="rounded-xl border border-[#745bc7]/28 bg-white/90 px-3 py-1.5 text-xs text-[#14100e] outline-none"
+              className="border-b border-[#14100e]/25 bg-transparent pb-1 text-xs text-[#14100e] outline-none"
             >
               <option value="all">{t.ledger.allWallets}</option>
               {store.wallets.map((w) => (
@@ -231,7 +217,7 @@ export const LedgerView: React.FC = () => {
               <button
                 type="button"
                 onClick={resetFilters}
-                className="inline-flex items-center gap-1 rounded-xl border border-[#745bc7]/30 px-2.5 py-1.5 text-xs font-medium text-[#745bc7] hover:bg-[#745bc7]/10"
+                className="inline-flex items-center gap-1 font-mono text-[11px] text-[#5f5368] hover:text-[#14100e]"
               >
                 <RotateCcw className="h-3 w-3" />
                 {t.actions.resetFilters}
@@ -240,88 +226,86 @@ export const LedgerView: React.FC = () => {
           </div>
         </div>
 
-        {/* Filtered Totals Ribbon */}
-        <div className="mt-4 grid grid-cols-3 gap-2 border-t border-[#745bc7]/15 pt-3.5 text-xs">
+        {/* Clean Filtered Totals Strip */}
+        <div className="mt-5 grid grid-cols-3 gap-4 border-t border-[#14100e]/10 pt-4 text-xs">
           <div>
-            <span className="font-mono text-[10px] tracking-wider text-[#5d5370] uppercase">
+            <span className="font-mono text-[10px] tracking-[0.14em] text-[#5f5368] uppercase">
               {t.dashboard.income}
             </span>
-            <div className="mt-0.5">
+            <div className="mt-1">
               <MoneyDisplay
                 amountIdr={filteredTotals.income}
-                primaryClassName="text-sm font-bold text-[#14866d]"
-                secondaryClassName="text-[10px] text-[#5d5370]"
+                primaryClassName="text-sm font-semibold text-[#117a62]"
+                secondaryClassName="text-[10px] text-[#5f5368]"
               />
             </div>
           </div>
           <div>
-            <span className="font-mono text-[10px] tracking-wider text-[#5d5370] uppercase">
+            <span className="font-mono text-[10px] tracking-[0.14em] text-[#5f5368] uppercase">
               {t.dashboard.expense}
             </span>
-            <div className="mt-0.5">
+            <div className="mt-1">
               <MoneyDisplay
                 amountIdr={filteredTotals.expense}
-                primaryClassName="text-sm font-bold text-[#c23b7b]"
-                secondaryClassName="text-[10px] text-[#5d5370]"
+                primaryClassName="text-sm font-semibold text-[#b42e69]"
+                secondaryClassName="text-[10px] text-[#5f5368]"
               />
             </div>
           </div>
           <div className="text-right">
-            <span className="font-mono text-[10px] tracking-wider text-[#5d5370] uppercase">
+            <span className="font-mono text-[10px] tracking-[0.14em] text-[#5f5368] uppercase">
               {t.dashboard.netCashflow}
             </span>
-            <div className="mt-0.5">
+            <div className="mt-1">
               <MoneyDisplay
                 amountIdr={filteredTotals.net}
                 showSign
-                primaryClassName={`text-sm font-bold ${
-                  filteredTotals.net >= 0 ? "text-[#745bc7]" : "text-[#c23b7b]"
-                }`}
-                secondaryClassName="text-[10px] text-[#5d5370]"
+                primaryClassName="text-sm font-semibold text-[#14100e]"
+                secondaryClassName="text-[10px] text-[#5f5368]"
               />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Grouped Transactions */}
+      {/* Grouped Daily Entries */}
       {groupedByDate.length === 0 ? (
-        <div className="tuyu-sheet rounded-2xl px-6 py-14 text-center">
-          <p className="font-editorial text-lg font-semibold tracking-[0.14em] text-[#745bc7] uppercase">
+        <div className="gallery-sheet px-6 py-14 text-center">
+          <p className="font-nav text-lg tracking-[0.14em] text-[#14100e] uppercase">
             {t.ledger.emptyTitle}
           </p>
-          <p className="mt-2 text-sm text-[#5d5370]">{t.ledger.emptyDesc}</p>
+          <p className="mt-2 text-xs text-[#5f5368]">{t.ledger.emptyDesc}</p>
           <button
             type="button"
             onClick={() => openNewTxModal("expense")}
-            className="tuyu-primary-btn mt-5 px-5 py-2 text-xs"
+            className="gallery-btn-solid mt-5 px-5 py-2 text-xs"
           >
             <Plus className="h-3.5 w-3.5" />
             {t.actions.addTransaction}
           </button>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-5">
           {groupedByDate.map(([dateIso, group]) => (
-            <section key={dateIso} className="tuyu-sheet rounded-2xl p-4 sm:p-5">
-              <div className="flex items-center justify-between gap-2 pb-2">
-                <span className="font-mono text-xs font-semibold tracking-[0.12em] text-[#745bc7] uppercase">
+            <section key={dateIso} className="gallery-sheet p-5">
+              <div className="flex items-baseline justify-between gap-2 pb-2">
+                <span className="font-mono text-[11px] font-semibold tracking-[0.14em] text-[#14100e] uppercase">
                   {formatDateHeading(dateIso, locale)}
                 </span>
                 <MoneyDisplay
                   amountIdr={group.dailyNet}
                   showSign
                   inline
-                  primaryClassName={`text-xs font-bold ${
-                    group.dailyNet >= 0 ? "text-[#14866d]" : "text-[#c23b7b]"
+                  primaryClassName={`text-xs font-medium ${
+                    group.dailyNet >= 0 ? "text-[#117a62]" : "text-[#5f5368]"
                   }`}
-                  secondaryClassName="text-[10px] text-[#5d5370]"
+                  secondaryClassName="text-[10px] text-[#5f5368]"
                 />
               </div>
 
-              <div className="tuyu-raindrop-divider mb-2 opacity-80" />
+              <div className="tuyu-raindrop-divider mb-1.5" />
 
-              <ul className="divide-y divide-[#745bc7]/12">
+              <ul className="divide-y divide-[#14100e]/10">
                 {group.items.map((tx) => {
                   const cat = CATEGORY_MAP[tx.categoryId];
                   const wallet = walletMap[tx.walletId];
@@ -332,37 +316,32 @@ export const LedgerView: React.FC = () => {
                   return (
                     <li
                       key={tx.id}
-                      className="group flex flex-col justify-between gap-3 py-3 sm:flex-row sm:items-center"
+                      className="flex flex-col justify-between gap-3 py-3.5 sm:flex-row sm:items-center"
                     >
                       <div className="flex min-w-0 items-start gap-3">
                         <span
-                          className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white"
-                          style={{ backgroundColor: cat?.color ?? "#745bc7" }}
-                        >
-                          <CategoryIcon name={cat?.icon} className="h-4 w-4" />
-                        </span>
+                          className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
+                          style={{ backgroundColor: cat?.color ?? "#14100e" }}
+                        />
                         <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="text-sm font-semibold text-[#14100e]">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-sm font-medium text-[#14100e]">
                               {tx.note}
                             </span>
                             {tx.originalCurrency === "USD" && (
-                              <span className="rounded-full bg-[#7650f3]/12 px-2 py-0.5 font-mono text-[10px] font-semibold text-[#7650f3]">
-                                {t.ledger.originalUsdLabel} {formatUsd(tx.originalAmount)}
-                                {tx.fxRateAtEntry ? ` @ ${formatIdr(tx.fxRateAtEntry)}` : ""}
+                              <span className="font-mono text-[10px] text-[#745bc7]">
+                                [{t.ledger.originalUsdLabel} {formatUsd(tx.originalAmount)}
+                                {tx.fxRateAtEntry ? ` @ ${formatIdr(tx.fxRateAtEntry)}` : ""}]
                               </span>
                             )}
                             {isTransfer && tx.feeIdr && tx.feeIdr > 0 ? (
-                              <span className="rounded-full bg-[#c23b7b]/10 px-2 py-0.5 font-mono text-[10px] font-medium text-[#c23b7b]">
-                                {t.ledger.feeLabel}: {formatIdr(tx.feeIdr)}
+                              <span className="font-mono text-[10px] text-[#b42e69]">
+                                ({t.ledger.feeLabel} {formatIdr(tx.feeIdr)})
                               </span>
                             ) : null}
                           </div>
-                          <p className="mt-0.5 text-xs text-[#5d5370]">
-                            <span className="font-medium text-[#745bc7]">
-                              {getCategoryLabel(tx.categoryId, locale)}
-                            </span>
-                            {" · "}
+                          <p className="mt-0.5 font-mono text-[11px] text-[#5f5368]">
+                            {getCategoryLabel(tx.categoryId, locale)} ·{" "}
                             {isTransfer && toWallet
                               ? `${wallet?.name ?? ""} → ${toWallet.name}`
                               : wallet?.name ?? ""}
@@ -378,14 +357,14 @@ export const LedgerView: React.FC = () => {
                               isIncome ? tx.amountIdr : isTransfer ? tx.amountIdr : -tx.amountIdr
                             }
                             showSign={!isTransfer}
-                            primaryClassName={`text-sm font-bold ${
+                            primaryClassName={`text-sm font-medium ${
                               isIncome
-                                ? "text-[#14866d]"
+                                ? "text-[#117a62]"
                                 : isTransfer
-                                  ? "text-[#2276a8]"
-                                  : "text-[#c23b7b]"
+                                  ? "text-[#1e6c99]"
+                                  : "text-[#14100e]"
                             }`}
-                            secondaryClassName="text-[11px] text-[#5d5370]"
+                            secondaryClassName="text-[10px] text-[#5f5368]"
                           />
                         </div>
 
@@ -394,8 +373,7 @@ export const LedgerView: React.FC = () => {
                             type="button"
                             onClick={() => openEditTxModal(tx)}
                             aria-label={t.actions.edit}
-                            title={t.actions.edit}
-                            className="rounded-lg p-1.5 text-[#5d5370] transition hover:bg-[#745bc7]/12 hover:text-[#745bc7]"
+                            className="p-1.5 text-[#5f5368] transition hover:text-[#14100e]"
                           >
                             <Pencil className="h-3.5 w-3.5" />
                           </button>
@@ -403,8 +381,7 @@ export const LedgerView: React.FC = () => {
                             type="button"
                             onClick={() => duplicateTransaction(tx)}
                             aria-label={t.actions.duplicate}
-                            title={t.actions.duplicate}
-                            className="rounded-lg p-1.5 text-[#5d5370] transition hover:bg-[#745bc7]/12 hover:text-[#745bc7]"
+                            className="p-1.5 text-[#5f5368] transition hover:text-[#14100e]"
                           >
                             <Copy className="h-3.5 w-3.5" />
                           </button>
@@ -412,8 +389,7 @@ export const LedgerView: React.FC = () => {
                             type="button"
                             onClick={() => deleteTransaction(tx.id)}
                             aria-label={t.actions.delete}
-                            title={t.actions.delete}
-                            className="rounded-lg p-1.5 text-[#5d5370] transition hover:bg-[#c23b7b]/12 hover:text-[#c23b7b]"
+                            className="p-1.5 text-[#5f5368] transition hover:text-[#b42e69]"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
