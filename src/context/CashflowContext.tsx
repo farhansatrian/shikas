@@ -29,7 +29,7 @@ import {
   signOutShizukuId,
 } from "../services/shizukuAuth";
 
-const SANDBOX_STORE_KEY = "shikas_store_v4";
+const LOCAL_MODE_STORE_KEY = "shikas_local_v5";
 
 function generateId(prefix: string): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -38,13 +38,21 @@ function generateId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
-function loadSandboxStore(): CashflowStoreData {
+function loadLocalModeStore(): CashflowStoreData {
   try {
-    const raw = localStorage.getItem(SANDBOX_STORE_KEY);
-    if (!raw) return createDemoSeedData();
+    const raw = localStorage.getItem(LOCAL_MODE_STORE_KEY);
+    if (!raw) {
+      const fresh = createFreshEmptyData();
+      fresh.settings.shizukuWebsiteUrl = SHIZUKU_ECOSYSTEM.hubUrl;
+      return fresh;
+    }
     const parsed = JSON.parse(raw) as Partial<CashflowStoreData>;
-    if (!Array.isArray(parsed.transactions)) return createDemoSeedData();
-    const defaults = createDemoSeedData().settings;
+    if (!Array.isArray(parsed.transactions)) {
+      const fresh = createFreshEmptyData();
+      fresh.settings.shizukuWebsiteUrl = SHIZUKU_ECOSYSTEM.hubUrl;
+      return fresh;
+    }
+    const defaults = createFreshEmptyData().settings;
     return {
       version: 4,
       transactions: parsed.transactions.map((tx) => ({
@@ -59,7 +67,9 @@ function loadSandboxStore(): CashflowStoreData {
       },
     };
   } catch {
-    return createDemoSeedData();
+    const fresh = createFreshEmptyData();
+    fresh.settings.shizukuWebsiteUrl = SHIZUKU_ECOSYSTEM.hubUrl;
+    return fresh;
   }
 }
 
@@ -138,7 +148,7 @@ const CashflowContext = createContext<CashflowContextValue | null>(null);
 export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const [store, setStore] = useState<CashflowStoreData>(loadSandboxStore);
+  const [store, setStore] = useState<CashflowStoreData>(loadLocalModeStore);
   const [activeTab, setActiveTab] = useState<NavTab>("home");
   const [selectedMonth, setSelectedMonth] = useState<string>(() => getMonthKey());
   const [user, setUser] = useState<ShizukuUser | null>(null);
@@ -189,14 +199,14 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
     };
   }, []);
 
-  // Persist to either authenticated user ledger or local sandbox storage
+  // Persist to either authenticated database ledger or local browser storage
   useEffect(() => {
     if (!authReady) return;
     if (user) {
       void saveUserLedger(user, store);
     } else {
       try {
-        localStorage.setItem(SANDBOX_STORE_KEY, JSON.stringify(store));
+        localStorage.setItem(LOCAL_MODE_STORE_KEY, JSON.stringify(store));
       } catch {
         // Ignore quota issues
       }
@@ -289,15 +299,15 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
     const currentLocale = store.settings.locale;
     await signOutShizukuId();
     setUser(null);
-    const sandbox = loadSandboxStore();
-    sandbox.settings.locale = currentLocale;
-    setStore(sandbox);
+    const localData = loadLocalModeStore();
+    localData.settings.locale = currentLocale;
+    setStore(localData);
     setLastTxEvent(null);
     setAccountPanelOpen(false);
     notify(
       currentLocale === "id"
-        ? "Keluar dari akun. Kembali ke mode Sandbox."
-        : "Signed out. Switched back to Sandbox mode.",
+        ? "Keluar dari akun. Kembali ke Mode Lokal."
+        : "Signed out. Switched back to Local Mode.",
       "iris"
     );
   }, [notify, store.settings.locale]);

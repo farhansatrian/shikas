@@ -4,6 +4,7 @@ import type { CashflowStoreData, ShizukuUser } from "../types/cashflow";
 
 const LOCAL_ACCOUNTS_KEY = "shizuku_local_accounts_v1";
 const LOCAL_SESSION_KEY = "shizuku_local_session_v1";
+const CLOUD_TOKEN_KEY = "shizuku_cloud_token_v1";
 const USER_LEDGER_PREFIX = "shikas_user_ledger_v1_";
 
 interface LocalAccountRecord {
@@ -12,6 +13,31 @@ interface LocalAccountRecord {
   displayName: string;
   passwordHash: string;
   createdAt: string;
+}
+
+function getStoredCloudToken(): string | null {
+  try {
+    return localStorage.getItem(CLOUD_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function setStoredCloudToken(token: string | null): void {
+  try {
+    if (token) localStorage.setItem(CLOUD_TOKEN_KEY, token);
+    else localStorage.removeItem(CLOUD_TOKEN_KEY);
+  } catch {
+    // Ignore storage issues
+  }
+}
+
+function buildCloudHeaders(json = false): HeadersInit {
+  const headers: Record<string, string> = {};
+  if (json) headers["Content-Type"] = "application/json";
+  const token = getStoredCloudToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return headers;
 }
 
 async function hashSecret(raw: string): Promise<string> {
@@ -23,7 +49,6 @@ async function hashSecret(raw: string): Promise<string> {
       .map((b) => b.toString(16).padStart(2, "0"))
       .join("");
   }
-  // Lightweight deterministic fallback for non-secure dev contexts
   let hash = 5381;
   for (let i = 0; i < salted.length; i += 1) {
     hash = (hash * 33) ^ salted.charCodeAt(i);
@@ -46,7 +71,7 @@ function writeLocalAccounts(accounts: LocalAccountRecord[]): void {
   try {
     localStorage.setItem(LOCAL_ACCOUNTS_KEY, JSON.stringify(accounts));
   } catch {
-    // Ignore storage quota errors
+    // Ignore quota issues
   }
 }
 
@@ -60,10 +85,14 @@ export async function getCurrentSession(): Promise<ShizukuUser | null> {
       const res = await fetch(`${SHIZUKU_ECOSYSTEM.apiUrl}/api/ecosystem/me`, {
         method: "GET",
         credentials: "include",
+        headers: buildCloudHeaders(false),
       });
       if (!res.ok) return null;
-      const data = (await res.json()) as { user?: ShizukuUser | null };
-      if (!data.user) return null;
+      const data = (await res.json()) as { user?: Omit<ShizukuUser, "mode"> | null };
+      if (!data.user) {
+        setStoredCloudToken(null);
+        return null;
+      }
       return { ...data.user, mode: "cloud" };
     } catch {
       return null;
@@ -94,19 +123,27 @@ export async function signInWithShizukuId(
   }
 
   if (isCloudSyncConfigured()) {
-    const res = await fetch(`${SHIZUKU_ECOSYSTEM.apiUrl}/api/ecosystem/login`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
+    let res: Response;
+    try {
+      res = await fetch(`${SHIZUKU_ECOSYSTEM.apiUrl}/api/ecosystem/login`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+    } catch {
+      throw new Error("SERVER_UNREACHABLE");
+    }
+
     const body = (await res.json().catch(() => ({}))) as {
-      user?: ShizukuUser;
+      user?: Omit<ShizukuUser, "mode">;
+      token?: string;
       error?: string;
     };
     if (!res.ok || !body.user) {
       throw new Error(body.error || "INVALID_CREDENTIALS");
     }
+    if (body.token) setStoredCloudToken(body.token);
     return { ...body.user, mode: "cloud" };
   }
 
@@ -148,19 +185,27 @@ export async function registerShizukuId(
   }
 
   if (isCloudSyncConfigured()) {
-    const res = await fetch(`${SHIZUKU_ECOSYSTEM.apiUrl}/api/ecosystem/register`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, displayName, password }),
-    });
+    let res: Response;
+    try {
+      res = await fetch(`${SHIZUKU_ECOSYSTEM.apiUrl}/api/ecosystem/register`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, displayName, password }),
+      });
+    } catch {
+      throw new Error("SERVER_UNREACHABLE");
+    }
+
     const body = (await res.json().catch(() => ({}))) as {
-      user?: ShizukuUser;
+      user?: Omit<ShizukuUser, "mode">;
+      token?: string;
       error?: string;
     };
     if (!res.ok || !body.user) {
       throw new Error(body.error || "REGISTER_FAILED");
     }
+    if (body.token) setStoredCloudToken(body.token);
     return { ...body.user, mode: "cloud" };
   }
 
@@ -202,10 +247,12 @@ export async function signOutShizukuId(): Promise<void> {
       await fetch(`${SHIZUKU_ECOSYSTEM.apiUrl}/api/ecosystem/logout`, {
         method: "POST",
         credentials: "include",
+        headers: buildCloudHeaders(false),
       });
     } catch {
-      // Proceed clearing local state gracefully
+      // Clear local token even if server is offline
     }
+    setStoredCloudToken(null);
     return;
   }
   localStorage.removeItem(LOCAL_SESSION_KEY);
@@ -219,6 +266,7 @@ export async function loadUserLedger(
       const res = await fetch(`${SHIZUKU_ECOSYSTEM.apiUrl}/api/shikas/store`, {
         method: "GET",
         credentials: "include",
+        headers: buildCloudHeaders(false),
       });
       if (!res.ok) return null;
       const parsed = (await res.json()) as Partial<CashflowStoreData>;
@@ -234,7 +282,7 @@ export async function loadUserLedger(
           privacyMode: parsed.settings?.privacyMode ?? false,
           rainEnabled: parsed.settings?.rainEnabled ?? true,
           shizukuWebsiteUrl:
-            parsed.settings?.shizukuWebsiteUrl ?? SHIZUKU_ECOSYSTEM.hubUrl,
+            parsed.settings?.shizukuWebsiteUrl || SHIZUKU_ECOSYSTEM.hubUrl,
         },
       };
     } catch {
@@ -258,7 +306,7 @@ export async function loadUserLedger(
         privacyMode: parsed.settings?.privacyMode ?? false,
         rainEnabled: parsed.settings?.rainEnabled ?? true,
         shizukuWebsiteUrl:
-          parsed.settings?.shizukuWebsiteUrl ?? SHIZUKU_ECOSYSTEM.hubUrl,
+          parsed.settings?.shizukuWebsiteUrl || SHIZUKU_ECOSYSTEM.hubUrl,
       },
     };
   } catch {
@@ -269,23 +317,25 @@ export async function loadUserLedger(
 export async function saveUserLedger(
   user: ShizukuUser,
   data: CashflowStoreData
-): Promise<void> {
+): Promise<boolean> {
   if (user.mode === "cloud" && isCloudSyncConfigured()) {
     try {
-      await fetch(`${SHIZUKU_ECOSYSTEM.apiUrl}/api/shikas/store`, {
+      const res = await fetch(`${SHIZUKU_ECOSYSTEM.apiUrl}/api/shikas/store`, {
         method: "PUT",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: buildCloudHeaders(true),
         body: JSON.stringify(data),
       });
+      return res.ok;
     } catch {
-      // Keep local mirror below as safety fallback
+      return false;
     }
   }
 
   try {
     localStorage.setItem(`${USER_LEDGER_PREFIX}${user.id}`, JSON.stringify(data));
+    return true;
   } catch {
-    // Ignore quota issues
+    return false;
   }
 }

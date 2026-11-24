@@ -11,6 +11,7 @@ export const AuthModal: React.FC = () => {
     closeAuthModal,
     signIn,
     register,
+    store,
     t,
   } = useCashflow();
 
@@ -195,7 +196,7 @@ export const AuthModal: React.FC = () => {
               />
             </div>
 
-            {mode === "register" && (
+            {mode === "register" && store.transactions.length > 0 && (
               <label className="flex cursor-pointer items-start gap-2.5 border border-[#745bc7]/25 bg-[#f7f3fe] px-3 py-2.5">
                 <input
                   type="checkbox"
