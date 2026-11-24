@@ -53,6 +53,14 @@ export interface ToastNotice {
   tone: "iris" | "success" | "danger";
 }
 
+export interface TxBurstEvent {
+  id: number;
+  type: TransactionType;
+  amountIdr: number;
+  note: string;
+  action: "created" | "updated" | "duplicated";
+}
+
 interface CashflowContextValue {
   store: CashflowStoreData;
   activeTab: NavTab;
@@ -75,6 +83,8 @@ interface CashflowContextValue {
   ) => void;
   deleteTransaction: (id: string) => void;
   duplicateTransaction: (tx: Transaction) => void;
+  // Reactive visual event for Raindrop Vessel & Dialogue Box (silent, zero SFX)
+  lastTxEvent: TxBurstEvent | null;
   // Settings & Data
   updateSettings: (patch: Partial<AppSettings>) => void;
   setLocale: (locale: Locale) => void;
@@ -99,6 +109,7 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
   const [defaultTxType, setDefaultTxType] = useState<TransactionType>("expense");
   const [toasts, setToasts] = useState<ToastNotice[]>([]);
+  const [lastTxEvent, setLastTxEvent] = useState<TxBurstEvent | null>(null);
 
   const notify = useCallback((message: string, tone: ToastNotice["tone"] = "iris") => {
     const id = generateId("toast");
@@ -158,6 +169,13 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
           transactions: [created, ...prev.transactions],
         };
       });
+      setLastTxEvent({
+        id: Date.now(),
+        type: payload.type,
+        amountIdr: payload.amountIdr,
+        note: payload.note,
+        action: existingId ? "updated" : "created",
+      });
       notify(
         store.settings.locale === "id"
           ? existingId
@@ -197,6 +215,13 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
         ...prev,
         transactions: [copy, ...prev.transactions],
       }));
+      setLastTxEvent({
+        id: Date.now(),
+        type: tx.type,
+        amountIdr: tx.amountIdr,
+        note: tx.note,
+        action: "duplicated",
+      });
       notify(
         store.settings.locale === "id" ? "Catatan diduplikasi." : "Entry duplicated.",
         "success"
@@ -278,6 +303,7 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
       saveTransaction,
       deleteTransaction,
       duplicateTransaction,
+      lastTxEvent,
       updateSettings,
       setLocale,
       togglePrivacyMode,
@@ -300,6 +326,7 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
       saveTransaction,
       deleteTransaction,
       duplicateTransaction,
+      lastTxEvent,
       updateSettings,
       setLocale,
       togglePrivacyMode,

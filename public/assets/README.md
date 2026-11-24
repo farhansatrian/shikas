@@ -1,13 +1,12 @@
-# ShiKas Assets Directory (`public/assets/`)
+# SHIKAS (雫) Assets Folder
 
-Taruh file gambar kamu di folder ini. Path aktifnya terdaftar terpusat di `src/config/assets.ts`:
+Taruh file gambar / ilustrasi custom di folder `public/assets/` ini, lalu daftarkan path-nya di `src/config/assets.ts`.
 
-| Path File | Fungsi di Aplikasi | Status |
-|---|---|---|
-| `public/assets/bg-watercolor-pc.jpg` | Background watercolor resolusi tinggi (Desktop) | Disalin dari `shizuku` |
-| `public/assets/bg-watercolor-sp.jpg` | Background watercolor resolusi tinggi (Mobile) | Disalin dari `shizuku` |
-| `public/assets/raindrop-line.png` | Garis pembatas *raindrop* pada halaman `LEDGER` | Disalin dari `shizuku` |
-| `public/assets/tumblr_ohhlp7vvyH1qegob8o3_1280.jpg` | **Gambar utama terpusat** di halaman `HOME` | Aktif dipakai di `SHIKAS_ASSETS.heroMain` |
-| `public/assets/hero-left.svg` | Cadangan ilustrasi monokrom bawaan | Tersedia |
+## Asset Aktif Saat Ini
 
-> **Cara ganti gambar nanti:** cukup taruh gambar baru di `public/assets/<nama-file>`, lalu ganti nilai `heroMain` di `src/config/assets.ts` menjadi `"/assets/<nama-file>"` (atau langsung minta saya pasangkan).
+- `bg-watercolor-pc.jpg` — Background cat air pink full-screen desktop (dari SHIZUKU)
+- `bg-watercolor-sp.jpg` — Background cat air pink full-screen mobile (dari SHIZUKU)
+- `bg-watercolor-band.jpg` — Strip cat air magenta-ungu (1024×171, dari footer SHIZUKU)
+- `shizuku-umbrella.png` — Ilustrasi payung cat air SHIZUKU untuk Raindrop Vessel & Dialogue Portrait
+- `raindrop-line.png` — Garis pemisah rintik hujan horizontal (dari SHIZUKU)
+- `tumblr_ohhlp7vvyH1qegob8o3_1280.jpg` — Ilustrasi utama di tengah halaman `HOME`

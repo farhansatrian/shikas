@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import {
   Area,
   AreaChart,
@@ -16,6 +16,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { SHIKAS_ASSETS } from "../../config/assets";
 import { useCashflow } from "../../context/CashflowContext";
 import { CATEGORY_MAP, getCategoryLabel } from "../../data/categories";
 import {
@@ -59,15 +60,15 @@ export const AnalyticsView: React.FC = () => {
     [store.transactions, selectedMonth]
   );
 
-  const insights = useMemo(() => {
+  const chronicles = useMemo(() => {
     const list: string[] = [];
     const top = expenseBreakdown[0];
     if (top) {
       const catName = getCategoryLabel(top.categoryId, locale);
       list.push(
         locale === "id"
-          ? `Pengeluaran terbesar bulan ini ada di "${catName}" (${top.percentage.toFixed(1)}% · ${formatIdr(top.amountIdr)}).`
-          : `Largest spending category this month is "${catName}" (${top.percentage.toFixed(1)}% · ${formatIdr(top.amountIdr)}).`
+          ? `Pengeluaran terbesar bulan ini ada di "${catName}" (${top.percentage.toFixed(1)}% · ${store.settings.privacyMode ? "Rp •••••••" : formatIdr(top.amountIdr)}).`
+          : `Largest spending ripple this month is "${catName}" (${top.percentage.toFixed(1)}% · ${store.settings.privacyMode ? "Rp •••••••" : formatIdr(top.amountIdr)}).`
       );
     }
 
@@ -91,203 +92,72 @@ export const AnalyticsView: React.FC = () => {
     }
 
     return list;
-  }, [expenseBreakdown, currentSummary, prevSummary, selectedMonth, locale]);
+  }, [expenseBreakdown, currentSummary, prevSummary, selectedMonth, locale, store.settings.privacyMode]);
 
   const formatTooltip = (value: number) =>
     store.settings.privacyMode ? "Rp •••••••" : formatIdr(value);
 
   return (
     <div className="space-y-6">
-      {/* Integrated Title + Month Pill */}
+      {/* Editorial Title + Sharp Month Switcher */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="font-nav text-2xl font-medium tracking-[0.14em] text-[#1a1423] uppercase sm:text-[28px]">
+        <div>
+          <p className="font-mono text-[10px] tracking-[0.22em] text-[#745bc7] uppercase">
+            STATISTICS // 雫
+          </p>
+          <h1 className="mt-0.5 font-editorial text-2xl font-normal tracking-[0.26em] text-[#745bc7] uppercase sm:text-3xl">
             {t.analytics.title}
           </h1>
+        </div>
 
-          <div className="inline-flex items-center gap-1 rounded-full border border-[#745bc7]/20 bg-white/80 px-1.5 py-1 shadow-2xs backdrop-blur-md">
-            <button
-              type="button"
-              onClick={() => setSelectedMonth(shiftMonthKey(selectedMonth, -1))}
-              aria-label="Previous month"
-              className="flex h-6.5 w-6.5 items-center justify-center rounded-full text-[#655978] transition hover:bg-[#745bc7]/10 hover:text-[#745bc7]"
-            >
-              <ChevronLeft className="h-3.5 w-3.5" />
-            </button>
-            <span className="min-w-[116px] text-center text-xs font-semibold text-[#1a1423]">
-              {formatMonthLabel(selectedMonth, locale)}
-            </span>
-            <button
-              type="button"
-              onClick={() => setSelectedMonth(shiftMonthKey(selectedMonth, 1))}
-              aria-label="Next month"
-              className="flex h-6.5 w-6.5 items-center justify-center rounded-full text-[#655978] transition hover:bg-[#745bc7]/10 hover:text-[#745bc7]"
-            >
-              <ChevronRight className="h-3.5 w-3.5" />
-            </button>
-          </div>
+        <div className="vn-frame-subtle inline-flex items-center gap-1 px-1.5 py-1">
+          <button
+            type="button"
+            onClick={() => setSelectedMonth(shiftMonthKey(selectedMonth, -1))}
+            aria-label="Previous month"
+            className="flex h-6 w-6 items-center justify-center text-[#745bc7] transition hover:bg-[#e5dcfb]"
+          >
+            <ChevronLeft className="h-3.5 w-3.5" />
+          </button>
+          <span className="min-w-[122px] text-center font-mono text-[11px] font-semibold tracking-[0.12em] text-[#14100e] uppercase">
+            {formatMonthLabel(selectedMonth, locale)}
+          </span>
+          <button
+            type="button"
+            onClick={() => setSelectedMonth(shiftMonthKey(selectedMonth, 1))}
+            aria-label="Next month"
+            className="flex h-6 w-6 items-center justify-center text-[#745bc7] transition hover:bg-[#e5dcfb]"
+          >
+            <ChevronRight className="h-3.5 w-3.5" />
+          </button>
         </div>
       </div>
 
-      {/* 6-Month Composed Chart */}
-      <section className="glass-card rounded-2xl p-5 sm:p-6">
-        <h2 className="text-xs font-bold tracking-[0.12em] text-[#655978] uppercase">
-          {t.analytics.monthlyFlowChart}
-        </h2>
-        <div className="mt-4 h-[270px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={sixMonthData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(116,91,199,0.12)" vertical={false} />
-              <XAxis dataKey="label" tick={{ fill: "#655978", fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis
-                width={68}
-                tick={{ fill: "#655978", fontSize: 10 }}
-                axisLine={false}
-                tickLine={false}
-                tickFormatter={(v: number) =>
-                  store.settings.privacyMode ? "••" : formatCompactIdr(v, locale)
-                }
-              />
-              <Tooltip
-                cursor={{ fill: "rgba(116,91,199,0.06)" }}
-                contentStyle={{
-                  backgroundColor: "rgba(255,255,255,0.97)",
-                  borderColor: "rgba(116,91,199,0.22)",
-                  borderRadius: "14px",
-                  boxShadow: "0 12px 30px -14px rgba(84,54,152,0.25)",
-                  fontSize: "12px",
-                }}
-                formatter={(val: number, name: string) => [
-                  formatTooltip(val),
-                  name === "incomeIdr"
-                    ? t.analytics.incomeLegend
-                    : name === "expenseIdr"
-                      ? t.analytics.expenseLegend
-                      : t.analytics.netLegend,
-                ]}
-              />
-              <Legend
-                formatter={(val: string) =>
-                  val === "incomeIdr"
-                    ? t.analytics.incomeLegend
-                    : val === "expenseIdr"
-                      ? t.analytics.expenseLegend
-                      : t.analytics.netLegend
-                }
-                wrapperStyle={{ fontSize: "11px" }}
-              />
-              <Bar dataKey="incomeIdr" fill="#745bc7" radius={[8, 8, 0, 0]} maxBarSize={24} animationDuration={420} />
-              <Bar dataKey="expenseIdr" fill="#e26cc6" radius={[8, 8, 0, 0]} maxBarSize={24} animationDuration={420} />
-              <Line
-                type="monotone"
-                dataKey="netIdr"
-                stroke="#108469"
-                strokeWidth={2.5}
-                animationDuration={420}
-                dot={{ r: 4, fill: "#108469", strokeWidth: 2, stroke: "#ffffff" }}
-              />
-            </ComposedChart>
-          </ResponsiveContainer>
+      {/* 6-Month Flow Chart inside SHIZUKU RPG Frame */}
+      <section className="vn-frame overflow-hidden">
+        <div className="shikas-band-strip flex items-center justify-between px-4 py-2 text-white">
+          <h2 className="font-mono text-[10px] font-semibold tracking-[0.18em] uppercase drop-shadow-2xs">
+            {t.analytics.monthlyFlowChart}
+          </h2>
+          <span className="font-mono text-[10px] tracking-[0.14em] text-white/90">
+            6M // IDR
+          </span>
         </div>
-      </section>
 
-      {/* Donut Breakdown + Cumulative Balance Area */}
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
-        <section className="glass-card rounded-2xl p-5 sm:p-6 lg:col-span-6">
-          <h2 className="text-xs font-bold tracking-[0.12em] text-[#655978] uppercase">
-            {t.analytics.categoryBreakdown}
-          </h2>
-          {expenseBreakdown.length === 0 ? (
-            <p className="py-16 text-center text-xs text-[#655978]">{t.analytics.noExpenseData}</p>
-          ) : (
-            <div className="mt-4 grid grid-cols-1 items-center gap-4 sm:grid-cols-[152px_1fr]">
-              <div className="mx-auto h-[168px] w-[152px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={expenseBreakdown}
-                      dataKey="amountIdr"
-                      nameKey="categoryId"
-                      innerRadius={44}
-                      outerRadius={68}
-                      paddingAngle={3}
-                      animationDuration={420}
-                    >
-                      {expenseBreakdown.map((entry) => (
-                        <Cell
-                          key={entry.categoryId}
-                          fill={CATEGORY_MAP[entry.categoryId]?.color ?? "#745bc7"}
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "rgba(255,255,255,0.97)",
-                        borderColor: "rgba(116,91,199,0.22)",
-                        borderRadius: "14px",
-                        fontSize: "12px",
-                      }}
-                      formatter={(val: number, name: string) => [
-                        formatTooltip(val),
-                        getCategoryLabel(name, locale),
-                      ]}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-
-              <div className="space-y-2.5">
-                {expenseBreakdown.slice(0, 6).map((item) => {
-                  const cat = CATEGORY_MAP[item.categoryId];
-                  return (
-                    <div
-                      key={item.categoryId}
-                      className="flex items-center justify-between gap-2 text-xs"
-                    >
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span
-                          className="h-2.5 w-2.5 shrink-0 rounded-full"
-                          style={{ backgroundColor: cat?.color ?? "#745bc7" }}
-                        />
-                        <span className="truncate font-medium text-[#1a1423]">
-                          {getCategoryLabel(item.categoryId, locale)}
-                        </span>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <MoneyDisplay
-                          amountIdr={item.amountIdr}
-                          className="text-xs font-semibold text-[#1a1423]"
-                        />
-                        <span className="ml-1.5 font-mono text-[10px] text-[#745bc7]">
-                          {item.percentage.toFixed(0)}%
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </section>
-
-        <section className="glass-card rounded-2xl p-5 sm:p-6 lg:col-span-6">
-          <h2 className="text-xs font-bold tracking-[0.12em] text-[#655978] uppercase">
-            {t.analytics.balanceGrowth}
-          </h2>
-          <div className="mt-4 h-[215px] w-full">
+        <div className="p-4 sm:p-5">
+          <div className="h-[265px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={sixMonthData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="shikasIrisGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#745bc7" stopOpacity={0.32} />
-                    <stop offset="95%" stopColor="#d958b8" stopOpacity={0.03} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(116,91,199,0.12)" vertical={false} />
-                <XAxis dataKey="label" tick={{ fill: "#655978", fontSize: 11 }} axisLine={false} tickLine={false} />
+              <ComposedChart data={sixMonthData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="2 4" stroke="rgba(116,91,199,0.22)" vertical={false} />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fill: "#5d5370", fontSize: 11, fontFamily: "JetBrains Mono, monospace" }}
+                  axisLine={{ stroke: "rgba(116,91,199,0.35)" }}
+                  tickLine={false}
+                />
                 <YAxis
                   width={68}
-                  tick={{ fill: "#655978", fontSize: 10 }}
+                  tick={{ fill: "#5d5370", fontSize: 10, fontFamily: "JetBrains Mono, monospace" }}
                   axisLine={false}
                   tickLine={false}
                   tickFormatter={(v: number) =>
@@ -295,48 +165,238 @@ export const AnalyticsView: React.FC = () => {
                   }
                 />
                 <Tooltip
+                  cursor={{ fill: "rgba(116,91,199,0.08)" }}
                   contentStyle={{
-                    backgroundColor: "rgba(255,255,255,0.97)",
-                    borderColor: "rgba(116,91,199,0.22)",
-                    borderRadius: "14px",
-                    fontSize: "12px",
+                    backgroundColor: "rgba(253,249,255,0.98)",
+                    borderColor: "#745bc7",
+                    borderWidth: "1.5px",
+                    borderRadius: "0px",
+                    boxShadow: "4px 4px 0 rgba(116,91,199,0.2)",
+                    fontFamily: "JetBrains Mono, monospace",
+                    fontSize: "11px",
                   }}
-                  formatter={(val: number) => [formatTooltip(val), t.analytics.balanceLegend]}
+                  formatter={(val: number, name: string) => [
+                    formatTooltip(val),
+                    name === "incomeIdr"
+                      ? t.analytics.incomeLegend
+                      : name === "expenseIdr"
+                        ? t.analytics.expenseLegend
+                        : t.analytics.netLegend,
+                  ]}
                 />
-                <Area
+                <Legend
+                  formatter={(val: string) =>
+                    val === "incomeIdr"
+                      ? t.analytics.incomeLegend
+                      : val === "expenseIdr"
+                        ? t.analytics.expenseLegend
+                        : t.analytics.netLegend
+                  }
+                  wrapperStyle={{ fontSize: "11px", fontFamily: "JetBrains Mono, monospace" }}
+                />
+                <Bar dataKey="incomeIdr" fill="#2276a8" radius={[0, 0, 0, 0]} maxBarSize={22} animationDuration={380} />
+                <Bar dataKey="expenseIdr" fill="#d749d5" radius={[0, 0, 0, 0]} maxBarSize={22} animationDuration={380} />
+                <Line
                   type="monotone"
-                  dataKey="cumulativeBalanceIdr"
+                  dataKey="netIdr"
                   stroke="#745bc7"
-                  strokeWidth={2.5}
-                  animationDuration={420}
-                  fill="url(#shikasIrisGrad)"
+                  strokeWidth={2.2}
+                  animationDuration={380}
+                  dot={{ r: 3.5, fill: "#745bc7", strokeWidth: 1.5, stroke: "#ffffff" }}
                 />
-              </AreaChart>
+              </ComposedChart>
             </ResponsiveContainer>
+          </div>
+        </div>
+      </section>
+
+      {/* RPG Category Stat Bars + Cumulative Balance Trajectory */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+        <section className="vn-frame overflow-hidden lg:col-span-6">
+          <div className="border-b border-[#745bc7]/30 bg-[#e5dcfb]/55 px-4 py-2">
+            <h2 className="font-mono text-[10px] font-bold tracking-[0.18em] text-[#745bc7] uppercase">
+              {t.analytics.categoryBreakdown}
+            </h2>
+          </div>
+
+          <div className="p-4 sm:p-5">
+            {expenseBreakdown.length === 0 ? (
+              <p className="py-16 text-center font-mono text-xs text-[#5d5370]">
+                {t.analytics.noExpenseData}
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 items-center gap-4 sm:grid-cols-[144px_1fr]">
+                <div className="mx-auto h-[156px] w-[144px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={expenseBreakdown}
+                        dataKey="amountIdr"
+                        nameKey="categoryId"
+                        innerRadius={40}
+                        outerRadius={64}
+                        paddingAngle={2}
+                        animationDuration={380}
+                      >
+                        {expenseBreakdown.map((entry) => (
+                          <Cell
+                            key={entry.categoryId}
+                            fill={CATEGORY_MAP[entry.categoryId]?.color ?? "#745bc7"}
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "rgba(253,249,255,0.98)",
+                          borderColor: "#745bc7",
+                          borderRadius: "0px",
+                          fontFamily: "JetBrains Mono, monospace",
+                          fontSize: "11px",
+                        }}
+                        formatter={(val: number, name: string) => [
+                          formatTooltip(val),
+                          getCategoryLabel(name, locale),
+                        ]}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* Ranked RPG Category Stat Bars */}
+                <div className="space-y-2.5">
+                  {expenseBreakdown.slice(0, 6).map((item) => {
+                    const cat = CATEGORY_MAP[item.categoryId];
+                    const barColor = cat?.color ?? "#745bc7";
+                    return (
+                      <div key={item.categoryId}>
+                        <div className="flex items-center justify-between gap-2 font-mono text-[11px]">
+                          <span className="truncate font-semibold text-[#14100e]">
+                            {getCategoryLabel(item.categoryId, locale)}
+                          </span>
+                          <div className="shrink-0 text-right">
+                            <MoneyDisplay
+                              amountIdr={item.amountIdr}
+                              className="text-[11px] font-bold text-[#14100e]"
+                            />
+                            <span className="ml-1.5 text-[10px] text-[#745bc7]">
+                              {item.percentage.toFixed(0)}%
+                            </span>
+                          </div>
+                        </div>
+                        <div className="mt-1 h-1.5 w-full bg-[#745bc7]/12">
+                          <div
+                            className="h-full transition-all duration-300"
+                            style={{
+                              width: `${Math.min(100, item.percentage)}%`,
+                              backgroundColor: barColor,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="vn-frame overflow-hidden lg:col-span-6">
+          <div className="border-b border-[#745bc7]/30 bg-[#e5dcfb]/55 px-4 py-2">
+            <h2 className="font-mono text-[10px] font-bold tracking-[0.18em] text-[#745bc7] uppercase">
+              {t.analytics.balanceGrowth}
+            </h2>
+          </div>
+
+          <div className="p-4 sm:p-5">
+            <div className="h-[205px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={sixMonthData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="shikasVesselArea" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#745bc7" stopOpacity={0.42} />
+                      <stop offset="65%" stopColor="#d749d5" stopOpacity={0.18} />
+                      <stop offset="100%" stopColor="#ef85e8" stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="2 4" stroke="rgba(116,91,199,0.2)" vertical={false} />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fill: "#5d5370", fontSize: 11, fontFamily: "JetBrains Mono, monospace" }}
+                    axisLine={{ stroke: "rgba(116,91,199,0.35)" }}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    width={68}
+                    tick={{ fill: "#5d5370", fontSize: 10, fontFamily: "JetBrains Mono, monospace" }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(v: number) =>
+                      store.settings.privacyMode ? "••" : formatCompactIdr(v, locale)
+                    }
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "rgba(253,249,255,0.98)",
+                      borderColor: "#745bc7",
+                      borderRadius: "0px",
+                      fontFamily: "JetBrains Mono, monospace",
+                      fontSize: "11px",
+                    }}
+                    formatter={(val: number) => [formatTooltip(val), t.analytics.balanceLegend]}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="cumulativeBalanceIdr"
+                    stroke="#745bc7"
+                    strokeWidth={2.2}
+                    animationDuration={380}
+                    fill="url(#shikasVesselArea)"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         </section>
       </div>
 
-      {/* Twilight Insights Card */}
-      {insights.length > 0 && (
-        <section className="glass-twilight rounded-2xl p-6">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-[#f0a3e8]" />
-            <h2 className="text-xs font-bold tracking-[0.14em] text-white/85 uppercase">
-              {t.analytics.insightsTitle}
-            </h2>
+      {/* SHIZUKU Visual Novel Chronicle Notes (Replaces generic AI Sparkles Card) */}
+      {chronicles.length > 0 && (
+        <section className="vn-dialogue p-4 sm:p-5">
+          <div className="flex items-start gap-4">
+            <div className="hidden h-14 w-14 shrink-0 items-center justify-center border border-[#745bc7] bg-gradient-to-b from-[#efe9fd] to-[#fde8f6] p-2 sm:flex">
+              <img
+                src={SHIKAS_ASSETS.umbrella}
+                alt="SHIZUKU"
+                className="h-9 w-auto object-contain"
+              />
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between border-b border-[#745bc7]/25 pb-1.5">
+                <h2 className="font-editorial text-sm font-bold tracking-[0.2em] text-[#745bc7] uppercase">
+                  {locale === "id" ? "CATATAN SHIZUKU (雫)" : "SHIZUKU CHRONICLE (雫)"}
+                </h2>
+                <span className="font-mono text-[10px] tracking-[0.14em] text-[#d749d5]">
+                  {formatMonthLabel(selectedMonth, locale).toUpperCase()}
+                </span>
+              </div>
+
+              <ul className="mt-3 space-y-2">
+                {chronicles.map((line, i) => (
+                  <li
+                    key={i}
+                    className="flex items-start gap-2.5 font-mono text-xs leading-relaxed text-[#14100e]"
+                  >
+                    <span className="shrink-0 font-bold text-[#d749d5]">
+                      0{i + 1} ▶
+                    </span>
+                    <span>{line}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
-          <ul className="mt-4 space-y-2.5">
-            {insights.map((line, i) => (
-              <li
-                key={i}
-                className="flex items-start gap-3 rounded-xl bg-white/[0.06] px-4 py-3 text-sm text-white/90"
-              >
-                <span className="mt-0.5 font-mono text-xs text-[#e2a5f5]">0{i + 1}</span>
-                <span>{line}</span>
-              </li>
-            ))}
-          </ul>
         </section>
       )}
     </div>

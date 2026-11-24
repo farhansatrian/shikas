@@ -1,13 +1,17 @@
 @import "tailwindcss";
 
 :root {
-  --shikas-ink: #1a1423;
-  --shikas-muted: #655978;
+  --shikas-ink: #14100e;
+  --shikas-muted: #5d5370;
+  --shikas-lavender: #e5dcfb;
+  --shikas-lavender-soft: #f5effe;
   --shikas-iris: #745bc7;
   --shikas-violet: #7650f3;
-  --shikas-blush: #d958b8;
-  --shikas-income: #108469;
-  --shikas-expense: #c43673;
+  --shikas-magenta: #d749d5;
+  --shikas-magenta-deep: #b8339f;
+  --shikas-rain: #2276a8;
+  --shikas-rain-soft: #3b93c6;
+  --shikas-line: rgba(116, 91, 199, 0.3);
 }
 
 @theme inline {
@@ -45,14 +49,16 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* High-Resolution Pink Watercolor Backdrop (from SHIZUKU) */
+/* ============================================================================
+   Authentic SHIZUKU Full-Screen Pink Watercolor Backdrop (Untouched)
+   ============================================================================ */
 .shikas-watercolor-bg {
   position: fixed;
   inset: 0;
   z-index: -2;
   background-color: #fde8f6;
   background-image:
-    linear-gradient(180deg, rgba(255, 252, 254, 0.28) 0%, rgba(255, 250, 254, 0.16) 55%, rgba(255, 248, 254, 0.26) 100%),
+    linear-gradient(180deg, rgba(255, 252, 254, 0.22) 0%, rgba(255, 250, 254, 0.12) 55%, rgba(255, 248, 254, 0.2) 100%),
     url("/assets/bg-watercolor-pc.jpg");
   background-repeat: no-repeat;
   background-position: center center;
@@ -63,98 +69,216 @@ body {
 @media (max-width: 767px) {
   .shikas-watercolor-bg {
     background-image:
-      linear-gradient(180deg, rgba(255, 252, 254, 0.24) 0%, rgba(255, 250, 254, 0.14) 55%, rgba(255, 248, 254, 0.24) 100%),
+      linear-gradient(180deg, rgba(255, 252, 254, 0.2) 0%, rgba(255, 250, 254, 0.1) 55%, rgba(255, 248, 254, 0.18) 100%),
       url("/assets/bg-watercolor-sp.jpg");
   }
 }
 
 /* ============================================================================
-   Refined Tactile Frosted Glass Surfaces (Airy, Delicate, Harmonious with Pink)
+   Authentic SHIZUKU Vivid Magenta-Purple Watercolor Band (tuyu-watercolor-band.jpg)
+   Used natively for Footer Band & RPG Window Title Strips (Crisp 1024x171 ratio)
    ============================================================================ */
-.glass-card {
-  background: rgba(255, 255, 255, 0.84);
-  border: 1px solid rgba(116, 91, 199, 0.16);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  box-shadow: 0 14px 36px -24px rgba(84, 54, 152, 0.26);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
+.shikas-footer-band {
+  background-color: #c86ce8;
+  background-image:
+    url("/assets/bg-watercolor-band.jpg"),
+    linear-gradient(110deg, #ef85e8 0%, #c05ce6 52%, #745bc7 100%);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
 }
 
-.glass-card-interactive:hover {
-  background: rgba(255, 255, 255, 0.94);
-  border-color: rgba(116, 91, 199, 0.34);
-  box-shadow: 0 18px 40px -22px rgba(84, 54, 152, 0.34);
+.shikas-band-strip {
+  background-color: #c86ce8;
+  background-image:
+    linear-gradient(90deg, rgba(116, 91, 199, 0.22) 0%, rgba(215, 73, 213, 0.14) 60%, rgba(116, 91, 199, 0.32) 100%),
+    url("/assets/bg-watercolor-band.jpg"),
+    linear-gradient(110deg, #ef85e8 0%, #c05ce6 52%, #745bc7 100%);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
 }
 
-.glass-twilight {
-  background:
-    radial-gradient(circle at 90% 10%, rgba(217, 88, 184, 0.24) 0%, transparent 48%),
-    radial-gradient(circle at 12% 95%, rgba(118, 80, 243, 0.26) 0%, transparent 50%),
-    linear-gradient(145deg, #1d162e 0%, #2a2045 100%);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  color: #f9f6ff;
-  box-shadow: 0 22px 46px -26px rgba(29, 22, 46, 0.65);
+/* ============================================================================
+   SHIZUKU Visual Novel / Anime RPG Double-Border Frame (Zero AI Rounded Cards)
+   Sharp 0px geometry, iris double-frame, lavender-tinted paper, crisp shadow
+   ============================================================================ */
+.vn-frame {
+  position: relative;
+  background: rgba(253, 249, 255, 0.88);
+  border: 1.5px solid #745bc7;
+  box-shadow:
+    inset 0 0 0 3px rgba(255, 255, 255, 0.92),
+    inset 0 0 0 4px rgba(116, 91, 199, 0.28),
+    4px 4px 0 0 rgba(116, 91, 199, 0.16);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
-.shikas-btn-primary {
-  display: inline-flex;
+.vn-frame-subtle {
+  position: relative;
+  background: rgba(253, 249, 255, 0.78);
+  border: 1px solid rgba(116, 91, 199, 0.55);
+  box-shadow: 3px 3px 0 0 rgba(116, 91, 199, 0.12);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.vn-dialogue {
+  position: relative;
+  background: rgba(252, 248, 255, 0.92);
+  border: 2px solid #745bc7;
+  box-shadow:
+    inset 0 0 0 3px rgba(255, 255, 255, 0.96),
+    inset 0 0 0 4.5px rgba(215, 73, 213, 0.34),
+    5px 5px 0 0 rgba(116, 91, 199, 0.18);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* Crisp RPG Command Buttons (Sharp edges, zero gradient pills) */
+.vn-cmd {
+  position: relative;
+  display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 0.45rem;
-  border-radius: 9999px;
-  background: linear-gradient(135deg, #745bc7 0%, #7f5af0 65%, #b557dc 100%);
-  color: #ffffff;
-  font-weight: 600;
-  box-shadow: 0 10px 24px -12px rgba(116, 91, 199, 0.72);
-  transition: transform 0.15s ease, box-shadow 0.2s ease, opacity 0.2s ease;
-}
-
-.shikas-btn-primary:hover {
-  opacity: 0.95;
-  transform: translateY(-1px);
-  box-shadow: 0 14px 28px -12px rgba(116, 91, 199, 0.84);
-}
-
-.shikas-btn-primary:active {
-  transform: translateY(0);
-}
-
-.shikas-btn-soft {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.45rem;
-  border-radius: 9999px;
-  border: 1px solid rgba(116, 91, 199, 0.24);
-  background: rgba(255, 255, 255, 0.8);
+  justify-content: space-between;
+  border: 1px solid rgba(116, 91, 199, 0.35);
+  background: rgba(255, 255, 255, 0.72);
   color: var(--shikas-ink);
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.12s ease, color 0.15s ease;
+}
+
+.vn-cmd:hover,
+.vn-cmd[data-selected="true"] {
+  border-color: #745bc7;
+  background: rgba(229, 220, 251, 0.55);
+  transform: translateX(2px);
+}
+
+.vn-btn-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border: 1.5px solid #745bc7;
+  background: rgba(255, 255, 255, 0.85);
+  color: #745bc7;
+  font-family: var(--font-mono);
+  font-size: 11px;
   font-weight: 600;
-  transition: all 0.18s ease;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  box-shadow: 2px 2px 0 0 rgba(116, 91, 199, 0.22);
+  transition: background-color 0.15s ease, color 0.15s ease, transform 0.12s ease, border-color 0.15s ease;
 }
 
-.shikas-btn-soft:hover {
-  background: #ffffff;
-  border-color: rgba(116, 91, 199, 0.5);
-  color: var(--shikas-iris);
+.vn-btn-action:hover {
+  background: #745bc7;
+  color: #ffffff;
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 0 rgba(116, 91, 199, 0.32);
 }
 
-/* Modal pop animation */
+.vn-btn-action:active {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0 0 rgba(116, 91, 199, 0.22);
+}
+
+.vn-btn-band {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border: 1.5px solid #745bc7;
+  background-color: #b752de;
+  background-image:
+    linear-gradient(105deg, rgba(116, 91, 199, 0.35) 0%, rgba(215, 73, 213, 0.32) 100%),
+    url("/assets/bg-watercolor-band.jpg");
+  background-size: cover;
+  background-position: center;
+  color: #ffffff;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-shadow: 0 1px 4px rgba(45, 18, 84, 0.45);
+  box-shadow: 3px 3px 0 0 rgba(116, 91, 199, 0.28);
+  transition: opacity 0.15s ease, transform 0.12s ease, box-shadow 0.15s ease;
+}
+
+.vn-btn-band:hover {
+  opacity: 0.94;
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 0 rgba(116, 91, 199, 0.36);
+}
+
+.vn-btn-band:active {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0 0 rgba(116, 91, 199, 0.28);
+}
+
+/* ============================================================================
+   Subtle Game-UI Micro-Animations (Silent — Zero SFX)
+   ============================================================================ */
+@keyframes vnCursorNudge {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(3px);
+  }
+}
+
+.animate-vn-cursor {
+  display: inline-block;
+  animation: vnCursorNudge 0.95s ease-in-out infinite;
+}
+
+@keyframes vnNextPrompt {
+  0%, 100% {
+    transform: translateY(0);
+    opacity: 0.95;
+  }
+  50% {
+    transform: translateY(3px);
+    opacity: 0.45;
+  }
+}
+
+.animate-vn-next {
+  animation: vnNextPrompt 1.15s ease-in-out infinite;
+}
+
+@keyframes umbrellaFloat {
+  0%, 100% {
+    transform: translateY(0px) rotate(-2deg);
+  }
+  50% {
+    transform: translateY(-5px) rotate(2deg);
+  }
+}
+
+.animate-umbrella-float {
+  animation: umbrellaFloat 4.2s ease-in-out infinite;
+}
+
 @keyframes modalPopIn {
   from {
     opacity: 0;
-    transform: translateY(10px) scale(0.98);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateY(0);
   }
 }
 
 .animate-modal-in {
-  animation: modalPopIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: modalPopIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Authentic SHIZUKU Raindrop Horizontal Divider */
+/* Authentic SHIZUKU Raindrop Horizontal Divider (line.png) */
 .tuyu-raindrop-divider {
   height: 7px;
   width: 100%;
@@ -162,20 +286,20 @@ body {
   background-repeat: repeat-x;
   background-position: left center;
   background-size: 460px 6px;
-  opacity: 0.42;
+  opacity: 0.55;
 }
 
-/* Subtle Pure-CSS Falling Vertical Raindrops */
+/* Authentic Pure-CSS Falling Vertical Raindrops (#2276a8 / iris) */
 @keyframes shizukuRainFall {
   0% {
     transform: translateY(-80px);
     opacity: 0;
   }
   12% {
-    opacity: 0.22;
+    opacity: 0.28;
   }
   85% {
-    opacity: 0.18;
+    opacity: 0.22;
   }
   100% {
     transform: translateY(105vh);
@@ -187,8 +311,8 @@ body {
   position: absolute;
   top: -80px;
   width: 1px;
-  height: 50px;
-  background: linear-gradient(180deg, transparent 0%, rgba(116, 91, 199, 0.45) 100%);
+  height: 54px;
+  background: linear-gradient(180deg, transparent 0%, rgba(34, 118, 168, 0.55) 100%);
   animation-name: shizukuRainFall;
   animation-timing-function: linear;
   animation-iteration-count: infinite;
@@ -197,7 +321,10 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .shizuku-rain-drop,
-  .animate-modal-in {
+  .animate-modal-in,
+  .animate-vn-cursor,
+  .animate-vn-next,
+  .animate-umbrella-float {
     animation: none;
   }
   .shizuku-rain-drop {
@@ -211,16 +338,15 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(253, 232, 246, 0.45);
+  background: rgba(229, 220, 251, 0.4);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(116, 91, 199, 0.28);
-  border-radius: 9999px;
+  background: rgba(116, 91, 199, 0.35);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(116, 91, 199, 0.48);
+  background: rgba(116, 91, 199, 0.6);
 }
 
 input,

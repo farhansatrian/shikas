@@ -1,12 +1,9 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
-  ArrowDownLeft,
-  ArrowUpRight,
   ChevronLeft,
   ChevronRight,
   Copy,
   Pencil,
-  Plus,
   Search,
   Trash2,
   X,
@@ -15,18 +12,60 @@ import { useCashflow } from "../../context/CashflowContext";
 import { CATEGORY_MAP, getCategoryLabel } from "../../data/categories";
 import type { Transaction, TransactionType } from "../../types/cashflow";
 import {
+  computeCategoryBreakdown,
   computeCumulativeNetBalance,
   computeMonthlySummary,
+  computePercentDelta,
 } from "../../utils/calculations";
 import {
   formatDateHeading,
+  formatIdr,
   formatMonthLabel,
   shiftMonthKey,
 } from "../../utils/format";
 import { CategoryIcon } from "../common/CategoryIcon";
 import { MoneyDisplay } from "../common/MoneyDisplay";
+import { RaindropVessel, type VesselMood } from "./RaindropVessel";
+import { VnDialogueBox } from "./VnDialogueBox";
 
 type FilterType = "all" | TransactionType;
+
+const GAUGE_SEGMENTS = 20;
+
+const SegmentedRpgBar: React.FC<{
+  percent: number;
+  variant: "reserve" | "spent";
+}> = ({ percent, variant }) => {
+  const clamped = Math.max(0, Math.min(100, percent));
+  const filledCount = Math.round((clamped / 100) * GAUGE_SEGMENTS);
+
+  return (
+    <div
+      className="grid gap-[3px]"
+      style={{ gridTemplateColumns: `repeat(${GAUGE_SEGMENTS}, minmax(0, 1fr))` }}
+      aria-hidden="true"
+    >
+      {Array.from({ length: GAUGE_SEGMENTS }).map((_, i) => {
+        const active = i < filledCount;
+        let bg = "rgba(116, 91, 199, 0.13)";
+        if (active) {
+          if (variant === "reserve") {
+            bg = i < 10 ? "#2276a8" : "#745bc7";
+          } else {
+            bg = i < 10 ? "#d749d5" : "#b8339f";
+          }
+        }
+        return (
+          <span
+            key={i}
+            className="h-2.5 w-full transition-colors duration-200"
+            style={{ backgroundColor: bg }}
+          />
+        );
+      })}
+    </div>
+  );
+};
 
 export const CashflowView: React.FC = () => {
   const {
@@ -39,11 +78,15 @@ export const CashflowView: React.FC = () => {
     openEditTxModal,
     duplicateTransaction,
     deleteTransaction,
+    isTxModalOpen,
+    lastTxEvent,
   } = useCashflow();
 
   const [typeFilter, setTypeFilter] = useState<FilterType>("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [query, setQuery] = useState("");
+  const [selectedCmd, setSelectedCmd] = useState(0);
+  const [dialogueIdx, setDialogueIdx] = useState(0);
 
   const monthTransactions = useMemo(
     () => store.transactions.filter((tx) => tx.date.startsWith(selectedMonth)),
@@ -55,12 +98,21 @@ export const CashflowView: React.FC = () => {
     [store.transactions, selectedMonth]
   );
 
+  const prevSummary = useMemo(
+    () => computeMonthlySummary(store.transactions, shiftMonthKey(selectedMonth, -1)),
+    [store.transactions, selectedMonth]
+  );
+
+  const topExpenseCat = useMemo(
+    () => computeCategoryBreakdown(store.transactions, selectedMonth, "expense")[0],
+    [store.transactions, selectedMonth]
+  );
+
   const cumulativeBalance = useMemo(
     () => computeCumulativeNetBalance(store.transactions),
     [store.transactions]
   );
 
-  // Only show categories that actually appear in the selected month (+ filter type) for clean chips
   const activeMonthCategoryIds = useMemo(() => {
     const ids = new Set<string>();
     for (const tx of monthTransactions) {
@@ -108,338 +160,515 @@ export const CashflowView: React.FC = () => {
         : 0;
 
   const savedRatio =
-    monthSummary.incomeIdr > 0
-      ? Math.max(0, 100 - spentRatio)
-      : 0;
+    monthSummary.incomeIdr > 0 ? Math.max(0, 100 - spentRatio) : 0;
 
-  const hasActiveFilter =
-    typeFilter !== "all" || categoryFilter !== "all" || query.trim() !== "";
+  const isDeficit = monthSummary.netCashflowIdr < 0;
+  const hasData = monthSummary.txCount > 0;
+
+  const mood: VesselMood = !hasData
+    ? "quiet"
+    : isDeficit || savedRatio < 15
+      ? "drained"
+      : savedRatio >= 40
+        ? "calm"
+        : "balanced";
+
+  const mask = (amount: number) =>
+    store.settings.privacyMode ? "Rp •••••••" : formatIdr(amount);
+
+  // Dynamic Visual Novel chronicle lines (reacts to transactions & monthly health)
+  const dialogueLines = useMemo(() => {
+    const monthLabel = formatMonthLabel(selectedMonth, locale);
+    const lines: string[] = [];
+
+    if (lastTxEvent) {
+      if (lastTxEvent.type === "income") {
+        lines.push(
+          locale === "id"
+            ? `Tetesan baru tertangkap: +${mask(lastTxEvent.amountIdr)} (${lastTxEvent.note}). Permukaan air di wadah kembali naik.`
+            : `Raindrop caught: +${mask(lastTxEvent.amountIdr)} (${lastTxEvent.note}). The vessel rises calmly.`
+        );
+      } else {
+        lines.push(
+          locale === "id"
+            ? `Riak magenta tercatat: -${mask(lastTxEvent.amountIdr)} untuk "${lastTxEvent.note}". Arus kas bulan ini langsung diperbarui.`
+            : `Magenta ripple logged: -${mask(lastTxEvent.amountIdr)} for "${lastTxEvent.note}". Monthly reserve updated.`
+        );
+      }
+    }
+
+    if (!hasData) {
+      lines.push(
+        locale === "id"
+          ? `Wadah ${monthLabel} masih hening. Pilih perintah [+ INCOME] atau [- EXPENSE] untuk mulai menampung arus kas.`
+          : `${monthLabel}'s vessel is completely still. Pick [+ INCOME] or [- EXPENSE] from the command menu to begin.`
+      );
+    } else if (isDeficit) {
+      lines.push(
+        locale === "id"
+          ? `Hujan di ${monthLabel} cukup deras — pengeluaran melebihi pemasukan sebesar ${mask(Math.abs(monthSummary.netCashflowIdr))}.`
+          : `Heavy magenta downpour in ${monthLabel} — spending outpaced income by ${mask(Math.abs(monthSummary.netCashflowIdr))}.`
+      );
+    } else {
+      lines.push(
+        locale === "id"
+          ? `Arus ${monthLabel} terkendali: ${mask(monthSummary.netCashflowIdr)} tersimpan di wadah (${savedRatio.toFixed(0)}% dari total pemasukan).`
+          : `${monthLabel}'s rain holds steady — ${mask(monthSummary.netCashflowIdr)} remains in the vessel (${savedRatio.toFixed(0)}% of monthly inflow).`
+      );
+    }
+
+    if (topExpenseCat) {
+      const catName = getCategoryLabel(topExpenseCat.categoryId, locale);
+      lines.push(
+        locale === "id"
+          ? `Riak pengeluaran terbesar bulan ini berasal dari ${catName} (${topExpenseCat.percentage.toFixed(0)}% · ${mask(topExpenseCat.amountIdr)}).`
+          : `Biggest spending ripple this month comes from ${catName} (${topExpenseCat.percentage.toFixed(0)}% · ${mask(topExpenseCat.amountIdr)}).`
+      );
+    }
+
+    const expDelta = computePercentDelta(monthSummary.expenseIdr, prevSummary.expenseIdr);
+    if (expDelta !== null) {
+      const prevLabel = formatMonthLabel(shiftMonthKey(selectedMonth, -1), locale);
+      lines.push(
+        locale === "id"
+          ? `Dibanding ${prevLabel}, total pengeluaran ${expDelta <= 0 ? "turun" : "naik"} ${Math.abs(expDelta).toFixed(1)}%.`
+          : `Compared to ${prevLabel}, total spending ${expDelta <= 0 ? "dropped" : "rose"} by ${Math.abs(expDelta).toFixed(1)}%.`
+      );
+    }
+
+    return lines;
+  }, [
+    selectedMonth,
+    locale,
+    lastTxEvent,
+    hasData,
+    isDeficit,
+    monthSummary,
+    prevSummary,
+    savedRatio,
+    topExpenseCat,
+    store.settings.privacyMode,
+  ]);
+
+  // Reset dialogue index to latest burst line when a transaction is saved
+  useEffect(() => {
+    if (lastTxEvent) {
+      setDialogueIdx(0);
+    }
+  }, [lastTxEvent]);
 
   const handleSetTypeFilter = (next: FilterType) => {
     setTypeFilter(next);
     setCategoryFilter("all");
   };
 
+  const cycleFilter = () => {
+    const order: FilterType[] = ["all", "income", "expense"];
+    const next = order[(order.indexOf(typeFilter) + 1) % order.length];
+    handleSetTypeFilter(next);
+  };
+
+  const commands = useMemo(
+    () => [
+      {
+        id: "income",
+        label: locale === "id" ? "+ CATAT PEMASUKAN" : "+ RECORD INCOME",
+        tag: "IN",
+        accent: "#2276a8",
+        run: () => openNewTxModal("income"),
+      },
+      {
+        id: "expense",
+        label: locale === "id" ? "- CATAT PENGELUARAN" : "- RECORD EXPENSE",
+        tag: "OUT",
+        accent: "#c837a5",
+        run: () => openNewTxModal("expense"),
+      },
+      {
+        id: "filter",
+        label:
+          locale === "id"
+            ? `FILTER: ${typeFilter === "all" ? "SEMUA" : typeFilter === "income" ? "PEMASUKAN" : "PENGELUARAN"}`
+            : `FILTER: ${typeFilter.toUpperCase()}`,
+        tag: "TAB",
+        accent: "#745bc7",
+        run: cycleFilter,
+      },
+      {
+        id: "dialogue",
+        label: locale === "id" ? "CATATAN LANJUT" : "NEXT CHRONICLE",
+        tag: "LOG",
+        accent: "#7650f3",
+        run: () => setDialogueIdx((i) => i + 1),
+      },
+    ],
+    [locale, openNewTxModal, typeFilter]
+  );
+
+  // Silent RPG Keyboard Navigation (↑ ↓ Enter) when modal & inputs are inactive
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (isTxModalOpen) return;
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setSelectedCmd((prev) => (prev + 1) % commands.length);
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setSelectedCmd((prev) => (prev - 1 + commands.length) % commands.length);
+      } else if (e.key === "Enter" && document.activeElement === document.body) {
+        e.preventDefault();
+        commands[selectedCmd]?.run();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isTxModalOpen, commands, selectedCmd]);
+
+  const hasActiveFilter =
+    typeFilter !== "all" || categoryFilter !== "all" || query.trim() !== "";
+
   return (
     <div className="space-y-6">
-      {/* Clean Single Top Bar: Title + Integrated Month Switcher + Tactile Pill Actions */}
-      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="font-nav text-2xl font-medium tracking-[0.14em] text-[#1a1423] uppercase sm:text-[28px]">
-            {t.cashflow.title}
-          </h1>
-
-          {/* Integrated Sleek Month Pill */}
-          <div className="inline-flex items-center gap-1 rounded-full border border-[#745bc7]/20 bg-white/80 px-1.5 py-1 shadow-2xs backdrop-blur-md">
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedMonth(shiftMonthKey(selectedMonth, -1));
-                setCategoryFilter("all");
-              }}
-              aria-label="Previous month"
-              className="flex h-6.5 w-6.5 items-center justify-center rounded-full text-[#655978] transition hover:bg-[#745bc7]/10 hover:text-[#745bc7]"
-            >
-              <ChevronLeft className="h-3.5 w-3.5" />
-            </button>
-            <span className="min-w-[116px] text-center text-xs font-semibold text-[#1a1423]">
-              {formatMonthLabel(selectedMonth, locale)}
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedMonth(shiftMonthKey(selectedMonth, 1));
-                setCategoryFilter("all");
-              }}
-              aria-label="Next month"
-              className="flex h-6.5 w-6.5 items-center justify-center rounded-full text-[#655978] transition hover:bg-[#745bc7]/10 hover:text-[#745bc7]"
-            >
-              <ChevronRight className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        </div>
-
-        {/* Crisp Tactile Action Pills */}
-        <div className="flex items-center gap-2.5">
-          <button
-            type="button"
-            onClick={() => openNewTxModal("income")}
-            className="shikas-btn-soft px-4 py-2 text-xs text-[#108469] hover:border-[#108469]/50 hover:text-[#108469]"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            {t.actions.addIncome}
-          </button>
-          <button
-            type="button"
-            onClick={() => openNewTxModal("expense")}
-            className="shikas-btn-primary px-4.5 py-2 text-xs"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            {t.actions.addExpense}
-          </button>
-        </div>
-      </div>
-
       {/* =====================================================================
-          TACTILE BENTO SUMMARY (Hero Net Cashflow + Interactive Income/Expense)
+          1. INTERACTIVE STAGE: SHIZUKU Raindrop Vessel + Anime RPG Status Menu
          ===================================================================== */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-        {/* Left: Hero Net Cashflow & Ratio Card */}
-        <div className="glass-card flex flex-col justify-between rounded-2xl p-6 lg:col-span-7">
-          <div>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-xs font-semibold tracking-wide text-[#655978]">
-                {t.cashflow.netCashflow}
-              </span>
-              {monthSummary.incomeIdr > 0 && (
-                <span
-                  className={`rounded-full px-2.5 py-0.5 font-mono text-[11px] font-semibold ${
-                    monthSummary.netCashflowIdr >= 0
-                      ? "bg-[#108469]/12 text-[#108469]"
-                      : "bg-[#c43673]/12 text-[#c43673]"
-                  }`}
-                >
-                  {monthSummary.netCashflowIdr >= 0
-                    ? `${savedRatio.toFixed(0)}% ${locale === "id" ? "tersimpan" : "saved"}`
-                    : locale === "id"
-                      ? "Defisit"
-                      : "Deficit"}
-                </span>
-              )}
-            </div>
-
-            <div className="mt-2.5">
-              <MoneyDisplay
-                amountIdr={monthSummary.netCashflowIdr}
-                showSign
-                className={`text-3xl font-bold tracking-tight sm:text-[34px] ${
-                  monthSummary.netCashflowIdr >= 0 ? "text-[#1a1423]" : "text-[#c43673]"
-                }`}
-              />
-            </div>
-
-            {/* Sleek Income vs Expense Ratio Meter */}
-            <div className="mt-5">
-              <div className="flex h-2 w-full overflow-hidden rounded-full bg-[#745bc7]/12">
-                {monthSummary.incomeIdr > 0 && (
-                  <>
-                    <div
-                      className="h-full rounded-l-full bg-gradient-to-r from-[#108469] to-[#26a68a] transition-all duration-300"
-                      style={{ width: `${savedRatio}%` }}
-                    />
-                    <div
-                      className="h-full bg-gradient-to-r from-[#d958b8] to-[#c43673] transition-all duration-300"
-                      style={{ width: `${spentRatio}%` }}
-                    />
-                  </>
-                )}
-              </div>
-              <div className="mt-2 flex items-center justify-between text-[11px] text-[#655978]">
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-[#108469]" />
-                  {locale === "id" ? "Tersimpan" : "Saved"} ({savedRatio.toFixed(0)}%)
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-[#c43673]" />
-                  {locale === "id" ? "Terpakai" : "Spent"} ({spentRatio.toFixed(0)}%)
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-[#745bc7]/12 pt-3.5 text-xs text-[#655978]">
-            <span>
-              {t.cashflow.totalSaved}:{" "}
-              <MoneyDisplay
-                amountIdr={cumulativeBalance}
-                className="font-semibold text-[#745bc7]"
-              />
-            </span>
-            <span className="font-mono text-[11px]">
-              {monthSummary.txCount} {t.cashflow.entriesCount}
-            </span>
-          </div>
+      <section className="grid grid-cols-1 gap-5 lg:grid-cols-12">
+        {/* Left: Live Interactive Raindrop Vessel */}
+        <div className="lg:col-span-5">
+          <RaindropVessel
+            savedRatio={savedRatio}
+            hasData={hasData}
+            isDeficit={isDeficit}
+            mood={mood}
+            locale={locale}
+            burstEvent={lastTxEvent}
+          />
         </div>
 
-        {/* Right: 2 Crisp Stacked Income & Expense Interactive Cards */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:col-span-5 lg:grid-cols-1">
-          {/* Income Card */}
-          <div
-            onClick={() => handleSetTypeFilter(typeFilter === "income" ? "all" : "income")}
-            className={`glass-card glass-card-interactive flex cursor-pointer items-center justify-between rounded-2xl p-5 ${
-              typeFilter === "income" ? "ring-2 ring-[#108469]/45" : ""
-            }`}
-          >
-            <div className="flex items-center gap-3.5">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#108469]/12 text-[#108469]">
-                <ArrowDownLeft className="h-5 w-5" />
-              </span>
-              <div>
-                <p className="text-xs font-medium text-[#655978]">{t.cashflow.income}</p>
-                <div className="mt-0.5">
-                  <MoneyDisplay
-                    amountIdr={monthSummary.incomeIdr}
-                    className="text-xl font-bold text-[#108469]"
-                  />
-                </div>
-              </div>
-            </div>
+        {/* Right: RPG Status & Command Panel (SHIZUKU Violet-Magenta Palette) */}
+        <div className="vn-frame flex flex-col justify-between overflow-hidden lg:col-span-7">
+          {/* Vivid Watercolor Header Strip with Integrated Month Switcher */}
+          <div className="shikas-band-strip flex flex-wrap items-center justify-between gap-2 px-4 py-2 text-white">
+            <span className="font-mono text-[10px] font-semibold tracking-[0.2em] uppercase drop-shadow-2xs">
+              {t.cashflow.title} // IDR
+            </span>
 
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                openNewTxModal("income");
-              }}
-              aria-label="Quick add income"
-              title={t.actions.addIncome}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#108469]/10 text-[#108469] transition hover:bg-[#108469] hover:text-white"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
-          </div>
-
-          {/* Expense Card */}
-          <div
-            onClick={() => handleSetTypeFilter(typeFilter === "expense" ? "all" : "expense")}
-            className={`glass-card glass-card-interactive flex cursor-pointer items-center justify-between rounded-2xl p-5 ${
-              typeFilter === "expense" ? "ring-2 ring-[#c43673]/45" : ""
-            }`}
-          >
-            <div className="flex items-center gap-3.5">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#c43673]/12 text-[#c43673]">
-                <ArrowUpRight className="h-5 w-5" />
-              </span>
-              <div>
-                <p className="text-xs font-medium text-[#655978]">{t.cashflow.expense}</p>
-                <div className="mt-0.5">
-                  <MoneyDisplay
-                    amountIdr={monthSummary.expenseIdr}
-                    className="text-xl font-bold text-[#c43673]"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                openNewTxModal("expense");
-              }}
-              aria-label="Quick add expense"
-              title={t.actions.addExpense}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#c43673]/10 text-[#c43673] transition hover:bg-[#c43673] hover:text-white"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* =====================================================================
-          UNIFIED FROSTED GLASS LEDGER SHEET (Zero fragmented day boxes!)
-         ===================================================================== */}
-      <section className="glass-card overflow-hidden rounded-2xl">
-        {/* Top Filter & Search Bar */}
-        <div className="border-b border-[#745bc7]/12 p-4 sm:p-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            {/* Soft Segmented Type Pill */}
-            <div className="inline-flex w-fit rounded-full bg-[#f3edfc] p-1">
-              {(["all", "income", "expense"] as const).map((tab) => {
-                const active = typeFilter === tab;
-                const label =
-                  tab === "all"
-                    ? t.cashflow.all
-                    : tab === "income"
-                      ? t.cashflow.income
-                      : t.cashflow.expense;
-                return (
-                  <button
-                    key={tab}
-                    type="button"
-                    onClick={() => handleSetTypeFilter(tab)}
-                    className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
-                      active
-                        ? "bg-white text-[#745bc7] shadow-xs"
-                        : "text-[#655978] hover:text-[#1a1423]"
-                    }`}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Rounded Search Input */}
-            <div className="flex flex-1 items-center gap-2 rounded-full border border-[#745bc7]/16 bg-[#f7f4fc]/85 px-3.5 py-1.5 transition focus-within:border-[#745bc7]/45 focus-within:bg-white sm:max-w-[280px]">
-              <Search className="h-3.5 w-3.5 shrink-0 text-[#745bc7]/75" />
-              <input
-                type="text"
-                placeholder={t.cashflow.searchPlaceholder}
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                className="w-full bg-transparent text-xs text-[#1a1423] outline-none placeholder:text-[#655978]/70"
-              />
-              {query && (
-                <button
-                  type="button"
-                  onClick={() => setQuery("")}
-                  aria-label="Clear search"
-                  className="text-[#655978] hover:text-[#1a1423]"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Tappable Category Filter Chips (replaces raw OS <select>) */}
-          {activeMonthCategoryIds.length > 0 && (
-            <div className="mt-3.5 flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar sm:flex-wrap sm:overflow-visible">
+            <div className="inline-flex items-center gap-1.5">
               <button
                 type="button"
-                onClick={() => setCategoryFilter("all")}
-                className={`shrink-0 rounded-full px-3 py-1 text-[11px] font-medium transition ${
-                  categoryFilter === "all"
-                    ? "bg-[#745bc7] text-white"
-                    : "bg-[#f4effc] text-[#655978] hover:bg-[#ebe3fa] hover:text-[#1a1423]"
+                onClick={() => {
+                  setSelectedMonth(shiftMonthKey(selectedMonth, -1));
+                  setCategoryFilter("all");
+                }}
+                aria-label="Previous month"
+                className="flex h-6 w-6 items-center justify-center border border-white/40 bg-white/15 text-white transition hover:bg-white/30"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </button>
+              <span className="min-w-[116px] text-center font-mono text-[11px] font-semibold tracking-[0.12em] uppercase drop-shadow-2xs">
+                {formatMonthLabel(selectedMonth, locale)}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedMonth(shiftMonthKey(selectedMonth, 1));
+                  setCategoryFilter("all");
+                }}
+                aria-label="Next month"
+                className="flex h-6 w-6 items-center justify-center border border-white/40 bg-white/15 text-white transition hover:bg-white/30"
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-1 flex-col justify-between gap-4 p-4 sm:p-5">
+            {/* Net Balance + Cumulative Header */}
+            <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[#745bc7]/20 pb-3.5">
+              <div>
+                <p className="font-mono text-[10px] tracking-[0.18em] text-[#5d5370] uppercase">
+                  {t.cashflow.netCashflow}
+                </p>
+                <div className="mt-1">
+                  <MoneyDisplay
+                    amountIdr={monthSummary.netCashflowIdr}
+                    showSign
+                    className={`text-2xl font-bold tracking-tight sm:text-[30px] ${
+                      isDeficit ? "text-[#c837a5]" : "text-[#14100e]"
+                    }`}
+                  />
+                </div>
+              </div>
+
+              <div className="text-left sm:text-right">
+                <p className="font-mono text-[10px] tracking-[0.16em] text-[#5d5370] uppercase">
+                  {t.cashflow.totalSaved}
+                </p>
+                <MoneyDisplay
+                  amountIdr={cumulativeBalance}
+                  className="mt-0.5 text-sm font-bold text-[#745bc7]"
+                />
+              </div>
+            </div>
+
+            {/* Notched 20-Segment Anime RPG Gauges */}
+            <div className="space-y-2.5">
+              <div>
+                <div className="mb-1 flex items-center justify-between font-mono text-[10px] tracking-[0.14em] uppercase">
+                  <span className="font-semibold text-[#2276a8]">
+                    HP // {locale === "id" ? "CADANGAN" : "RESERVE"}
+                  </span>
+                  <span className="font-semibold text-[#14100e]">
+                    {savedRatio.toFixed(0)}%
+                  </span>
+                </div>
+                <SegmentedRpgBar percent={savedRatio} variant="reserve" />
+              </div>
+
+              <div>
+                <div className="mb-1 flex items-center justify-between font-mono text-[10px] tracking-[0.14em] uppercase">
+                  <span className="font-semibold text-[#c837a5]">
+                    SP // {locale === "id" ? "TERPAKAI" : "SPENT"}
+                  </span>
+                  <span className="font-semibold text-[#14100e]">
+                    {spentRatio.toFixed(0)}%
+                  </span>
+                </div>
+                <SegmentedRpgBar percent={spentRatio} variant="spent" />
+              </div>
+            </div>
+
+            {/* Inline Interactive IN / OUT Stat Strip (No Bento Cards) */}
+            <div className="grid grid-cols-2 border border-[#745bc7]/30 bg-white/60">
+              <button
+                type="button"
+                onClick={() =>
+                  handleSetTypeFilter(typeFilter === "income" ? "all" : "income")
+                }
+                className={`border-r border-[#745bc7]/30 px-3 py-2 text-left transition ${
+                  typeFilter === "income"
+                    ? "bg-[#2276a8]/12"
+                    : "hover:bg-[#e5dcfb]/45"
                 }`}
               >
-                {t.cashflow.allCategories}
+                <span className="flex items-center justify-between font-mono text-[9px] tracking-[0.16em] text-[#5d5370] uppercase">
+                  <span>{t.cashflow.income}</span>
+                  {typeFilter === "income" && (
+                    <span className="text-[#2276a8]">▶</span>
+                  )}
+                </span>
+                <MoneyDisplay
+                  amountIdr={monthSummary.incomeIdr}
+                  className="mt-0.5 text-sm font-bold text-[#2276a8] sm:text-base"
+                />
               </button>
-              {activeMonthCategoryIds.map((catId) => {
-                const cat = CATEGORY_MAP[catId];
-                const active = categoryFilter === catId;
-                return (
+
+              <button
+                type="button"
+                onClick={() =>
+                  handleSetTypeFilter(typeFilter === "expense" ? "all" : "expense")
+                }
+                className={`px-3 py-2 text-left transition ${
+                  typeFilter === "expense"
+                    ? "bg-[#d749d5]/12"
+                    : "hover:bg-[#e5dcfb]/45"
+                }`}
+              >
+                <span className="flex items-center justify-between font-mono text-[9px] tracking-[0.16em] text-[#5d5370] uppercase">
+                  <span>{t.cashflow.expense}</span>
+                  {typeFilter === "expense" && (
+                    <span className="text-[#c837a5]">▶</span>
+                  )}
+                </span>
+                <MoneyDisplay
+                  amountIdr={monthSummary.expenseIdr}
+                  className="mt-0.5 text-sm font-bold text-[#c837a5] sm:text-base"
+                />
+              </button>
+            </div>
+
+            {/* Interactive RPG Command Menu (Keyboard ↑↓ Enter + Click) */}
+            <div>
+              <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                {commands.map((cmd, idx) => {
+                  const selected = selectedCmd === idx;
+                  return (
+                    <button
+                      key={cmd.id}
+                      type="button"
+                      data-selected={selected}
+                      onMouseEnter={() => setSelectedCmd(idx)}
+                      onFocus={() => setSelectedCmd(idx)}
+                      onClick={cmd.run}
+                      className="vn-cmd px-3 py-2 text-left font-mono text-[11px] font-semibold tracking-[0.08em]"
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span
+                          className={`w-3 shrink-0 ${selected ? "animate-vn-cursor opacity-100" : "opacity-0"}`}
+                          style={{ color: cmd.accent }}
+                        >
+                          ▶
+                        </span>
+                        <span
+                          className="truncate"
+                          style={{ color: selected ? cmd.accent : "#14100e" }}
+                        >
+                          {cmd.label}
+                        </span>
+                      </span>
+                      <span className="ml-2 shrink-0 border border-[#745bc7]/30 px-1.5 py-0.5 text-[9px] text-[#5d5370]">
+                        {cmd.tag}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <p className="mt-2 font-mono text-[9px] tracking-[0.14em] text-[#5d5370]/85 uppercase">
+                {locale === "id"
+                  ? `↑↓ PILIH PERINTAH · ENTER JALANKAN · ${monthSummary.txCount} CATATAN BULAN INI`
+                  : `↑↓ MOVE CURSOR · ENTER SELECT · ${monthSummary.txCount} ENTRIES THIS MONTH`}
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* =====================================================================
+          2. VISUAL NOVEL DIALOGUE BOX (Silent Typewriter Chronicle)
+         ===================================================================== */}
+      <VnDialogueBox
+        lines={dialogueLines}
+        activeIndex={dialogueIdx}
+        onAdvance={() => setDialogueIdx((i) => i + 1)}
+        mood={mood}
+        locale={locale}
+      />
+
+      {/* =====================================================================
+          3. ZERO-CARD EDITORIAL TIMELINE (Authentic tuyu.moe / SHIZUKU Style)
+         ===================================================================== */}
+      <section className="pt-2">
+        {/* Authentic tuyu.moe Pipe-Separated Serif Tabs + Minimal Search */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <ul className="flex max-w-full flex-nowrap items-center overflow-x-auto no-scrollbar">
+            {(["all", "income", "expense"] as const).map((tab, idx) => {
+              const active = typeFilter === tab;
+              const label =
+                tab === "all"
+                  ? t.cashflow.all
+                  : tab === "income"
+                    ? t.cashflow.income
+                    : t.cashflow.expense;
+              return (
+                <li
+                  key={tab}
+                  className={`shrink-0 border-r border-[#745bc7] ${
+                    idx === 0 ? "border-l" : ""
+                  }`}
+                >
                   <button
-                    key={catId}
                     type="button"
-                    onClick={() => setCategoryFilter(active ? "all" : catId)}
-                    className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-medium transition ${
+                    onClick={() => handleSetTypeFilter(tab)}
+                    className={`whitespace-nowrap px-3.5 py-0.5 font-editorial text-xs tracking-[0.2em] uppercase transition sm:px-5 sm:text-[13px] ${
                       active
-                        ? "bg-[#745bc7] text-white"
-                        : "bg-[#f4effc] text-[#655978] hover:bg-[#ebe3fa] hover:text-[#1a1423]"
+                        ? "font-bold text-[#745bc7]"
+                        : "font-normal text-[#745bc7]/60 hover:text-[#d749d5]"
                     }`}
                   >
-                    <span
-                      className="h-1.5 w-1.5 rounded-full"
-                      style={{ backgroundColor: active ? "#ffffff" : cat?.color ?? "#745bc7" }}
-                    />
-                    {getCategoryLabel(catId, locale)}
+                    {active ? `▶ ${label}` : label}
                   </button>
-                );
-              })}
-            </div>
-          )}
+                </li>
+              );
+            })}
+          </ul>
+
+          {/* Sharp Minimal Search Input */}
+          <div className="flex items-center gap-2 border-b border-[#745bc7]/55 bg-white/50 px-2.5 py-1.5 backdrop-blur-xs transition focus-within:border-[#745bc7] focus-within:bg-white/85 sm:w-64">
+            <Search className="h-3.5 w-3.5 shrink-0 text-[#745bc7]" />
+            <input
+              type="text"
+              placeholder={t.cashflow.searchPlaceholder}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="w-full bg-transparent font-mono text-[11px] text-[#14100e] outline-none placeholder:text-[#5d5370]/75"
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                aria-label="Clear search"
+                className="text-[#5d5370] hover:text-[#14100e]"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Entries List inside Unified Sheet */}
+        {/* Minimal Sharp Category Index Strip (No Rounded Pills) */}
+        {activeMonthCategoryIds.length > 0 && (
+          <div className="mt-3.5 flex items-center gap-x-3 gap-y-1.5 overflow-x-auto pb-1 no-scrollbar sm:flex-wrap sm:overflow-visible">
+            <button
+              type="button"
+              onClick={() => setCategoryFilter("all")}
+              className={`shrink-0 border-b pb-0.5 font-mono text-[10px] tracking-[0.14em] uppercase transition ${
+                categoryFilter === "all"
+                  ? "border-[#745bc7] font-bold text-[#745bc7]"
+                  : "border-transparent text-[#5d5370] hover:text-[#14100e]"
+              }`}
+            >
+              [{t.cashflow.allCategories}]
+            </button>
+            {activeMonthCategoryIds.map((catId) => {
+              const cat = CATEGORY_MAP[catId];
+              const active = categoryFilter === catId;
+              return (
+                <button
+                  key={catId}
+                  type="button"
+                  onClick={() => setCategoryFilter(active ? "all" : catId)}
+                  className={`inline-flex shrink-0 items-center gap-1.5 border-b pb-0.5 font-mono text-[10px] tracking-[0.1em] uppercase transition ${
+                    active
+                      ? "border-[#d749d5] font-bold text-[#14100e]"
+                      : "border-transparent text-[#5d5370] hover:text-[#745bc7]"
+                  }`}
+                >
+                  <span
+                    className="h-1.5 w-1.5"
+                    style={{ backgroundColor: cat?.color ?? "#745bc7" }}
+                  />
+                  {getCategoryLabel(catId, locale)}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="tuyu-raindrop-divider my-5" />
+
+        {/* Entries Stream Directly Over Pink Watercolor Backdrop */}
         {groupedByDate.length === 0 ? (
-          <div className="px-6 py-16 text-center">
-            <p className="text-sm font-semibold text-[#1a1423]">{t.cashflow.emptyTitle}</p>
-            <p className="mt-1 text-xs text-[#655978]">{t.cashflow.emptyDesc}</p>
-            <div className="mt-5 flex flex-wrap justify-center gap-2.5">
+          <div className="vn-frame-subtle px-6 py-14 text-center">
+            <p className="font-editorial text-lg font-semibold tracking-[0.14em] text-[#745bc7] uppercase">
+              {t.cashflow.emptyTitle}
+            </p>
+            <p className="mt-1.5 font-mono text-xs text-[#5d5370]">
+              {t.cashflow.emptyDesc}
+            </p>
+            <div className="mt-5 flex flex-wrap justify-center gap-3">
               {hasActiveFilter ? (
                 <button
                   type="button"
@@ -448,99 +677,110 @@ export const CashflowView: React.FC = () => {
                     setCategoryFilter("all");
                     setQuery("");
                   }}
-                  className="shikas-btn-soft px-4 py-2 text-xs"
+                  className="vn-btn-action px-4 py-2"
                 >
-                  {t.actions.resetFilters}
+                  ▶ {t.actions.resetFilters}
                 </button>
               ) : (
                 <>
                   <button
                     type="button"
                     onClick={() => openNewTxModal("income")}
-                    className="shikas-btn-soft px-4 py-2 text-xs text-[#108469]"
+                    className="vn-btn-action px-4 py-2"
                   >
-                    <Plus className="h-3.5 w-3.5" />
-                    {t.actions.addIncome}
+                    + {t.actions.addIncome}
                   </button>
                   <button
                     type="button"
                     onClick={() => openNewTxModal("expense")}
-                    className="shikas-btn-primary px-4 py-2 text-xs"
+                    className="vn-btn-band px-4 py-2"
                   >
-                    <Plus className="h-3.5 w-3.5" />
-                    {t.actions.addExpense}
+                    - {t.actions.addExpense}
                   </button>
                 </>
               )}
             </div>
           </div>
         ) : (
-          <div>
-            {groupedByDate.map(([dateIso, group], groupIdx) => (
-              <div key={dateIso} className={groupIdx > 0 ? "border-t border-[#745bc7]/10" : ""}>
-                {/* Subtle Date Group Strip */}
-                <div className="flex items-center justify-between bg-[#745bc7]/[0.045] px-5 py-2">
-                  <span className="font-mono text-[11px] font-semibold tracking-wider text-[#655978] uppercase">
+          <div className="space-y-6">
+            {groupedByDate.map(([dateIso, group]) => (
+              <div key={dateIso}>
+                {/* Date Editorial Heading */}
+                <div className="flex items-baseline justify-between gap-2 pb-1.5">
+                  <span className="font-mono text-[11px] font-semibold tracking-[0.18em] text-[#745bc7] uppercase">
                     {formatDateHeading(dateIso, locale)}
                   </span>
                   <MoneyDisplay
                     amountIdr={group.dailyNet}
                     showSign
                     className={`text-[11px] font-semibold ${
-                      group.dailyNet >= 0 ? "text-[#108469]" : "text-[#655978]"
+                      group.dailyNet >= 0 ? "text-[#2276a8]" : "text-[#c837a5]"
                     }`}
                   />
                 </div>
 
-                {/* Transaction Rows */}
-                <ul className="divide-y divide-[#745bc7]/8">
+                {/* Transparent Sharp Timeline Rows */}
+                <ul className="divide-y divide-[#745bc7]/20 border-t border-b border-[#745bc7]/30 bg-[#fdf9ff]/52 backdrop-blur-xs">
                   {group.items.map((tx) => {
                     const cat = CATEGORY_MAP[tx.categoryId];
                     const isIncome = tx.type === "income";
-                    const color = cat?.color ?? "#745bc7";
+                    const accent = isIncome ? "#2276a8" : "#d749d5";
 
                     return (
                       <li
                         key={tx.id}
-                        className="group flex items-center justify-between gap-3 px-4 py-3.5 transition hover:bg-[#745bc7]/[0.035] sm:px-5"
+                        className="group relative flex items-center justify-between gap-3 px-3.5 py-3 transition hover:bg-[#fdf9ff]/92 sm:px-4"
                       >
-                        <div className="flex min-w-0 items-center gap-3.5">
+                        {/* Sharp Left Type Bar */}
+                        <span
+                          className="absolute top-0 bottom-0 left-0 w-[3px] opacity-65 transition group-hover:opacity-100"
+                          style={{ backgroundColor: accent }}
+                          aria-hidden="true"
+                        />
+
+                        <div className="flex min-w-0 items-center gap-3 pl-1">
                           <span
-                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+                            className="flex h-8 w-8 shrink-0 items-center justify-center border bg-white/80"
                             style={{
-                              backgroundColor: `${color}18`,
-                              color,
+                              borderColor: `${accent}55`,
+                              color: accent,
                             }}
                           >
-                            <CategoryIcon name={cat?.icon} className="h-4.5 w-4.5" />
+                            <CategoryIcon name={cat?.icon} className="h-3.5 w-3.5" />
                           </span>
 
                           <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-[#1a1423]">
-                              {tx.note}
+                            <p className="flex items-center gap-1.5 truncate text-sm font-semibold text-[#14100e]">
+                              <span
+                                className="hidden font-mono text-[10px] opacity-0 transition group-hover:opacity-100 sm:inline"
+                                style={{ color: accent }}
+                              >
+                                ▶
+                              </span>
+                              <span className="truncate">{tx.note}</span>
                             </p>
-                            <p className="mt-0.5 truncate text-xs text-[#655978]">
+                            <p className="mt-0.5 truncate font-mono text-[10px] tracking-[0.06em] text-[#5d5370]">
                               {getCategoryLabel(tx.categoryId, locale)}
                               {tx.merchant ? ` · ${tx.merchant}` : ""}
                             </p>
                           </div>
                         </div>
 
-                        <div className="flex shrink-0 items-center gap-3">
+                        <div className="flex shrink-0 items-center gap-2.5 sm:gap-3.5">
                           <MoneyDisplay
                             amountIdr={isIncome ? tx.amountIdr : -tx.amountIdr}
                             showSign
                             className={`text-sm font-bold ${
-                              isIncome ? "text-[#108469]" : "text-[#1a1423]"
+                              isIncome ? "text-[#2276a8]" : "text-[#14100e]"
                             }`}
                           />
 
-                          <div className="flex items-center gap-0.5 sm:opacity-30 sm:transition sm:group-hover:opacity-100">
+                          <div className="flex items-center gap-0.5 sm:opacity-35 sm:transition sm:group-hover:opacity-100">
                             <button
                               type="button"
                               onClick={() => openEditTxModal(tx)}
                               aria-label={t.actions.edit}
-                              className="rounded-lg p-1.5 text-[#655978] transition hover:bg-[#745bc7]/12 hover:text-[#745bc7]"
+                              className="border border-transparent p-1.5 text-[#5d5370] transition hover:border-[#745bc7]/50 hover:bg-white hover:text-[#745bc7]"
                             >
                               <Pencil className="h-3.5 w-3.5" />
                             </button>
@@ -548,7 +788,7 @@ export const CashflowView: React.FC = () => {
                               type="button"
                               onClick={() => duplicateTransaction(tx)}
                               aria-label={t.actions.duplicate}
-                              className="rounded-lg p-1.5 text-[#655978] transition hover:bg-[#745bc7]/12 hover:text-[#745bc7]"
+                              className="border border-transparent p-1.5 text-[#5d5370] transition hover:border-[#745bc7]/50 hover:bg-white hover:text-[#745bc7]"
                             >
                               <Copy className="h-3.5 w-3.5" />
                             </button>
@@ -556,7 +796,7 @@ export const CashflowView: React.FC = () => {
                               type="button"
                               onClick={() => deleteTransaction(tx.id)}
                               aria-label={t.actions.delete}
-                              className="rounded-lg p-1.5 text-[#655978] transition hover:bg-[#c43673]/12 hover:text-[#c43673]"
+                              className="border border-transparent p-1.5 text-[#5d5370] transition hover:border-[#c837a5]/50 hover:bg-white hover:text-[#c837a5]"
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </button>

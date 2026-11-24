@@ -3,7 +3,7 @@ import { ArrowUpRight } from "lucide-react";
 import { useCashflow } from "../../context/CashflowContext";
 
 export const Footer: React.FC = () => {
-  const { activeTab, store, t, notify } = useCashflow();
+  const { store, t, notify } = useCashflow();
   const shizukuUrl = store.settings.shizukuWebsiteUrl.trim();
 
   const renderShizukuLink = () => {
@@ -13,7 +13,7 @@ export const Footer: React.FC = () => {
           href={shizukuUrl}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-0.5 text-[#14100e]/80 transition hover:text-[#14100e] hover:underline"
+          className="inline-flex items-center gap-0.5 text-white/95 underline decoration-white/45 underline-offset-4 transition hover:text-white hover:decoration-white"
         >
           SHIZUKU
           <ArrowUpRight className="h-3 w-3" />
@@ -25,7 +25,7 @@ export const Footer: React.FC = () => {
       <button
         type="button"
         onClick={() => notify(t.settings.shizukuNotDeployedToast, "iris")}
-        className="inline-flex items-center gap-0.5 text-[#14100e]/75 transition hover:text-[#14100e]"
+        className="inline-flex items-center gap-0.5 text-white/90 underline decoration-white/40 underline-offset-4 transition hover:text-white hover:decoration-white"
         title={t.settings.shizukuNotDeployedToast}
       >
         SHIZUKU
@@ -34,22 +34,14 @@ export const Footer: React.FC = () => {
     );
   };
 
-  if (activeTab === "home") {
-    return (
-      <footer className="relative z-10 mx-auto w-full max-w-[960px] px-5 pb-6 text-center font-mono text-[10px] tracking-[0.14em] text-[#5f5368]/80">
-        <span>© {new Date().getFullYear()} SHIKAS (雫)</span>
-        <span className="mx-2 text-[#14100e]/25">·</span>
-        {renderShizukuLink()}
-      </footer>
-    );
-  }
-
   return (
-    <footer className="relative z-10 mx-auto mt-14 w-full max-w-[960px] px-5 pb-10 sm:px-8">
-      <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-t border-[#14100e]/12 pt-5 text-center font-mono text-[11px] tracking-[0.12em] text-[#5f5368]">
-        <span>© {new Date().getFullYear()} SHIKAS (雫)</span>
-        <span className="text-[#14100e]/25">·</span>
-        {renderShizukuLink()}
+    <footer className="shikas-footer-band relative z-10 mt-14 w-full px-6 py-9 text-center text-white md:py-12">
+      <div className="mx-auto flex max-w-[960px] flex-col items-center gap-1.5">
+        <p className="font-mono text-[10px] tracking-[0.26em] text-white/95 uppercase md:text-[11px] md:tracking-[0.32em]">
+          © {new Date().getFullYear()} SHIKAS (雫)
+          <span className="mx-2.5 text-white/45">·</span>
+          {renderShizukuLink()}
+        </p>
       </div>
     </footer>
   );
