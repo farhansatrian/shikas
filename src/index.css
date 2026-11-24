@@ -1,0 +1,225 @@
+@import "tailwindcss";
+
+:root {
+  --tuyu-lavender: #e5dcfb;
+  --tuyu-lavender-soft: #efe9fd;
+  --tuyu-iris: #745bc7;
+  --tuyu-violet: #7650f3;
+  --tuyu-magenta: #d749d5;
+  --tuyu-ink: #14100e;
+  --tuyu-muted: #5d5370;
+  --tuyu-rain: #2276a8;
+  --tuyu-line: rgba(116, 91, 199, 0.25);
+
+  --shikas-income: #14866d;
+  --shikas-income-soft: rgba(20, 134, 109, 0.12);
+  --shikas-expense: #c23b7b;
+  --shikas-expense-soft: rgba(194, 59, 123, 0.12);
+  --shikas-transfer: #2276a8;
+  --shikas-transfer-soft: rgba(34, 118, 168, 0.12);
+  --shikas-warn: #b7791f;
+  --shikas-warn-soft: rgba(183, 121, 31, 0.13);
+}
+
+@theme inline {
+  --font-sans: "Plus Jakarta Sans", "Noto Sans JP", "Hiragino Kaku Gothic ProN", sans-serif;
+  --font-display: "Cormorant Garamond", "Noto Sans JP", Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+html {
+  scroll-behavior: smooth;
+  background-color: var(--tuyu-lavender);
+  color: var(--tuyu-ink);
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--tuyu-lavender);
+  color: var(--tuyu-ink);
+  overflow-x: hidden;
+  letter-spacing: 0.25px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-editorial {
+  font-family: var(--font-display);
+}
+
+.font-mono-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================================
+   SHIZUKU Signature Watercolor Washes & Atmospheric Surfaces
+   ============================================================================ */
+.shizuku-canvas {
+  background-color: var(--tuyu-lavender);
+  background-image:
+    radial-gradient(ellipse 68% 36% at 8% 0%, rgba(250, 212, 236, 0.62) 0%, transparent 72%),
+    radial-gradient(ellipse 60% 34% at 94% 14%, rgba(215, 73, 213, 0.12) 0%, transparent 68%),
+    radial-gradient(ellipse 72% 38% at 82% 96%, rgba(195, 179, 248, 0.55) 0%, transparent 70%);
+  background-attachment: fixed;
+}
+
+.tuyu-sheet {
+  background-color: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(116, 91, 199, 0.2);
+  backdrop-filter: blur(10px);
+  transition: background-color 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease, transform 0.22s ease;
+}
+
+.tuyu-sheet-hover:hover {
+  background-color: rgba(255, 255, 255, 0.94);
+  border-color: rgba(116, 91, 199, 0.48);
+  box-shadow: 0 12px 28px -18px rgba(116, 91, 199, 0.45);
+}
+
+.twilight-card {
+  background:
+    radial-gradient(circle at 88% 12%, rgba(215, 73, 213, 0.28) 0%, transparent 45%),
+    radial-gradient(circle at 12% 90%, rgba(118, 80, 243, 0.34) 0%, transparent 52%),
+    linear-gradient(145deg, #1b1530 0%, #2b1f4d 58%, #221940 100%);
+  border: 1px solid rgba(229, 220, 251, 0.24);
+  box-shadow: 0 22px 44px -26px rgba(27, 21, 48, 0.72);
+}
+
+.tuyu-footer-band {
+  background-color: #c86ce8;
+  background-image:
+    radial-gradient(ellipse 55% 85% at 15% 20%, rgba(255, 185, 245, 0.52) 0%, transparent 68%),
+    radial-gradient(ellipse 50% 90% at 84% 78%, rgba(116, 91, 199, 0.65) 0%, transparent 70%),
+    linear-gradient(112deg, #ef85e8 0%, #c05ce6 52%, #745bc7 100%);
+}
+
+/* Editorial outlined pill button */
+.tuyu-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 9999px;
+  border: 1px solid var(--tuyu-iris);
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--tuyu-iris);
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  transition: all 0.2s ease;
+}
+
+.tuyu-pill-btn:hover {
+  color: var(--tuyu-violet);
+  border-color: var(--tuyu-violet);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.tuyu-primary-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, #745bc7 0%, #7650f3 65%, #a04fe8 100%);
+  color: #ffffff;
+  font-weight: 600;
+  transition: transform 0.16s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+  box-shadow: 0 10px 22px -12px rgba(118, 80, 243, 0.65);
+}
+
+.tuyu-primary-btn:hover {
+  opacity: 0.94;
+  transform: translateY(-1px);
+  box-shadow: 0 14px 26px -12px rgba(118, 80, 243, 0.78);
+}
+
+.tuyu-primary-btn:active {
+  transform: translateY(0);
+}
+
+/* ============================================================================
+   SHIZUKU Signature Multi-Tone Raindrop Horizontal Divider (Pure Inline SVG)
+   ============================================================================ */
+.tuyu-raindrop-divider {
+  height: 9px;
+  width: 100%;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='9' viewBox='0 0 96 9'%3E%3Cpath d='M8 1 C8 1 5.5 4.6 5.5 6.3 A2.5 2.5 0 0 0 10.5 6.3 C10.5 4.6 8 1 8 1 Z' fill='%23745bc7' fill-opacity='0.65'/%3E%3Cpath d='M24 2 C24 2 22 4.8 22 6.2 A2 2 0 0 0 26 6.2 C26 4.8 24 2 24 2 Z' fill='%23d749d5' fill-opacity='0.52'/%3E%3Cpath d='M40 1.4 C40 1.4 37.8 4.7 37.8 6.2 A2.2 2.2 0 0 0 42.2 6.2 C42.2 4.7 40 1.4 40 1.4 Z' fill='%232276a8' fill-opacity='0.55'/%3E%3Cpath d='M56 1 C56 1 53.5 4.6 53.5 6.3 A2.5 2.5 0 0 0 58.5 6.3 C58.5 4.6 56 1 56 1 Z' fill='%237650f3' fill-opacity='0.6'/%3E%3Cpath d='M72 2 C72 2 70 4.8 70 6.2 A2 2 0 0 0 74 6.2 C74 4.8 72 2 72 2 Z' fill='%23d749d5' fill-opacity='0.48'/%3E%3Cpath d='M88 1.5 C88 1.5 85.8 4.7 85.8 6.2 A2.2 2.2 0 0 0 90.2 6.2 C90.2 4.7 88 1.5 88 1.5 Z' fill='%23745bc7' fill-opacity='0.55'/%3E%3C/svg%3E");
+  background-repeat: repeat-x;
+  background-position: left center;
+  background-size: 96px 9px;
+}
+
+/* ============================================================================
+   SHIZUKU Subtle Pure-CSS Falling Vertical Raindrops
+   ============================================================================ */
+@keyframes shizukuRainFall {
+  0% {
+    transform: translateY(-90px);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.42;
+  }
+  85% {
+    opacity: 0.35;
+  }
+  100% {
+    transform: translateY(105vh);
+    opacity: 0;
+  }
+}
+
+.shizuku-rain-drop {
+  position: absolute;
+  top: -80px;
+  width: 1px;
+  height: 54px;
+  background: linear-gradient(180deg, transparent 0%, rgba(34, 118, 168, 0.55) 75%, rgba(116, 91, 199, 0.65) 100%);
+  animation-name: shizukuRainFall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shizuku-rain-drop {
+    animation: none;
+    display: none;
+  }
+}
+
+/* Custom subtle lavender scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(229, 220, 251, 0.55);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(116, 91, 199, 0.36);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(116, 91, 199, 0.62);
+}
+
+/* Clean form input defaults */
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
