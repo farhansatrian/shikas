@@ -41,11 +41,12 @@ export function formatCompactCurrency(
 
   const abs = Math.abs(amountIdr);
   const sign = amountIdr < 0 ? "-" : "";
+  const trimZero = (n: number) => n.toFixed(1).replace(/\.0$/, "");
   if (abs >= 1_000_000_000) {
-    return `${sign}Rp ${(abs / 1_000_000_000).toFixed(1)}${locale === "id" ? "M" : "B"}`;
+    return `${sign}Rp ${trimZero(abs / 1_000_000_000)}${locale === "id" ? "M" : "B"}`;
   }
   if (abs >= 1_000_000) {
-    return `${sign}Rp ${(abs / 1_000_000).toFixed(1)}${locale === "id" ? "jt" : "M"}`;
+    return `${sign}Rp ${trimZero(abs / 1_000_000)}${locale === "id" ? "jt" : "M"}`;
   }
   if (abs >= 1_000) {
     return `${sign}Rp ${Math.round(abs / 1_000)}${locale === "id" ? "rb" : "k"}`;

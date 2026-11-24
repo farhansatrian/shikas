@@ -146,11 +146,12 @@ export const AnalyticsView: React.FC = () => {
         </h2>
         <div className="mt-4 h-[290px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={sixMonthData} margin={{ top: 10, right: 12, left: -8, bottom: 0 }}>
+            <ComposedChart data={sixMonthData} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(116,91,199,0.16)" vertical={false} />
               <XAxis dataKey="label" tick={{ fill: "#5d5370", fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis
-                tick={{ fill: "#5d5370", fontSize: 11 }}
+                width={66}
+                tick={{ fill: "#5d5370", fontSize: 10 }}
                 axisLine={false}
                 tickLine={false}
                 tickFormatter={(v: number) =>
@@ -185,13 +186,14 @@ export const AnalyticsView: React.FC = () => {
                 }
                 wrapperStyle={{ fontSize: "12px" }}
               />
-              <Bar dataKey="incomeIdr" fill="#14866d" radius={[6, 6, 0, 0]} maxBarSize={26} />
-              <Bar dataKey="expenseIdr" fill="#d749d5" radius={[6, 6, 0, 0]} maxBarSize={26} />
+              <Bar dataKey="incomeIdr" fill="#14866d" radius={[6, 6, 0, 0]} maxBarSize={26} animationDuration={450} />
+              <Bar dataKey="expenseIdr" fill="#d749d5" radius={[6, 6, 0, 0]} maxBarSize={26} animationDuration={450} />
               <Line
                 type="monotone"
                 dataKey="netIdr"
                 stroke="#7650f3"
                 strokeWidth={2.5}
+                animationDuration={450}
                 dot={{ r: 4, fill: "#7650f3", strokeWidth: 2, stroke: "#ffffff" }}
               />
             </ComposedChart>
@@ -287,7 +289,7 @@ export const AnalyticsView: React.FC = () => {
           </h2>
           <div className="mt-4 h-[230px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={sixMonthData} margin={{ top: 10, right: 10, left: -8, bottom: 0 }}>
+              <AreaChart data={sixMonthData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="shikasBalanceGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#7650f3" stopOpacity={0.35} />
@@ -297,6 +299,7 @@ export const AnalyticsView: React.FC = () => {
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(116,91,199,0.14)" vertical={false} />
                 <XAxis dataKey="label" tick={{ fill: "#5d5370", fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis
+                  width={66}
                   tick={{ fill: "#5d5370", fontSize: 10 }}
                   axisLine={false}
                   tickLine={false}
@@ -320,6 +323,7 @@ export const AnalyticsView: React.FC = () => {
                   dataKey="endingBalanceIdr"
                   stroke="#745bc7"
                   strokeWidth={2.5}
+                  animationDuration={450}
                   fill="url(#shikasBalanceGrad)"
                 />
               </AreaChart>

@@ -513,8 +513,8 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
     setSelectedMonth(getMonthKey());
     notify(
       store.settings.locale === "id"
-        ? "Dataset demo 4 bulan dimuat."
-        : "4-month realistic demo dataset loaded.",
+        ? "Dataset demo 6 bulan dimuat."
+        : "6-month realistic demo dataset loaded.",
       "success"
     );
   }, [notify, store.settings.locale]);

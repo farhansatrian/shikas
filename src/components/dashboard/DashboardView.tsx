@@ -439,7 +439,7 @@ export const DashboardView: React.FC = () => {
 
           <div className="mt-4 h-[230px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={sixMonthSeries} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+              <BarChart data={sixMonthSeries} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(116,91,199,0.14)" vertical={false} />
                 <XAxis
                   dataKey="label"
@@ -448,6 +448,7 @@ export const DashboardView: React.FC = () => {
                   tickLine={false}
                 />
                 <YAxis
+                  width={64}
                   tick={{ fill: "#5d5370", fontSize: 10 }}
                   axisLine={false}
                   tickLine={false}
@@ -474,8 +475,8 @@ export const DashboardView: React.FC = () => {
                     name === "incomeIdr" ? t.analytics.incomeLegend : t.analytics.expenseLegend,
                   ]}
                 />
-                <Bar dataKey="incomeIdr" fill="#745bc7" radius={[6, 6, 0, 0]} maxBarSize={24} />
-                <Bar dataKey="expenseIdr" fill="#d749d5" radius={[6, 6, 0, 0]} maxBarSize={24} />
+                <Bar dataKey="incomeIdr" fill="#745bc7" radius={[6, 6, 0, 0]} maxBarSize={24} animationDuration={450} />
+                <Bar dataKey="expenseIdr" fill="#d749d5" radius={[6, 6, 0, 0]} maxBarSize={24} animationDuration={450} />
               </BarChart>
             </ResponsiveContainer>
           </div>

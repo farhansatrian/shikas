@@ -162,18 +162,18 @@ export const LedgerView: React.FC = () => {
       <div className="tuyu-sheet rounded-2xl p-4 sm:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           {/* SHIZUKU Pipe-Separated Type Tabs */}
-          <ul className="flex max-w-full flex-nowrap items-center overflow-x-auto no-scrollbar">
+          <ul className="grid w-full grid-cols-4 items-center sm:flex sm:w-auto sm:flex-nowrap">
             {tabs.map((tab, idx) => {
               const active = typeFilter === tab.value;
               return (
                 <li
                   key={tab.value}
-                  className={`shrink-0 border-r border-[#745bc7]/50 ${idx === 0 ? "border-l" : ""}`}
+                  className={`border-r border-[#745bc7]/50 text-center sm:shrink-0 ${idx === 0 ? "border-l" : ""}`}
                 >
                   <button
                     type="button"
                     onClick={() => setTypeFilter(tab.value)}
-                    className={`px-3.5 py-1 font-editorial text-xs tracking-[0.18em] uppercase transition ${
+                    className={`w-full px-1.5 py-1.5 font-editorial text-[11px] tracking-[0.11em] uppercase transition sm:w-auto sm:px-3.5 sm:py-1 sm:text-xs sm:tracking-[0.18em] ${
                       active
                         ? "bg-[#745bc7]/14 font-bold text-[#745bc7]"
                         : "text-[#5d5370] hover:text-[#7650f3]"
