@@ -6,7 +6,6 @@ import type {
   Transaction,
   Wallet,
 } from "../types/cashflow";
-import { DEFAULT_FALLBACK_USD_TO_IDR } from "../services/fxService";
 import { getMonthKey, shiftMonthKey } from "../utils/format";
 
 function dateInMonth(monthKey: string, day: number): string {
@@ -18,7 +17,7 @@ function dateInMonth(monthKey: string, day: number): string {
 
 export function createDemoSeedData(): CashflowStoreData {
   const now = new Date();
-  const m0 = getMonthKey(now); // Current month
+  const m0 = getMonthKey(now);
   const m1 = shiftMonthKey(m0, -1);
   const m2 = shiftMonthKey(m0, -2);
   const m3 = shiftMonthKey(m0, -3);
@@ -42,7 +41,7 @@ export function createDemoSeedData(): CashflowStoreData {
       institution: "Bank BCA",
       type: "bank",
       initialBalanceIdr: 6_800_000,
-      color: "#2276a8",
+      color: "#1e6c99",
     },
     {
       id: "w-gopay",
@@ -50,19 +49,19 @@ export function createDemoSeedData(): CashflowStoreData {
       institution: "GoTo Financial",
       type: "ewallet",
       initialBalanceIdr: 1_850_000,
-      color: "#14866d",
+      color: "#117a62",
     },
     {
       id: "w-savings",
-      name: "Bibit & Dana Darurat",
-      institution: "Reksadana Pasar Uang",
+      name: "Bibit & Emergency Fund",
+      institution: "Money Market Fund",
       type: "savings",
       initialBalanceIdr: 18_000_000,
       color: "#7650f3",
     },
     {
       id: "w-cash",
-      name: "Dompet Tunai",
+      name: "Cash Wallet",
       institution: "Cash",
       type: "cash",
       initialBalanceIdr: 950_000,
@@ -70,9 +69,7 @@ export function createDemoSeedData(): CashflowStoreData {
     },
   ];
 
-  const fx = DEFAULT_FALLBACK_USD_TO_IDR;
-
-  const mkIdrTx = (
+  const mkTx = (
     id: string,
     type: "income" | "expense",
     date: string,
@@ -91,37 +88,8 @@ export function createDemoSeedData(): CashflowStoreData {
     walletId,
     note,
     merchant,
-    originalCurrency: "IDR",
-    originalAmount: amountIdr,
     recurringId,
     createdAt: `${date}T09:00:00.000Z`,
-  });
-
-  const mkUsdTx = (
-    id: string,
-    type: "income" | "expense",
-    date: string,
-    amountUsd: number,
-    rate: number,
-    categoryId: string,
-    walletId: string,
-    note: string,
-    merchant?: string,
-    recurringId?: string
-  ): Transaction => ({
-    id,
-    type,
-    date,
-    amountIdr: Math.round(amountUsd * rate),
-    categoryId,
-    walletId,
-    note,
-    merchant,
-    originalCurrency: "USD",
-    originalAmount: amountUsd,
-    fxRateAtEntry: rate,
-    recurringId,
-    createdAt: `${date}T10:15:00.000Z`,
   });
 
   const mkTransfer = (
@@ -142,84 +110,82 @@ export function createDemoSeedData(): CashflowStoreData {
     toWalletId,
     feeIdr,
     note,
-    originalCurrency: "IDR",
-    originalAmount: amountIdr,
     createdAt: `${date}T11:30:00.000Z`,
   });
 
   const transactions: Transaction[] = [
-    // --- 5 months ago (m5) ---
-    mkIdrTx("tx-m5-1", "income", dateInMonth(m5, 1), 11_800_000, "salary", "w-bni", "Gaji bulanan", "PT BNI (Persero) Tbk", "rec-salary"),
-    mkTransfer("tx-m5-topup", dateInMonth(m5, 2), 2_500_000, "w-bni", "w-gopay", "Top-up GoPay bulanan", 2500),
-    mkIdrTx("tx-m5-2", "expense", dateInMonth(m5, 3), 2_400_000, "housing", "w-bni", "Sewa kost & listrik bulanan", "Kost Sudirman", "rec-kost"),
-    mkIdrTx("tx-m5-3", "expense", dateInMonth(m5, 9), 1_750_000, "food", "w-gopay", "Makan harian & kopi kantor", "QRIS / Kopi Kenangan"),
-    mkIdrTx("tx-m5-4", "expense", dateInMonth(m5, 13), 590_000, "transport", "w-gopay", "MRT & transportasi harian", "MRT Jakarta"),
-    mkIdrTx("tx-m5-5", "expense", dateInMonth(m5, 19), 1_200_000, "family", "w-bni", "Kirim bulanan orang tua", "Transfer Keluarga"),
-    mkTransfer("tx-m5-6", dateInMonth(m5, 25), 2_500_000, "w-bni", "w-savings", "Alokasi rutin Reksadana", 0),
+    // m5
+    mkTx("tx-m5-1", "income", dateInMonth(m5, 1), 11_800_000, "salary", "w-bni", "Monthly salary", "PT BNI (Persero) Tbk", "rec-salary"),
+    mkTransfer("tx-m5-topup", dateInMonth(m5, 2), 2_500_000, "w-bni", "w-gopay", "Monthly GoPay top-up", 2500),
+    mkTx("tx-m5-2", "expense", dateInMonth(m5, 3), 2_400_000, "housing", "w-bni", "Rent & electricity", "Kost Sudirman", "rec-kost"),
+    mkTx("tx-m5-3", "expense", dateInMonth(m5, 9), 1_750_000, "food", "w-gopay", "Daily meals & coffee", "QRIS / Kopi Kenangan"),
+    mkTx("tx-m5-4", "expense", dateInMonth(m5, 13), 590_000, "transport", "w-gopay", "MRT & daily commute", "MRT Jakarta"),
+    mkTx("tx-m5-5", "expense", dateInMonth(m5, 19), 1_200_000, "family", "w-bni", "Monthly family support", "Family Transfer"),
+    mkTransfer("tx-m5-6", dateInMonth(m5, 25), 2_500_000, "w-bni", "w-savings", "Monthly savings allocation", 0),
 
-    // --- 4 months ago (m4) ---
-    mkIdrTx("tx-m4-1", "income", dateInMonth(m4, 1), 12_200_000, "salary", "w-bni", "Gaji bulanan", "PT BNI (Persero) Tbk", "rec-salary"),
-    mkTransfer("tx-m4-topup", dateInMonth(m4, 2), 2_600_000, "w-bni", "w-gopay", "Top-up GoPay bulanan", 2500),
-    mkIdrTx("tx-m4-2", "expense", dateInMonth(m4, 3), 2_400_000, "housing", "w-bni", "Sewa kost & listrik bulanan", "Kost Sudirman", "rec-kost"),
-    mkIdrTx("tx-m4-3", "expense", dateInMonth(m4, 10), 1_890_000, "food", "w-gopay", "Makan siang, groceries & kopi", "QRIS / Superindo"),
-    mkIdrTx("tx-m4-4", "expense", dateInMonth(m4, 14), 640_000, "transport", "w-gopay", "Commuter & GoRide", "JakLingko / Gojek"),
-    mkUsdTx("tx-m4-5", "expense", dateInMonth(m4, 15), 20, fx - 180, "subscriptions", "w-bca", "Langganan AI Dev Copilot", "OpenAI / GitHub", "rec-ai"),
-    mkIdrTx("tx-m4-6", "expense", dateInMonth(m4, 20), 1_200_000, "family", "w-bni", "Kirim bulanan orang tua", "Transfer Keluarga"),
-    mkTransfer("tx-m4-7", dateInMonth(m4, 25), 2_800_000, "w-bni", "w-savings", "Top-up tabungan Dana Darurat", 0),
+    // m4
+    mkTx("tx-m4-1", "income", dateInMonth(m4, 1), 12_200_000, "salary", "w-bni", "Monthly salary", "PT BNI (Persero) Tbk", "rec-salary"),
+    mkTransfer("tx-m4-topup", dateInMonth(m4, 2), 2_600_000, "w-bni", "w-gopay", "Monthly GoPay top-up", 2500),
+    mkTx("tx-m4-2", "expense", dateInMonth(m4, 3), 2_400_000, "housing", "w-bni", "Rent & electricity", "Kost Sudirman", "rec-kost"),
+    mkTx("tx-m4-3", "expense", dateInMonth(m4, 10), 1_890_000, "food", "w-gopay", "Lunch, groceries & coffee", "QRIS / Superindo"),
+    mkTx("tx-m4-4", "expense", dateInMonth(m4, 14), 640_000, "transport", "w-gopay", "Commuter & ride-hailing", "JakLingko / Gojek"),
+    mkTx("tx-m4-5", "expense", dateInMonth(m4, 15), 325_000, "subscriptions", "w-bca", "AI Dev Copilot subscription", "GitHub / OpenAI", "rec-ai"),
+    mkTx("tx-m4-6", "expense", dateInMonth(m4, 20), 1_200_000, "family", "w-bni", "Monthly family support", "Family Transfer"),
+    mkTransfer("tx-m4-7", dateInMonth(m4, 25), 2_800_000, "w-bni", "w-savings", "Emergency fund top-up", 0),
 
-    // --- 3 months ago (m3) ---
-    mkIdrTx("tx-m3-1", "income", dateInMonth(m3, 1), 12_500_000, "salary", "w-bni", "Gaji bulanan", "PT BNI (Persero) Tbk", "rec-salary"),
-    mkTransfer("tx-m3-topup", dateInMonth(m3, 2), 2_500_000, "w-bni", "w-gopay", "Top-up GoPay untuk makan & transport", 2500),
-    mkIdrTx("tx-m3-2", "expense", dateInMonth(m3, 3), 2_400_000, "housing", "w-bni", "Sewa kost & listrik bulanan", "Kost Sudirman", "rec-kost"),
-    mkIdrTx("tx-m3-3", "expense", dateInMonth(m3, 6), 1_650_000, "food", "w-gopay", "Makan harian, kopi & groceries", "QRIS / Kopi Kenangan"),
-    mkIdrTx("tx-m3-4", "expense", dateInMonth(m3, 9), 620_000, "transport", "w-gopay", "MRT, TransJakarta & ojek online", "MRT Jakarta / Gojek"),
-    mkUsdTx("tx-m3-5", "expense", dateInMonth(m3, 12), 20, fx - 120, "subscriptions", "w-bca", "Langganan AI Dev Copilot", "OpenAI / GitHub", "rec-ai"),
-    mkIdrTx("tx-m3-6", "expense", dateInMonth(m3, 16), 950_000, "shopping", "w-bca", "Keycap mechanical & aksesoris desk", "Tokopedia"),
-    mkIdrTx("tx-m3-7", "expense", dateInMonth(m3, 20), 1_200_000, "family", "w-bni", "Kirim bulanan orang tua", "Transfer Keluarga"),
-    mkTransfer("tx-m3-8", dateInMonth(m3, 24), 3_000_000, "w-bni", "w-savings", "Alokasi rutin Reksadana Pasar Uang", 0),
+    // m3
+    mkTx("tx-m3-1", "income", dateInMonth(m3, 1), 12_500_000, "salary", "w-bni", "Monthly salary", "PT BNI (Persero) Tbk", "rec-salary"),
+    mkTransfer("tx-m3-topup", dateInMonth(m3, 2), 2_500_000, "w-bni", "w-gopay", "GoPay top-up for food & transit", 2500),
+    mkTx("tx-m3-2", "expense", dateInMonth(m3, 3), 2_400_000, "housing", "w-bni", "Rent & electricity", "Kost Sudirman", "rec-kost"),
+    mkTx("tx-m3-3", "expense", dateInMonth(m3, 6), 1_650_000, "food", "w-gopay", "Daily meals, coffee & groceries", "QRIS / Kopi Kenangan"),
+    mkTx("tx-m3-4", "expense", dateInMonth(m3, 9), 620_000, "transport", "w-gopay", "MRT, TransJakarta & GoRide", "MRT Jakarta / Gojek"),
+    mkTx("tx-m3-5", "expense", dateInMonth(m3, 12), 330_000, "subscriptions", "w-bca", "AI Dev Copilot subscription", "GitHub / OpenAI", "rec-ai"),
+    mkTx("tx-m3-6", "expense", dateInMonth(m3, 16), 950_000, "shopping", "w-bca", "Mechanical keycaps & desk accessories", "Tokopedia"),
+    mkTx("tx-m3-7", "expense", dateInMonth(m3, 20), 1_200_000, "family", "w-bni", "Monthly family support", "Family Transfer"),
+    mkTransfer("tx-m3-8", dateInMonth(m3, 24), 3_000_000, "w-bni", "w-savings", "Monthly money market fund", 0),
 
-    // --- 2 months ago (m2) ---
-    mkIdrTx("tx-m2-1", "income", dateInMonth(m2, 1), 12_500_000, "salary", "w-bni", "Gaji bulanan", "PT BNI (Persero) Tbk", "rec-salary"),
-    mkTransfer("tx-m2-topup", dateInMonth(m2, 2), 3_000_000, "w-bni", "w-gopay", "Top-up GoPay bulanan", 2500),
-    mkUsdTx("tx-m2-2", "income", dateInMonth(m2, 10), 180, fx - 60, "freelance", "w-bca", "Mini UI audit & React component review", "Client Remote"),
-    mkIdrTx("tx-m2-3", "expense", dateInMonth(m2, 3), 2_400_000, "housing", "w-bni", "Sewa kost & listrik bulanan", "Kost Sudirman", "rec-kost"),
-    mkIdrTx("tx-m2-4", "expense", dateInMonth(m2, 8), 1_820_000, "food", "w-gopay", "Makan siang kantor & ngopi weekend", "QRIS / Fore Coffee"),
-    mkIdrTx("tx-m2-5", "expense", dateInMonth(m2, 11), 680_000, "transport", "w-gopay", "Commuter + GoCar hujan", "MRT / Gojek"),
-    mkUsdTx("tx-m2-6", "expense", dateInMonth(m2, 14), 20, fx - 40, "subscriptions", "w-bca", "Langganan AI Dev Copilot", "OpenAI / GitHub", "rec-ai"),
-    mkIdrTx("tx-m2-7", "expense", dateInMonth(m2, 18), 540_000, "health", "w-bca", "Membership gym & vitamin", "Fitness / Guardian"),
-    mkIdrTx("tx-m2-8", "expense", dateInMonth(m2, 22), 1_200_000, "family", "w-bni", "Kirim bulanan orang tua", "Transfer Keluarga"),
-    mkIdrTx("tx-m2-9", "expense", dateInMonth(m2, 25), 490_000, "entertainment", "w-gopay", "Nonton bioskop & vinyl OST anime", "CGV / Gramedia"),
-    mkTransfer("tx-m2-10", dateInMonth(m2, 27), 4_000_000, "w-bni", "w-savings", "Top-up tabungan Dana Darurat", 2500),
+    // m2
+    mkTx("tx-m2-1", "income", dateInMonth(m2, 1), 12_500_000, "salary", "w-bni", "Monthly salary", "PT BNI (Persero) Tbk", "rec-salary"),
+    mkTransfer("tx-m2-topup", dateInMonth(m2, 2), 3_000_000, "w-bni", "w-gopay", "Monthly GoPay top-up", 2500),
+    mkTx("tx-m2-2", "income", dateInMonth(m2, 10), 2_950_000, "freelance", "w-bca", "UI audit & React component review", "Remote Client"),
+    mkTx("tx-m2-3", "expense", dateInMonth(m2, 3), 2_400_000, "housing", "w-bni", "Rent & electricity", "Kost Sudirman", "rec-kost"),
+    mkTx("tx-m2-4", "expense", dateInMonth(m2, 8), 1_820_000, "food", "w-gopay", "Office lunch & weekend coffee", "QRIS / Fore Coffee"),
+    mkTx("tx-m2-5", "expense", dateInMonth(m2, 11), 680_000, "transport", "w-gopay", "Commuter & rainy-day rides", "MRT / Gojek"),
+    mkTx("tx-m2-6", "expense", dateInMonth(m2, 14), 330_000, "subscriptions", "w-bca", "AI Dev Copilot subscription", "GitHub / OpenAI", "rec-ai"),
+    mkTx("tx-m2-7", "expense", dateInMonth(m2, 18), 540_000, "health", "w-bca", "Gym membership & vitamins", "Fitness / Guardian"),
+    mkTx("tx-m2-8", "expense", dateInMonth(m2, 22), 1_200_000, "family", "w-bni", "Monthly family support", "Family Transfer"),
+    mkTx("tx-m2-9", "expense", dateInMonth(m2, 25), 490_000, "entertainment", "w-gopay", "Cinema & soundtrack vinyl", "CGV / Gramedia"),
+    mkTransfer("tx-m2-10", dateInMonth(m2, 27), 4_000_000, "w-bni", "w-savings", "Emergency fund allocation", 2500),
 
-    // --- Last month (m1) ---
-    mkIdrTx("tx-m1-1", "income", dateInMonth(m1, 1), 13_200_000, "salary", "w-bni", "Gaji bulanan + tunjangan", "PT BNI (Persero) Tbk", "rec-salary"),
-    mkTransfer("tx-m1-11", dateInMonth(m1, 2), 2_700_000, "w-bni", "w-gopay", "Top-up GoPay untuk makan & transport", 2500),
-    mkIdrTx("tx-m1-2", "income", dateInMonth(m1, 15), 425_000, "investment_return", "w-savings", "Imbal hasil kupon & RDPU", "Bibit"),
-    mkIdrTx("tx-m1-3", "expense", dateInMonth(m1, 2), 2_450_000, "housing", "w-bni", "Sewa kost, air & token listrik", "Kost Sudirman", "rec-kost"),
-    mkIdrTx("tx-m1-4", "expense", dateInMonth(m1, 5), 350_000, "subscriptions", "w-bca", "Internet fiber & Spotify Duo", "Biznet / Spotify", "rec-net"),
-    mkIdrTx("tx-m1-5", "expense", dateInMonth(m1, 9), 1_940_000, "food", "w-gopay", "Makan harian, matcha & groceries", "QRIS / Superindo"),
-    mkIdrTx("tx-m1-6", "expense", dateInMonth(m1, 12), 710_000, "transport", "w-gopay", "MRT, KRL & ojek harian", "JakLingko / Gojek"),
-    mkUsdTx("tx-m1-7", "expense", dateInMonth(m1, 14), 20, fx + 30, "subscriptions", "w-bca", "Langganan AI Dev Copilot", "OpenAI / GitHub", "rec-ai"),
-    mkIdrTx("tx-m1-8", "expense", dateInMonth(m1, 19), 650_000, "education", "w-bca", "Buku arsitektur sistem & kursus cloud", "Periplus / Udemy"),
-    mkIdrTx("tx-m1-9", "expense", dateInMonth(m1, 21), 1_250_000, "family", "w-bni", "Kirim bulanan orang tua", "Transfer Keluarga"),
-    mkIdrTx("tx-m1-10", "expense", dateInMonth(m1, 24), 480_000, "health", "w-bca", "Gym bulanan", "Fitness Center"),
-    mkTransfer("tx-m1-12", dateInMonth(m1, 27), 3_500_000, "w-bni", "w-savings", "Alokasi rutin tabungan & investasi", 0),
+    // m1
+    mkTx("tx-m1-1", "income", dateInMonth(m1, 1), 13_200_000, "salary", "w-bni", "Monthly salary & allowance", "PT BNI (Persero) Tbk", "rec-salary"),
+    mkTransfer("tx-m1-11", dateInMonth(m1, 2), 2_700_000, "w-bni", "w-gopay", "GoPay top-up for daily spending", 2500),
+    mkTx("tx-m1-2", "income", dateInMonth(m1, 15), 425_000, "investment_return", "w-savings", "Money market yield & coupon", "Bibit"),
+    mkTx("tx-m1-3", "expense", dateInMonth(m1, 2), 2_450_000, "housing", "w-bni", "Rent, water & power token", "Kost Sudirman", "rec-kost"),
+    mkTx("tx-m1-4", "expense", dateInMonth(m1, 5), 350_000, "subscriptions", "w-bca", "Fiber internet & Spotify Duo", "Biznet / Spotify", "rec-net"),
+    mkTx("tx-m1-5", "expense", dateInMonth(m1, 9), 1_940_000, "food", "w-gopay", "Daily meals, matcha & groceries", "QRIS / Superindo"),
+    mkTx("tx-m1-6", "expense", dateInMonth(m1, 12), 710_000, "transport", "w-gopay", "MRT, commuter & rides", "JakLingko / Gojek"),
+    mkTx("tx-m1-7", "expense", dateInMonth(m1, 14), 330_000, "subscriptions", "w-bca", "AI Dev Copilot subscription", "GitHub / OpenAI", "rec-ai"),
+    mkTx("tx-m1-8", "expense", dateInMonth(m1, 19), 650_000, "education", "w-bca", "System design books & cloud course", "Periplus / Udemy"),
+    mkTx("tx-m1-9", "expense", dateInMonth(m1, 21), 1_250_000, "family", "w-bni", "Monthly family support", "Family Transfer"),
+    mkTx("tx-m1-10", "expense", dateInMonth(m1, 24), 480_000, "health", "w-bca", "Monthly gym membership", "Fitness Center"),
+    mkTransfer("tx-m1-12", dateInMonth(m1, 27), 3_500_000, "w-bni", "w-savings", "Monthly savings allocation", 0),
 
-    // --- Current month (m0) ---
-    mkIdrTx("tx-m0-1", "income", dateInMonth(m0, 1), 13_200_000, "salary", "w-bni", "Gaji bulanan + tunjangan", "PT BNI (Persero) Tbk", "rec-salary"),
-    mkIdrTx("tx-m0-2", "expense", dateInMonth(m0, clampCurrent(2)), 2_450_000, "housing", "w-bni", "Sewa kost & listrik bulanan", "Kost Sudirman", "rec-kost"),
-    mkTransfer("tx-m0-3", dateInMonth(m0, clampCurrent(3)), 2_000_000, "w-bni", "w-gopay", "Top-up budget harian QRIS", 2500),
-    mkIdrTx("tx-m0-4", "expense", dateInMonth(m0, clampCurrent(5)), 350_000, "subscriptions", "w-bca", "Internet fiber & Spotify Duo", "Biznet / Spotify", "rec-net"),
-    mkIdrTx("tx-m0-5", "expense", dateInMonth(m0, clampCurrent(6)), 485_000, "food", "w-gopay", "Belanja mingguan buah, kopi & meal prep", "Grand Lucky / QRIS"),
-    mkIdrTx("tx-m0-6", "expense", dateInMonth(m0, clampCurrent(9)), 245_000, "transport", "w-gopay", "Kartu MRT & GoRide kantor", "MRT Jakarta"),
-    mkUsdTx("tx-m0-7", "expense", dateInMonth(m0, clampCurrent(11)), 20, fx, "subscriptions", "w-bca", "Langganan AI Dev Copilot", "OpenAI / GitHub", "rec-ai"),
-    mkIdrTx("tx-m0-8", "expense", dateInMonth(m0, clampCurrent(13)), 390_000, "food", "w-gopay", "Makan malam ramen & matcha bersama tim", "Marutama Ramen"),
-    mkUsdTx("tx-m0-9", "income", dateInMonth(m0, clampCurrent(15)), 125, fx, "freelance", "w-bca", "Konsultasi frontend & integrasi API", "Remote Sprint"),
-    mkIdrTx("tx-m0-10", "expense", dateInMonth(m0, clampCurrent(17)), 1_250_000, "family", "w-bni", "Kirim bulanan orang tua", "Transfer Keluarga"),
-    mkIdrTx("tx-m0-11", "expense", dateInMonth(m0, clampCurrent(19)), 480_000, "health", "w-bca", "Membership gym bulanan", "Fitness Center"),
-    mkIdrTx("tx-m0-12", "expense", dateInMonth(m0, clampCurrent(21)), 315_000, "entertainment", "w-cash", "Ngopi sore, komik & parkir", "Gramedia / Kopi"),
-    mkIdrTx("tx-m0-13", "expense", dateInMonth(m0, clampCurrent(22)), 620_000, "food", "w-gopay", "Makan siang harian minggu ke-3", "QRIS Kantin & Cafe"),
-    mkTransfer("tx-m0-14", dateInMonth(m0, clampCurrent(23)), 3_500_000, "w-bni", "w-savings", "Setoran rutin Dana Darurat & Jepang", 0),
+    // m0 (current month)
+    mkTx("tx-m0-1", "income", dateInMonth(m0, 1), 13_200_000, "salary", "w-bni", "Monthly salary & allowance", "PT BNI (Persero) Tbk", "rec-salary"),
+    mkTx("tx-m0-2", "expense", dateInMonth(m0, clampCurrent(2)), 2_450_000, "housing", "w-bni", "Rent & electricity", "Kost Sudirman", "rec-kost"),
+    mkTransfer("tx-m0-3", dateInMonth(m0, clampCurrent(3)), 2_000_000, "w-bni", "w-gopay", "Daily QRIS budget top-up", 2500),
+    mkTx("tx-m0-4", "expense", dateInMonth(m0, clampCurrent(5)), 350_000, "subscriptions", "w-bca", "Fiber internet & Spotify Duo", "Biznet / Spotify", "rec-net"),
+    mkTx("tx-m0-5", "expense", dateInMonth(m0, clampCurrent(6)), 485_000, "food", "w-gopay", "Weekly groceries, fruit & coffee", "Grand Lucky / QRIS"),
+    mkTx("tx-m0-6", "expense", dateInMonth(m0, clampCurrent(9)), 245_000, "transport", "w-gopay", "MRT pass & office commute", "MRT Jakarta"),
+    mkTx("tx-m0-7", "expense", dateInMonth(m0, clampCurrent(11)), 330_000, "subscriptions", "w-bca", "AI Dev Copilot subscription", "GitHub / OpenAI", "rec-ai"),
+    mkTx("tx-m0-8", "expense", dateInMonth(m0, clampCurrent(13)), 390_000, "food", "w-gopay", "Team ramen dinner & matcha", "Marutama Ramen"),
+    mkTx("tx-m0-9", "income", dateInMonth(m0, clampCurrent(15)), 2_100_000, "freelance", "w-bca", "Frontend sprint & API integration", "Remote Sprint"),
+    mkTx("tx-m0-10", "expense", dateInMonth(m0, clampCurrent(17)), 1_250_000, "family", "w-bni", "Monthly family support", "Family Transfer"),
+    mkTx("tx-m0-11", "expense", dateInMonth(m0, clampCurrent(19)), 480_000, "health", "w-bca", "Monthly gym membership", "Fitness Center"),
+    mkTx("tx-m0-12", "expense", dateInMonth(m0, clampCurrent(21)), 315_000, "entertainment", "w-cash", "Afternoon coffee, manga & parking", "Gramedia / Cafe"),
+    mkTx("tx-m0-13", "expense", dateInMonth(m0, clampCurrent(22)), 620_000, "food", "w-gopay", "Weekday lunches (week 3)", "QRIS Canteen & Cafe"),
+    mkTransfer("tx-m0-14", dateInMonth(m0, clampCurrent(23)), 3_500_000, "w-bni", "w-savings", "Monthly Emergency & Japan trip fund", 0),
   ];
 
   const budgets: Budget[] = [
@@ -237,38 +203,35 @@ export function createDemoSeedData(): CashflowStoreData {
   const recurring: RecurringItem[] = [
     {
       id: "rec-salary",
-      title: "Gaji Bulanan & Tunjangan",
+      title: "Monthly Salary & Allowance",
       type: "income",
       categoryId: "salary",
       walletId: "w-bni",
       dayOfMonth: 1,
-      currency: "IDR",
-      amount: 13_200_000,
+      amountIdr: 13_200_000,
       note: "PT BNI (Persero) Tbk",
       active: true,
     },
     {
       id: "rec-kost",
-      title: "Sewa Kost & Listrik",
+      title: "Rent & Electricity",
       type: "expense",
       categoryId: "housing",
       walletId: "w-bni",
       dayOfMonth: 2,
-      currency: "IDR",
-      amount: 2_450_000,
+      amountIdr: 2_450_000,
       note: "Kost Sudirman",
       active: true,
     },
     {
       id: "rec-net",
-      title: "Internet Fiber & Spotify",
+      title: "Fiber Internet & Spotify Duo",
       type: "expense",
       categoryId: "subscriptions",
       walletId: "w-bca",
       dayOfMonth: 5,
-      currency: "IDR",
-      amount: 350_000,
-      note: "Biznet / Spotify Duo",
+      amountIdr: 350_000,
+      note: "Biznet / Spotify",
       active: true,
     },
     {
@@ -278,9 +241,8 @@ export function createDemoSeedData(): CashflowStoreData {
       categoryId: "subscriptions",
       walletId: "w-bca",
       dayOfMonth: 11,
-      currency: "USD",
-      amount: 20,
-      note: "Ditagih dalam USD — auto-konversi kurs real-time",
+      amountIdr: 330_000,
+      note: "Monthly developer tools",
       active: true,
     },
     {
@@ -290,9 +252,8 @@ export function createDemoSeedData(): CashflowStoreData {
       categoryId: "subscriptions",
       walletId: "w-bca",
       dayOfMonth: 26,
-      currency: "USD",
-      amount: 12,
-      note: "VPS / Vercel / Domain ekosistem Shizuku",
+      amountIdr: 200_000,
+      note: "SHIZUKU ecosystem hosting",
       active: true,
     },
   ];
@@ -300,12 +261,12 @@ export function createDemoSeedData(): CashflowStoreData {
   const goals: SavingsGoal[] = [
     {
       id: "g-emergency",
-      name: "Dana Darurat 6 Bulan",
+      name: "6-Month Emergency Fund",
       targetIdr: 45_000_000,
       savedIdr: 32_500_000,
       deadline: `${now.getFullYear() + 1}-06-30`,
       color: "#745bc7",
-      note: "Target aman 6x pengeluaran rutin bulanan",
+      note: "Target 6x monthly baseline expenses",
     },
     {
       id: "g-japan",
@@ -313,44 +274,43 @@ export function createDemoSeedData(): CashflowStoreData {
       targetIdr: 28_000_000,
       savedIdr: 12_400_000,
       deadline: `${now.getFullYear() + 1}-11-15`,
-      color: "#d749d5",
-      note: "Tiket PP, JR Pass, penginapan & kuliner",
+      color: "#b42e69",
+      note: "Flights, JR Pass, lodging & food",
     },
     {
       id: "g-gear",
-      name: "Workstation & Monitor 4K",
+      name: "4K Monitor & Desk Setup",
       targetIdr: 12_000_000,
       savedIdr: 7_800_000,
       deadline: `${now.getFullYear() + 1}-03-31`,
-      color: "#2276a8",
-      note: "Upgrade setup desk coding harian",
+      color: "#1e6c99",
+      note: "Daily workstation upgrade",
     },
   ];
 
   return {
-    version: 1,
+    version: 3,
     wallets,
     transactions,
     budgets,
     recurring,
     goals,
     settings: {
-      locale: "id",
-      displayCurrency: "DUAL",
+      locale: "en",
       privacyMode: false,
       rainEnabled: true,
-      shizukuPortfolioUrl: "https://github.com/farhansatrian/shizuku",
+      shizukuWebsiteUrl: "",
     },
   };
 }
 
 export function createFreshEmptyData(): CashflowStoreData {
   return {
-    version: 1,
+    version: 3,
     wallets: [
       {
         id: "w-main",
-        name: "Rekening Utama",
+        name: "Primary Bank",
         institution: "Bank",
         type: "bank",
         initialBalanceIdr: 0,
@@ -362,11 +322,11 @@ export function createFreshEmptyData(): CashflowStoreData {
         institution: "Digital Wallet",
         type: "ewallet",
         initialBalanceIdr: 0,
-        color: "#14866d",
+        color: "#117a62",
       },
       {
         id: "w-cash",
-        name: "Tunai",
+        name: "Cash",
         institution: "Cash",
         type: "cash",
         initialBalanceIdr: 0,
@@ -378,11 +338,10 @@ export function createFreshEmptyData(): CashflowStoreData {
     recurring: [],
     goals: [],
     settings: {
-      locale: "id",
-      displayCurrency: "DUAL",
+      locale: "en",
       privacyMode: false,
       rainEnabled: true,
-      shizukuPortfolioUrl: "https://github.com/farhansatrian/shizuku",
+      shizukuWebsiteUrl: "",
     },
   };
 }

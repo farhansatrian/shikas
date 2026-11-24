@@ -1,8 +1,4 @@
-export type Locale = "id" | "en";
-
-export type DisplayCurrencyMode = "IDR" | "USD" | "DUAL";
-
-export type EntryCurrency = "IDR" | "USD";
+export type Locale = "en" | "id";
 
 export type TransactionType = "income" | "expense" | "transfer";
 
@@ -46,9 +42,6 @@ export interface Transaction {
   feeIdr?: number; // Optional transfer admin fee (e.g., BI-FAST Rp 2.500)
   note: string;
   merchant?: string;
-  originalCurrency: EntryCurrency;
-  originalAmount: number;
-  fxRateAtEntry?: number; // USD -> IDR rate when originalCurrency === "USD"
   recurringId?: string;
   createdAt: string;
 }
@@ -67,8 +60,7 @@ export interface RecurringItem {
   categoryId: string;
   walletId: string;
   dayOfMonth: number; // 1 - 28
-  currency: EntryCurrency;
-  amount: number; // Nominal in `currency` (IDR or USD)
+  amountIdr: number;
   note?: string;
   active: boolean;
 }
@@ -83,20 +75,11 @@ export interface SavingsGoal {
   note?: string;
 }
 
-export interface FxRateState {
-  usdToIdr: number;
-  source: "open.er-api.com" | "frankfurter.dev" | "cached" | "fallback";
-  updatedAt: string; // ISO timestamp
-  status: "loading" | "live" | "cached" | "fallback";
-  error?: string;
-}
-
 export interface AppSettings {
   locale: Locale;
-  displayCurrency: DisplayCurrencyMode;
   privacyMode: boolean;
   rainEnabled: boolean;
-  shizukuPortfolioUrl: string;
+  shizukuWebsiteUrl: string;
 }
 
 export interface CashflowStoreData {

@@ -1,6 +1,5 @@
 import type { CashflowStoreData, Locale, Transaction, Wallet } from "../types/cashflow";
 import { getCategoryLabel } from "../data/categories";
-import { idrToUsd } from "./fxService";
 
 function escapeCsvCell(value: string | number | undefined): string {
   const str = String(value ?? "");
@@ -25,7 +24,6 @@ function triggerFileDownload(content: string, filename: string, mimeType: string
 export function exportTransactionsToCsv(
   transactions: Transaction[],
   wallets: Wallet[],
-  usdToIdr: number,
   locale: Locale
 ): void {
   const walletMap = Object.fromEntries(wallets.map((w) => [w.id, w.name]));
@@ -39,10 +37,6 @@ export function exportTransactionsToCsv(
     "Note",
     "Amount (IDR)",
     "Fee (IDR)",
-    "Live Equivalent (USD)",
-    "Original Currency",
-    "Original Amount",
-    "Entry FX Rate (USD->IDR)",
   ];
 
   const sorted = [...transactions].sort((a, b) => (a.date < b.date ? 1 : -1));
@@ -56,15 +50,15 @@ export function exportTransactionsToCsv(
     tx.note,
     tx.amountIdr,
     tx.feeIdr ?? 0,
-    idrToUsd(tx.amountIdr, usdToIdr).toFixed(2),
-    tx.originalCurrency,
-    tx.originalAmount,
-    tx.fxRateAtEntry ?? "",
   ]);
 
   const csvLines = [headers, ...rows].map((row) => row.map(escapeCsvCell).join(","));
   const stamp = new Date().toISOString().slice(0, 10);
-  triggerFileDownload(`\uFEFF${csvLines.join("\n")}`, `shikas-ledger-${stamp}.csv`, "text/csv;charset=utf-8;");
+  triggerFileDownload(
+    `\uFEFF${csvLines.join("\n")}`,
+    `shikas-ledger-${stamp}.csv`,
+    "text/csv;charset=utf-8;"
+  );
 }
 
 export function exportBackupJson(data: CashflowStoreData): void {
@@ -86,27 +80,32 @@ export function parseBackupJson(rawText: string): CashflowStoreData {
   ) {
     throw new Error("Invalid ShiKas backup structure.");
   }
+
+  const normalizedRecurring = Array.isArray(parsed.recurring)
+    ? parsed.recurring.map((r) => {
+        const legacy = r as unknown as { amountIdr?: number; amount?: number };
+        return {
+          ...r,
+          amountIdr: typeof legacy.amountIdr === "number" ? legacy.amountIdr : Number(legacy.amount ?? 0),
+        };
+      })
+    : [];
+
   return {
-    version: 1,
+    version: 3,
     wallets: parsed.wallets,
     transactions: parsed.transactions,
     budgets: parsed.budgets,
-    recurring: Array.isArray(parsed.recurring) ? parsed.recurring : [],
+    recurring: normalizedRecurring,
     goals: Array.isArray(parsed.goals) ? parsed.goals : [],
     settings: {
-      locale: parsed.settings?.locale === "en" ? "en" : "id",
-      displayCurrency:
-        parsed.settings?.displayCurrency === "IDR" ||
-        parsed.settings?.displayCurrency === "USD" ||
-        parsed.settings?.displayCurrency === "DUAL"
-          ? parsed.settings.displayCurrency
-          : "DUAL",
+      locale: parsed.settings?.locale === "id" ? "id" : "en",
       privacyMode: Boolean(parsed.settings?.privacyMode),
       rainEnabled: parsed.settings?.rainEnabled ?? true,
-      shizukuPortfolioUrl:
-        typeof parsed.settings?.shizukuPortfolioUrl === "string"
-          ? parsed.settings.shizukuPortfolioUrl
-          : "https://github.com/farhansatrian/shizuku",
+      shizukuWebsiteUrl:
+        typeof parsed.settings?.shizukuWebsiteUrl === "string"
+          ? parsed.settings.shizukuWebsiteUrl
+          : "",
     },
   };
 }

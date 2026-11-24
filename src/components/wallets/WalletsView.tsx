@@ -100,18 +100,13 @@ export const WalletsView: React.FC = () => {
         </div>
       </div>
 
-      {/* Stark Monochrome Total Net Liquidity */}
+      {/* Total Net Liquidity */}
       <section className="gallery-dark p-6 sm:p-7">
         <p className="font-mono text-[10px] tracking-[0.2em] text-white/55 uppercase">
           {t.dashboard.totalBalance}
         </p>
         <div className="mt-2">
-          <MoneyDisplay
-            amountIdr={totalBalance}
-            forceDual
-            primaryClassName="text-3xl font-semibold text-white"
-            secondaryClassName="mt-1 text-sm text-white/60"
-          />
+          <MoneyDisplay amountIdr={totalBalance} className="text-3xl font-semibold text-white" />
         </div>
 
         {totalBalance > 0 && (
@@ -201,20 +196,14 @@ export const WalletsView: React.FC = () => {
               <div className="mt-5">
                 <MoneyDisplay
                   amountIdr={currentBal}
-                  primaryClassName="text-xl font-semibold text-[#14100e]"
-                  secondaryClassName="text-xs text-[#5f5368]"
+                  className="text-xl font-semibold text-[#14100e]"
                 />
               </div>
 
               <div className="mt-4 flex items-center justify-between border-t border-[#14100e]/10 pt-3 font-mono text-[11px] text-[#5f5368]">
                 <span>
                   {t.wallets.initialBalance}:{" "}
-                  <MoneyDisplay
-                    amountIdr={w.initialBalanceIdr}
-                    inline
-                    primaryClassName="text-[#5f5368]"
-                    secondaryClassName="hidden"
-                  />
+                  <MoneyDisplay amountIdr={w.initialBalanceIdr} className="text-[#5f5368]" />
                 </span>
                 <span className="text-[#14100e]">{share.toFixed(1)}%</span>
               </div>
@@ -223,7 +212,7 @@ export const WalletsView: React.FC = () => {
         })}
       </div>
 
-      {/* Minimalist Wallet Modal */}
+      {/* Wallet Modal */}
       {modalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-[#111015]/55 p-4 backdrop-blur-xs"
@@ -256,7 +245,7 @@ export const WalletsView: React.FC = () => {
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="cth. BNI Taplus / OVO"
+                  placeholder="e.g. BNI Taplus / GoPay"
                   className="mt-1 w-full border border-[#14100e]/22 bg-white px-3 py-2 text-sm text-[#14100e] outline-none focus:border-[#14100e]"
                 />
               </div>

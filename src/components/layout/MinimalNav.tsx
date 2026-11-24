@@ -1,18 +1,34 @@
 import React from "react";
-import {
-  ArrowLeftRight,
-  ChevronLeft,
-  ChevronRight,
-  Eye,
-  EyeOff,
-  Plus,
-  RefreshCw,
-} from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useCashflow } from "../../context/CashflowContext";
-import type { DisplayCurrencyMode, NavTab } from "../../types/cashflow";
-import { formatIdr, formatMonthLabel, shiftMonthKey } from "../../utils/format";
+import type { NavTab } from "../../types/cashflow";
+import { formatMonthLabel, shiftMonthKey } from "../../utils/format";
 
 const NAV_TABS: NavTab[] = ["home", "ledger", "wallets", "plan", "analytics", "data"];
+
+function ShizukuUmbrellaMark({ className = "h-5 w-5" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 32 32" fill="none" className={className} aria-hidden="true">
+      <path d="M16 4V6.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <path
+        d="M5 17.5C5 11.425 9.925 6.5 16 6.5C22.075 6.5 27 11.425 27 17.5C24.8 16.2 22.8 16.2 21 17.5C19.2 16.2 17.4 16.2 16 17.5C14.6 16.2 12.8 16.2 11 17.5C9.2 16.2 7.2 16.2 5 17.5Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+        fill="currentColor"
+        fillOpacity="0.14"
+      />
+      <path
+        d="M16 17.5V24.5C16 26.2 14.7 27.5 13 27.5C11.7 27.5 10.6 26.6 10.3 25.4"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+      <circle cx="8" cy="8.5" r="1.1" fill="currentColor" fillOpacity="0.7" />
+      <circle cx="25.5" cy="9.5" r="1.3" fill="currentColor" fillOpacity="0.55" />
+    </svg>
+  );
+}
 
 export const MinimalNav: React.FC = () => {
   const {
@@ -20,115 +36,125 @@ export const MinimalNav: React.FC = () => {
     setActiveTab,
     selectedMonth,
     setSelectedMonth,
-    store,
-    fx,
-    refreshFx,
-    setFxModalOpen,
-    setDisplayCurrency,
     setLocale,
-    togglePrivacyMode,
-    openNewTxModal,
     t,
     locale,
   } = useCashflow();
-
-  const cycleCurrency = () => {
-    const order: DisplayCurrencyMode[] = ["DUAL", "IDR", "USD"];
-    const next = order[(order.indexOf(store.settings.displayCurrency) + 1) % order.length];
-    setDisplayCurrency(next);
-  };
-
-  const currencyLabel =
-    store.settings.displayCurrency === "DUAL"
-      ? "IDR+USD"
-      : store.settings.displayCurrency;
 
   const isHome = activeTab === "home";
 
   return (
     <header className="relative z-20 w-full">
-      {/* Exact omocat.com 3-zone airy top bar: tiny emblem left · centered 6-item nav · tiny icons right */}
-      <div className="mx-auto grid w-full max-w-[1380px] grid-cols-[auto_1fr_auto] items-center gap-3 px-5 pt-6 pb-4 sm:px-10 sm:pt-8">
-        {/* Left: Compact SHIKAS (雫) Emblem */}
-        <button
-          type="button"
-          onClick={() => setActiveTab("home")}
-          title="SHIKAS (雫) — Personal Cashflow"
-          aria-label="SHIKAS Home"
-          className="group flex h-8 w-8 items-center justify-center border border-[#14100e]/22 bg-white/85 transition hover:border-[#14100e] hover:bg-[#14100e]"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            className="h-4 w-4 fill-none stroke-[#14100e] stroke-[1.7] transition group-hover:stroke-white"
-          >
-            <path d="M12 3.5C12 3.5 6.5 10.2 6.5 14.3A5.5 5.5 0 0 0 17.5 14.3C17.5 10.2 12 3.5 12 3.5Z" />
-          </svg>
-        </button>
+      {/* Desktop: exact mathematical 1fr | auto | 1fr centering so nav aligns 100% with hero center */}
+      <div className="mx-auto w-full max-w-[1440px] px-5 pt-6 pb-4 sm:px-10 sm:pt-8">
+        <div className="flex flex-col gap-4 md:grid md:grid-cols-[1fr_auto_1fr] md:items-center md:gap-4">
+          {/* Top row on mobile (Logo left + EN|ID right); Col 1 on desktop */}
+          <div className="flex items-center justify-between md:justify-start">
+            <button
+              type="button"
+              onClick={() => setActiveTab("home")}
+              aria-label="SHIKAS Home"
+              className="group inline-flex items-center gap-2 text-[#745bc7] transition-opacity hover:opacity-75 focus:outline-none"
+            >
+              <span className="font-editorial text-[20px] font-medium tracking-[0.28em] uppercase sm:text-[23px]">
+                SHIKAS
+              </span>
+              <ShizukuUmbrellaMark className="h-5 w-5 sm:h-6 sm:w-6" />
+            </button>
 
-        {/* Center: Pure Condensed Uppercase Navigation */}
-        <nav aria-label="Primary navigation" className="flex justify-center">
-          <ul className="flex flex-wrap items-center justify-center gap-x-3.5 gap-y-1.5 sm:gap-x-8">
-            {NAV_TABS.map((tab) => {
-              const active = activeTab === tab;
-              return (
-                <li key={tab}>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab(tab)}
-                    className={`font-nav pb-0.5 text-[14px] tracking-[0.11em] uppercase transition sm:text-[16px] sm:tracking-[0.13em] ${
-                      active
-                        ? "border-b-[1.5px] border-[#14100e] font-medium text-[#14100e]"
-                        : "border-b-[1.5px] border-transparent font-normal text-[#14100e]/65 hover:text-[#14100e]"
-                    }`}
-                  >
-                    {t.nav[tab]}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </nav>
+            {/* Mobile Language Switcher */}
+            <div
+              role="group"
+              aria-label="Language switcher"
+              className="flex items-center gap-1.5 font-editorial text-xs font-bold tracking-[0.18em] md:hidden"
+            >
+              <button
+                type="button"
+                onClick={() => setLocale("en")}
+                className={
+                  locale === "en"
+                    ? "text-[#745bc7]"
+                    : "text-[#745bc7]/40 transition hover:text-[#745bc7]/80"
+                }
+              >
+                EN
+              </button>
+              <span className="text-[#745bc7]/30">|</span>
+              <button
+                type="button"
+                onClick={() => setLocale("id")}
+                className={
+                  locale === "id"
+                    ? "text-[#745bc7]"
+                    : "text-[#745bc7]/40 transition hover:text-[#745bc7]/80"
+                }
+              >
+                ID
+              </button>
+            </div>
+          </div>
 
-        {/* Right: 3 Quiet Minimal Monochrome Icons (echoing omocat.com top-right icons) */}
-        <div className="flex items-center justify-end gap-2.5 text-[#14100e]/80 sm:gap-3.5">
-          <button
-            type="button"
-            onClick={() => setFxModalOpen(true)}
-            aria-label={t.actions.fxConverter}
-            title={`1 USD = ${formatIdr(fx.usdToIdr)} (${t.actions.fxConverter})`}
-            className="p-1 transition hover:text-[#14100e]"
+          {/* Center Nav: Dead-center of viewport on both Desktop & Mobile */}
+          <nav aria-label="Primary navigation" className="flex justify-center">
+            <ul className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 sm:gap-x-8">
+              {NAV_TABS.map((tab) => {
+                const active = activeTab === tab;
+                return (
+                  <li key={tab}>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab(tab)}
+                      className={`font-nav pb-0.5 text-[14px] tracking-[0.12em] uppercase transition sm:text-[16px] sm:tracking-[0.14em] ${
+                        active
+                          ? "border-b-[1.5px] border-[#14100e] font-medium text-[#14100e]"
+                          : "border-b-[1.5px] border-transparent font-normal text-[#14100e]/65 hover:text-[#14100e]"
+                      }`}
+                    >
+                      {t.nav[tab]}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </nav>
+
+          {/* Desktop Right: Quiet SHIZUKU EN | ID switcher (balances 1fr right column) */}
+          <div
+            role="group"
+            aria-label="Language switcher"
+            className="hidden items-center justify-end gap-2 font-editorial text-[13px] font-bold tracking-[0.18em] md:flex"
           >
-            <ArrowLeftRight className="h-3.5 w-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={togglePrivacyMode}
-            aria-label={t.settings.privacyLabel}
-            title={t.settings.privacyLabel}
-            className="hidden p-1 transition hover:text-[#14100e] sm:inline-flex"
-          >
-            {store.settings.privacyMode ? (
-              <EyeOff className="h-3.5 w-3.5" />
-            ) : (
-              <Eye className="h-3.5 w-3.5" />
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={() => openNewTxModal("expense")}
-            aria-label={t.actions.addTransaction}
-            title={t.actions.addTransaction}
-            className="p-1 transition hover:text-[#14100e]"
-          >
-            <Plus className="h-4 w-4" />
-          </button>
+            <button
+              type="button"
+              onClick={() => setLocale("en")}
+              className={
+                locale === "en"
+                  ? "text-[#745bc7]"
+                  : "text-[#745bc7]/40 transition hover:text-[#745bc7]/80"
+              }
+            >
+              EN
+            </button>
+            <span className="text-[#745bc7]/30">|</span>
+            <button
+              type="button"
+              onClick={() => setLocale("id")}
+              className={
+                locale === "id"
+                  ? "text-[#745bc7]"
+                  : "text-[#745bc7]/40 transition hover:text-[#745bc7]/80"
+              }
+            >
+              ID
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Context Utility Strip: Hidden on HOME so HOME remains ultra-clean like omocat.com */}
+      {/* Minimal Month Bar on Workspace Pages (hidden on HOME) */}
       {!isHome && (
         <div className="mx-auto w-full max-w-[960px] px-5 pt-2 pb-4 sm:px-8">
-          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-[#14100e]/12 pb-2.5 font-mono text-[11px] text-[#5f5368]">
+          <div className="flex items-center justify-between border-b border-[#14100e]/12 pb-2.5 font-mono text-[11px] text-[#5f5368]">
             <div className="flex items-center gap-2 text-[#14100e]">
               <button
                 type="button"
@@ -138,7 +164,7 @@ export const MinimalNav: React.FC = () => {
               >
                 <ChevronLeft className="h-3.5 w-3.5" />
               </button>
-              <span className="min-w-[104px] text-center font-medium">
+              <span className="min-w-[110px] text-center font-medium">
                 {formatMonthLabel(selectedMonth, locale)}
               </span>
               <button
@@ -150,65 +176,7 @@ export const MinimalNav: React.FC = () => {
                 <ChevronRight className="h-3.5 w-3.5" />
               </button>
             </div>
-
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setFxModalOpen(true)}
-                  className="inline-flex items-center gap-1.5 text-[#14100e] hover:underline"
-                >
-                  <span
-                    className={`h-1.5 w-1.5 rounded-full ${
-                      fx.status === "live"
-                        ? "bg-[#117a62]"
-                        : fx.status === "loading"
-                          ? "bg-[#745bc7] animate-pulse"
-                          : "bg-[#a66a14]"
-                    }`}
-                  />
-                  <span className="font-mono-num">1 USD = {formatIdr(fx.usdToIdr)}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void refreshFx(true)}
-                  aria-label={t.actions.refreshRate}
-                  className="p-0.5 text-[#5f5368] hover:text-[#14100e]"
-                >
-                  <RefreshCw className={`h-3 w-3 ${fx.status === "loading" ? "animate-spin" : ""}`} />
-                </button>
-              </div>
-
-              <span className="text-[#14100e]/20">·</span>
-
-              <button
-                type="button"
-                onClick={cycleCurrency}
-                className="font-medium text-[#14100e] hover:underline"
-              >
-                {currencyLabel}
-              </button>
-
-              <span className="text-[#14100e]/20">·</span>
-
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => setLocale("id")}
-                  className={locale === "id" ? "font-semibold text-[#14100e]" : "text-[#5f5368] hover:text-[#14100e]"}
-                >
-                  ID
-                </button>
-                <span className="text-[#14100e]/25">/</span>
-                <button
-                  type="button"
-                  onClick={() => setLocale("en")}
-                  className={locale === "en" ? "font-semibold text-[#14100e]" : "text-[#5f5368] hover:text-[#14100e]"}
-                >
-                  EN
-                </button>
-              </div>
-            </div>
+            <span className="tracking-[0.14em] uppercase">IDR</span>
           </div>
         </div>
       )}

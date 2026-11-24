@@ -2,9 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { ArrowRight, X } from "lucide-react";
 import { useCashflow } from "../../context/CashflowContext";
 import { CATEGORIES } from "../../data/categories";
-import { idrToUsd, usdToIdrAmount } from "../../services/fxService";
-import type { EntryCurrency, TransactionType } from "../../types/cashflow";
-import { formatIdr, formatUsd, todayIsoDate } from "../../utils/format";
+import type { TransactionType } from "../../types/cashflow";
+import { todayIsoDate } from "../../utils/format";
 
 export const TransactionModal: React.FC = () => {
   const {
@@ -14,7 +13,6 @@ export const TransactionModal: React.FC = () => {
     closeTxModal,
     saveTransaction,
     store,
-    fx,
     t,
     locale,
   } = useCashflow();
@@ -25,7 +23,6 @@ export const TransactionModal: React.FC = () => {
   );
 
   const [type, setType] = useState<TransactionType>("expense");
-  const [entryCurrency, setEntryCurrency] = useState<EntryCurrency>("IDR");
   const [amountInput, setAmountInput] = useState("");
   const [date, setDate] = useState(todayIsoDate());
   const [categoryId, setCategoryId] = useState("food");
@@ -41,8 +38,7 @@ export const TransactionModal: React.FC = () => {
     setError(null);
     if (editingTx) {
       setType(editingTx.type);
-      setEntryCurrency(editingTx.originalCurrency);
-      setAmountInput(String(editingTx.originalAmount));
+      setAmountInput(String(editingTx.amountIdr));
       setDate(editingTx.date);
       setCategoryId(editingTx.categoryId);
       setWalletId(editingTx.walletId);
@@ -52,7 +48,6 @@ export const TransactionModal: React.FC = () => {
       setNote(editingTx.note);
     } else {
       setType(defaultTxType);
-      setEntryCurrency("IDR");
       setAmountInput("");
       setDate(todayIsoDate());
       setCategoryId(
@@ -83,15 +78,11 @@ export const TransactionModal: React.FC = () => {
 
   if (!isTxModalOpen) return null;
 
-  const parsedAmount = Number(amountInput) || 0;
-  const computedIdr =
-    entryCurrency === "USD" ? usdToIdrAmount(parsedAmount, fx.usdToIdr) : Math.round(parsedAmount);
-  const computedUsd =
-    entryCurrency === "USD" ? parsedAmount : idrToUsd(parsedAmount, fx.usdToIdr);
+  const parsedAmount = Math.round(Number(amountInput) || 0);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (parsedAmount <= 0 || computedIdr <= 0) {
+    if (parsedAmount <= 0) {
       setError(t.txModal.invalidAmountError);
       return;
     }
@@ -106,7 +97,7 @@ export const TransactionModal: React.FC = () => {
       {
         type,
         date,
-        amountIdr: computedIdr,
+        amountIdr: parsedAmount,
         categoryId: type === "transfer" ? "transfer" : categoryId,
         walletId,
         toWalletId: type === "transfer" ? toWalletId : undefined,
@@ -120,10 +111,7 @@ export const TransactionModal: React.FC = () => {
               : "Inter-wallet transfer"
             : filteredCategories.find((c) => c.id === categoryId)?.[
                 locale === "id" ? "nameId" : "nameEn"
-              ] ?? "Transaksi"),
-        originalCurrency: entryCurrency,
-        originalAmount: parsedAmount,
-        fxRateAtEntry: entryCurrency === "USD" ? fx.usdToIdr : undefined,
+              ] ?? "Transaction"),
       },
       editingTx?.id
     );
@@ -180,55 +168,23 @@ export const TransactionModal: React.FC = () => {
           </div>
 
           <div>
-            <div className="flex items-center justify-between">
-              <label className="font-mono text-[10px] tracking-[0.14em] text-[#5f5368] uppercase">
-                {t.txModal.amount}
-              </label>
-              <div className="flex items-center gap-1">
-                {(["IDR", "USD"] as const).map((cur) => (
-                  <button
-                    key={cur}
-                    type="button"
-                    onClick={() => setEntryCurrency(cur)}
-                    className={`border px-2.5 py-0.5 font-mono text-[10px] transition ${
-                      entryCurrency === cur
-                        ? "border-[#14100e] bg-[#14100e] text-white"
-                        : "border-[#14100e]/20 bg-white text-[#5f5368]"
-                    }`}
-                  >
-                    {cur}
-                  </button>
-                ))}
-              </div>
-            </div>
-
+            <label className="block font-mono text-[10px] tracking-[0.14em] text-[#5f5368] uppercase">
+              {t.txModal.amount}
+            </label>
             <div className="mt-1.5 flex items-center border border-[#14100e]/25 bg-white px-3.5 py-2.5 focus-within:border-[#14100e]">
-              <span className="font-mono-num mr-2 text-sm font-semibold text-[#5f5368]">
-                {entryCurrency === "IDR" ? "Rp" : "$"}
-              </span>
+              <span className="font-mono-num mr-2 text-sm font-semibold text-[#5f5368]">Rp</span>
               <input
                 type="number"
-                inputMode="decimal"
-                step={entryCurrency === "USD" ? "0.01" : "100"}
+                inputMode="numeric"
+                step="1000"
                 min="0"
                 required
-                placeholder={entryCurrency === "IDR" ? "150000" : "20.00"}
+                placeholder="150000"
                 value={amountInput}
                 onChange={(e) => setAmountInput(e.target.value)}
                 className="font-mono-num w-full bg-transparent text-lg font-semibold text-[#14100e] outline-none"
               />
             </div>
-
-            {parsedAmount > 0 && (
-              <div className="mt-1.5 flex flex-wrap items-center justify-between gap-1 border border-[#14100e]/10 bg-white/80 px-3 py-1.5 font-mono text-[11px] text-[#5f5368]">
-                <span>{t.txModal.liveConversionPreview}</span>
-                <span className="font-semibold text-[#14100e]">
-                  {entryCurrency === "USD"
-                    ? `${formatUsd(parsedAmount)} → ${formatIdr(computedIdr)}`
-                    : `${formatIdr(computedIdr)} ≈ ${formatUsd(computedUsd)}`}
-                </span>
-              </div>
-            )}
           </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

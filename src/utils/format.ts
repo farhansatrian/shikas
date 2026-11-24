@@ -1,5 +1,4 @@
 import type { Locale } from "../types/cashflow";
-import { idrToUsd } from "../services/fxService";
 
 export function formatIdr(amount: number, showSign = false): string {
   const abs = Math.round(Math.abs(amount));
@@ -10,35 +9,7 @@ export function formatIdr(amount: number, showSign = false): string {
   return `${sign}Rp ${formatted}`;
 }
 
-export function formatUsd(amountUsd: number, showSign = false): string {
-  const abs = Math.abs(amountUsd);
-  const formatted = new Intl.NumberFormat("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(abs);
-  const sign = amountUsd < 0 ? "-" : showSign && amountUsd > 0 ? "+" : "";
-  return `${sign}$${formatted}`;
-}
-
-export function formatIdrAsUsd(amountIdr: number, usdToIdr: number, showSign = false): string {
-  return formatUsd(idrToUsd(amountIdr, usdToIdr), showSign);
-}
-
-export function formatCompactCurrency(
-  amountIdr: number,
-  mode: "IDR" | "USD",
-  usdToIdr: number,
-  locale: Locale
-): string {
-  if (mode === "USD") {
-    const val = idrToUsd(amountIdr, usdToIdr);
-    const abs = Math.abs(val);
-    const sign = val < 0 ? "-" : "";
-    if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(1)}M`;
-    if (abs >= 1_000) return `${sign}$${(abs / 1_000).toFixed(1)}k`;
-    return `${sign}$${abs.toFixed(0)}`;
-  }
-
+export function formatCompactIdr(amountIdr: number, locale: Locale): string {
   const abs = Math.abs(amountIdr);
   const sign = amountIdr < 0 ? "-" : "";
   const trimZero = (n: number) => n.toFixed(1).replace(/\.0$/, "");
@@ -93,21 +64,6 @@ export function formatShortDate(dateIso: string, locale: Locale): string {
     day: "numeric",
     month: "short",
   }).format(date);
-}
-
-export function formatFxTimestamp(isoString: string, locale: Locale): string {
-  try {
-    const d = new Date(isoString);
-    return new Intl.DateTimeFormat(locale === "id" ? "id-ID" : "en-US", {
-      day: "numeric",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    }).format(d);
-  } catch {
-    return "";
-  }
 }
 
 export function todayIsoDate(): string {

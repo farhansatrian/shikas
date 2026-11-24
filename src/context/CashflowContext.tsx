@@ -10,8 +10,6 @@ import type {
   AppSettings,
   Budget,
   CashflowStoreData,
-  DisplayCurrencyMode,
-  FxRateState,
   Locale,
   NavTab,
   RecurringItem,
@@ -20,15 +18,10 @@ import type {
   Wallet,
 } from "../types/cashflow";
 import { createDemoSeedData, createFreshEmptyData } from "../data/seedData";
-import {
-  fetchRealtimeUsdToIdr,
-  getInitialFxState,
-  usdToIdrAmount,
-} from "../services/fxService";
 import { getMonthKey, shiftMonthKey } from "../utils/format";
 import { TRANSLATIONS, type TranslationDict } from "../i18n/translations";
 
-const STORE_KEY = "shikas_store_v2";
+const STORE_KEY = "shikas_store_v3";
 
 function generateId(prefix: string): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -47,7 +40,7 @@ function loadStoreFromStorage(): CashflowStoreData {
     }
     const defaults = createDemoSeedData().settings;
     return {
-      version: 1,
+      version: 3,
       wallets: parsed.wallets,
       transactions: parsed.transactions,
       budgets: Array.isArray(parsed.budgets) ? parsed.budgets : [],
@@ -71,23 +64,19 @@ export interface ToastNotice {
 
 interface CashflowContextValue {
   store: CashflowStoreData;
-  fx: FxRateState;
-  refreshFx: (force?: boolean) => Promise<void>;
   activeTab: NavTab;
   setActiveTab: (tab: NavTab) => void;
   selectedMonth: string;
   setSelectedMonth: (month: string) => void;
   t: TranslationDict;
   locale: Locale;
-  // Modals
+  // Transaction Modal
   isTxModalOpen: boolean;
   editingTx: Transaction | null;
   defaultTxType: "income" | "expense" | "transfer";
   openNewTxModal: (type?: "income" | "expense" | "transfer") => void;
   openEditTxModal: (tx: Transaction) => void;
   closeTxModal: () => void;
-  isFxModalOpen: boolean;
-  setFxModalOpen: (open: boolean) => void;
   // CRUD Actions
   saveTransaction: (
     payload: Omit<Transaction, "id" | "createdAt">,
@@ -109,7 +98,6 @@ interface CashflowContextValue {
   // Settings & Data
   updateSettings: (patch: Partial<AppSettings>) => void;
   setLocale: (locale: Locale) => void;
-  setDisplayCurrency: (mode: DisplayCurrencyMode) => void;
   togglePrivacyMode: () => void;
   resetToDemoData: () => void;
   resetToFreshEmpty: () => void;
@@ -125,13 +113,11 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const [store, setStore] = useState<CashflowStoreData>(loadStoreFromStorage);
-  const [fx, setFx] = useState<FxRateState>(getInitialFxState);
   const [activeTab, setActiveTab] = useState<NavTab>("home");
   const [selectedMonth, setSelectedMonth] = useState<string>(() => getMonthKey());
   const [isTxModalOpen, setTxModalOpen] = useState(false);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
   const [defaultTxType, setDefaultTxType] = useState<"income" | "expense" | "transfer">("expense");
-  const [isFxModalOpen, setFxModalOpen] = useState(false);
   const [toasts, setToasts] = useState<ToastNotice[]>([]);
 
   const notify = useCallback((message: string, tone: ToastNotice["tone"] = "iris") => {
@@ -142,7 +128,6 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
     }, 3200);
   }, []);
 
-  // Persist store on change
   useEffect(() => {
     try {
       localStorage.setItem(STORE_KEY, JSON.stringify(store));
@@ -151,27 +136,9 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [store]);
 
-  // Sync HTML lang attribute
   useEffect(() => {
     document.documentElement.lang = store.settings.locale;
   }, [store.settings.locale]);
-
-  // Live FX fetch on mount + periodic refresh
-  const refreshFx = useCallback(async (force = false) => {
-    if (force) {
-      setFx((prev) => ({ ...prev, status: "loading" }));
-    }
-    const next = await fetchRealtimeUsdToIdr(force);
-    setFx(next);
-  }, []);
-
-  useEffect(() => {
-    void refreshFx(false);
-    const interval = window.setInterval(() => {
-      void refreshFx(false);
-    }, 15 * 60 * 1000);
-    return () => window.clearInterval(interval);
-  }, [refreshFx]);
 
   const openNewTxModal = useCallback((type: "income" | "expense" | "transfer" = "expense") => {
     setEditingTx(null);
@@ -327,44 +294,38 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
     [notify, store.settings.locale]
   );
 
-  const deleteBudget = useCallback(
-    (id: string) => {
-      setStore((prev) => ({
-        ...prev,
-        budgets: prev.budgets.filter((b) => b.id !== id),
-      }));
-    },
-    []
-  );
+  const deleteBudget = useCallback((id: string) => {
+    setStore((prev) => ({
+      ...prev,
+      budgets: prev.budgets.filter((b) => b.id !== id),
+    }));
+  }, []);
 
-  const copyBudgetsFromPreviousMonth = useCallback(
-    (targetMonth: string): boolean => {
-      const prevMonth = shiftMonthKey(targetMonth, -1);
-      let copied = false;
-      setStore((prev) => {
-        const prevBudgets = prev.budgets.filter((b) => b.month === prevMonth);
-        if (prevBudgets.length === 0) return prev;
-        copied = true;
-        const existingCats = new Set(
-          prev.budgets.filter((b) => b.month === targetMonth).map((b) => b.categoryId)
-        );
-        const toAdd: Budget[] = prevBudgets
-          .filter((b) => !existingCats.has(b.categoryId))
-          .map((b) => ({
-            id: generateId("b"),
-            month: targetMonth,
-            categoryId: b.categoryId,
-            limitIdr: b.limitIdr,
-          }));
-        return {
-          ...prev,
-          budgets: [...prev.budgets, ...toAdd],
-        };
-      });
-      return copied;
-    },
-    []
-  );
+  const copyBudgetsFromPreviousMonth = useCallback((targetMonth: string): boolean => {
+    const prevMonth = shiftMonthKey(targetMonth, -1);
+    let copied = false;
+    setStore((prev) => {
+      const prevBudgets = prev.budgets.filter((b) => b.month === prevMonth);
+      if (prevBudgets.length === 0) return prev;
+      copied = true;
+      const existingCats = new Set(
+        prev.budgets.filter((b) => b.month === targetMonth).map((b) => b.categoryId)
+      );
+      const toAdd: Budget[] = prevBudgets
+        .filter((b) => !existingCats.has(b.categoryId))
+        .map((b) => ({
+          id: generateId("b"),
+          month: targetMonth,
+          categoryId: b.categoryId,
+          limitIdr: b.limitIdr,
+        }));
+      return {
+        ...prev,
+        budgets: [...prev.budgets, ...toAdd],
+      };
+    });
+    return copied;
+  }, []);
 
   const saveRecurring = useCallback(
     (payload: Omit<RecurringItem, "id">, existingId?: string) => {
@@ -404,21 +365,15 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
       const day = String(Math.min(item.dayOfMonth, maxDay)).padStart(2, "0");
       const date = `${monthKey}-${day}`;
 
-      const isUsd = item.currency === "USD";
-      const amountIdr = isUsd ? usdToIdrAmount(item.amount, fx.usdToIdr) : Math.round(item.amount);
-
       const tx: Transaction = {
         id: generateId("tx"),
         type: item.type,
         date,
-        amountIdr,
+        amountIdr: Math.round(item.amountIdr),
         categoryId: item.categoryId,
         walletId: item.walletId,
         note: item.title,
         merchant: item.note,
-        originalCurrency: item.currency,
-        originalAmount: item.amount,
-        fxRateAtEntry: isUsd ? fx.usdToIdr : undefined,
         recurringId: item.id,
         createdAt: new Date().toISOString(),
       };
@@ -434,7 +389,7 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
         "success"
       );
     },
-    [fx.usdToIdr, notify, store.settings.locale]
+    [notify, store.settings.locale]
   );
 
   const saveGoal = useCallback(
@@ -494,11 +449,6 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
     [updateSettings]
   );
 
-  const setDisplayCurrency = useCallback(
-    (displayCurrency: DisplayCurrencyMode) => updateSettings({ displayCurrency }),
-    [updateSettings]
-  );
-
   const togglePrivacyMode = useCallback(() => {
     setStore((prev) => ({
       ...prev,
@@ -509,6 +459,7 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
   const resetToDemoData = useCallback(() => {
     const demo = createDemoSeedData();
     demo.settings.locale = store.settings.locale;
+    demo.settings.shizukuWebsiteUrl = store.settings.shizukuWebsiteUrl;
     setStore(demo);
     setSelectedMonth(getMonthKey());
     notify(
@@ -517,11 +468,12 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
         : "6-month realistic demo dataset loaded.",
       "success"
     );
-  }, [notify, store.settings.locale]);
+  }, [notify, store.settings.locale, store.settings.shizukuWebsiteUrl]);
 
   const resetToFreshEmpty = useCallback(() => {
     const fresh = createFreshEmptyData();
     fresh.settings.locale = store.settings.locale;
+    fresh.settings.shizukuWebsiteUrl = store.settings.shizukuWebsiteUrl;
     setStore(fresh);
     setSelectedMonth(getMonthKey());
     notify(
@@ -530,7 +482,7 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
         : "Ledger cleared to a fresh start.",
       "iris"
     );
-  }, [notify, store.settings.locale]);
+  }, [notify, store.settings.locale, store.settings.shizukuWebsiteUrl]);
 
   const importStoreData = useCallback(
     (data: CashflowStoreData) => {
@@ -543,8 +495,6 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
   const value = useMemo<CashflowContextValue>(
     () => ({
       store,
-      fx,
-      refreshFx,
       activeTab,
       setActiveTab,
       selectedMonth,
@@ -557,8 +507,6 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
       openNewTxModal,
       openEditTxModal,
       closeTxModal,
-      isFxModalOpen,
-      setFxModalOpen,
       saveTransaction,
       deleteTransaction,
       duplicateTransaction,
@@ -575,7 +523,6 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
       deleteGoal,
       updateSettings,
       setLocale,
-      setDisplayCurrency,
       togglePrivacyMode,
       resetToDemoData,
       resetToFreshEmpty,
@@ -585,8 +532,6 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
     }),
     [
       store,
-      fx,
-      refreshFx,
       activeTab,
       selectedMonth,
       isTxModalOpen,
@@ -595,7 +540,6 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
       openNewTxModal,
       openEditTxModal,
       closeTxModal,
-      isFxModalOpen,
       saveTransaction,
       deleteTransaction,
       duplicateTransaction,
@@ -612,7 +556,6 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
       deleteGoal,
       updateSettings,
       setLocale,
-      setDisplayCurrency,
       togglePrivacyMode,
       resetToDemoData,
       resetToFreshEmpty,

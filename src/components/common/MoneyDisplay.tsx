@@ -1,68 +1,31 @@
 import React from "react";
 import { useCashflow } from "../../context/CashflowContext";
-import { formatIdr, formatIdrAsUsd } from "../../utils/format";
+import { formatIdr } from "../../utils/format";
 
 interface MoneyDisplayProps {
   amountIdr: number;
   showSign?: boolean;
-  primaryClassName?: string;
-  secondaryClassName?: string;
-  inline?: boolean;
-  forceDual?: boolean;
+  className?: string;
 }
 
 export const MoneyDisplay: React.FC<MoneyDisplayProps> = ({
   amountIdr,
   showSign = false,
-  primaryClassName = "text-base font-semibold",
-  secondaryClassName = "text-xs opacity-70",
-  inline = false,
-  forceDual = false,
+  className = "text-sm font-semibold",
 }) => {
-  const { store, fx } = useCashflow();
-  const { displayCurrency, privacyMode } = store.settings;
+  const { store } = useCashflow();
 
-  if (privacyMode) {
+  if (store.settings.privacyMode) {
     return (
-      <span className={`font-mono-num tracking-wider ${primaryClassName}`}>
-        {displayCurrency === "USD" ? "$ •••••" : "Rp •••••••"}
+      <span className={`font-mono-num tracking-wider ${className}`}>
+        Rp •••••••
       </span>
     );
   }
 
-  const mode = forceDual && displayCurrency === "IDR" ? "DUAL" : displayCurrency;
-
-  if (mode === "USD") {
-    return (
-      <span className={`font-mono-num ${primaryClassName}`}>
-        {formatIdrAsUsd(amountIdr, fx.usdToIdr, showSign)}
-      </span>
-    );
-  }
-
-  if (mode === "IDR") {
-    return (
-      <span className={`font-mono-num ${primaryClassName}`}>
-        {formatIdr(amountIdr, showSign)}
-      </span>
-    );
-  }
-
-  // DUAL mode: IDR primary + real-time USD equivalent
   return (
-    <span
-      className={
-        inline
-          ? "inline-flex flex-wrap items-baseline gap-x-2"
-          : "inline-flex flex-col"
-      }
-    >
-      <span className={`font-mono-num ${primaryClassName}`}>
-        {formatIdr(amountIdr, showSign)}
-      </span>
-      <span className={`font-mono-num ${secondaryClassName}`}>
-        ≈ {formatIdrAsUsd(amountIdr, fx.usdToIdr, showSign)}
-      </span>
+    <span className={`font-mono-num ${className}`}>
+      {formatIdr(amountIdr, showSign)}
     </span>
   );
 };

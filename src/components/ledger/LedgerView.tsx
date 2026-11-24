@@ -3,12 +3,7 @@ import { Copy, Pencil, Plus, RotateCcw, Search, Trash2 } from "lucide-react";
 import { useCashflow } from "../../context/CashflowContext";
 import { CATEGORIES, CATEGORY_MAP, getCategoryLabel } from "../../data/categories";
 import type { Transaction, TransactionType } from "../../types/cashflow";
-import {
-  formatDateHeading,
-  formatIdr,
-  formatMonthLabel,
-  formatUsd,
-} from "../../utils/format";
+import { formatDateHeading, formatIdr, formatMonthLabel } from "../../utils/format";
 import { MoneyDisplay } from "../common/MoneyDisplay";
 
 type FilterType = "all" | TransactionType;
@@ -116,7 +111,6 @@ export const LedgerView: React.FC = () => {
 
   return (
     <div className="space-y-7">
-      {/* Header Row */}
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <p className="font-mono text-[10px] tracking-[0.2em] text-[#5f5368] uppercase">
@@ -147,10 +141,9 @@ export const LedgerView: React.FC = () => {
         </div>
       </div>
 
-      {/* Minimalist Filter Sheet */}
+      {/* Filter Bar */}
       <div className="gallery-sheet p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          {/* Clean Underline Type Tabs */}
           <ul className="flex items-center gap-6">
             {tabs.map((tab) => {
               const active = typeFilter === tab.value;
@@ -172,7 +165,6 @@ export const LedgerView: React.FC = () => {
             })}
           </ul>
 
-          {/* Clean Hairline Inputs */}
           <div className="flex flex-wrap items-center gap-2.5">
             <div className="flex min-w-[190px] flex-1 items-center gap-2 border-b border-[#14100e]/25 pb-1 sm:flex-initial">
               <Search className="h-3.5 w-3.5 text-[#5f5368]" />
@@ -226,42 +218,38 @@ export const LedgerView: React.FC = () => {
           </div>
         </div>
 
-        {/* Clean Filtered Totals Strip */}
         <div className="mt-5 grid grid-cols-3 gap-4 border-t border-[#14100e]/10 pt-4 text-xs">
           <div>
-            <span className="font-mono text-[10px] tracking-[0.14em] text-[#5f5368] uppercase">
+            <p className="font-mono text-[10px] tracking-[0.14em] text-[#5f5368] uppercase">
               {t.dashboard.income}
-            </span>
+            </p>
             <div className="mt-1">
               <MoneyDisplay
                 amountIdr={filteredTotals.income}
-                primaryClassName="text-sm font-semibold text-[#117a62]"
-                secondaryClassName="text-[10px] text-[#5f5368]"
+                className="text-sm font-semibold text-[#117a62]"
               />
             </div>
           </div>
           <div>
-            <span className="font-mono text-[10px] tracking-[0.14em] text-[#5f5368] uppercase">
+            <p className="font-mono text-[10px] tracking-[0.14em] text-[#5f5368] uppercase">
               {t.dashboard.expense}
-            </span>
+            </p>
             <div className="mt-1">
               <MoneyDisplay
                 amountIdr={filteredTotals.expense}
-                primaryClassName="text-sm font-semibold text-[#b42e69]"
-                secondaryClassName="text-[10px] text-[#5f5368]"
+                className="text-sm font-semibold text-[#b42e69]"
               />
             </div>
           </div>
           <div className="text-right">
-            <span className="font-mono text-[10px] tracking-[0.14em] text-[#5f5368] uppercase">
+            <p className="font-mono text-[10px] tracking-[0.14em] text-[#5f5368] uppercase">
               {t.dashboard.netCashflow}
-            </span>
+            </p>
             <div className="mt-1">
               <MoneyDisplay
                 amountIdr={filteredTotals.net}
                 showSign
-                primaryClassName="text-sm font-semibold text-[#14100e]"
-                secondaryClassName="text-[10px] text-[#5f5368]"
+                className="text-sm font-semibold text-[#14100e]"
               />
             </div>
           </div>
@@ -295,11 +283,9 @@ export const LedgerView: React.FC = () => {
                 <MoneyDisplay
                   amountIdr={group.dailyNet}
                   showSign
-                  inline
-                  primaryClassName={`text-xs font-medium ${
+                  className={`text-xs font-medium ${
                     group.dailyNet >= 0 ? "text-[#117a62]" : "text-[#5f5368]"
                   }`}
-                  secondaryClassName="text-[10px] text-[#5f5368]"
                 />
               </div>
 
@@ -325,15 +311,7 @@ export const LedgerView: React.FC = () => {
                         />
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-sm font-medium text-[#14100e]">
-                              {tx.note}
-                            </span>
-                            {tx.originalCurrency === "USD" && (
-                              <span className="font-mono text-[10px] text-[#745bc7]">
-                                [{t.ledger.originalUsdLabel} {formatUsd(tx.originalAmount)}
-                                {tx.fxRateAtEntry ? ` @ ${formatIdr(tx.fxRateAtEntry)}` : ""}]
-                              </span>
-                            )}
+                            <span className="text-sm font-medium text-[#14100e]">{tx.note}</span>
                             {isTransfer && tx.feeIdr && tx.feeIdr > 0 ? (
                               <span className="font-mono text-[10px] text-[#b42e69]">
                                 ({t.ledger.feeLabel} {formatIdr(tx.feeIdr)})
@@ -351,22 +329,19 @@ export const LedgerView: React.FC = () => {
                       </div>
 
                       <div className="flex items-center justify-between gap-4 sm:justify-end">
-                        <div className="text-left sm:text-right">
-                          <MoneyDisplay
-                            amountIdr={
-                              isIncome ? tx.amountIdr : isTransfer ? tx.amountIdr : -tx.amountIdr
-                            }
-                            showSign={!isTransfer}
-                            primaryClassName={`text-sm font-medium ${
-                              isIncome
-                                ? "text-[#117a62]"
-                                : isTransfer
-                                  ? "text-[#1e6c99]"
-                                  : "text-[#14100e]"
-                            }`}
-                            secondaryClassName="text-[10px] text-[#5f5368]"
-                          />
-                        </div>
+                        <MoneyDisplay
+                          amountIdr={
+                            isIncome ? tx.amountIdr : isTransfer ? tx.amountIdr : -tx.amountIdr
+                          }
+                          showSign={!isTransfer}
+                          className={`text-sm font-medium ${
+                            isIncome
+                              ? "text-[#117a62]"
+                              : isTransfer
+                                ? "text-[#1e6c99]"
+                                : "text-[#14100e]"
+                          }`}
+                        />
 
                         <div className="flex items-center gap-1">
                           <button

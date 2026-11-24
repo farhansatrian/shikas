@@ -3,7 +3,6 @@ import { CashflowProvider, useCashflow } from "./context/CashflowContext";
 import { ShizukuRainLayer } from "./components/layout/ShizukuRainLayer";
 import { MinimalNav } from "./components/layout/MinimalNav";
 import { Footer } from "./components/layout/Footer";
-import { FxConverterModal } from "./components/common/FxConverterModal";
 import { TransactionModal } from "./components/common/TransactionModal";
 import { DashboardView } from "./components/dashboard/DashboardView";
 import { LedgerView } from "./components/ledger/LedgerView";
@@ -58,7 +57,6 @@ const ShiKasShell: React.FC = () => {
 
       <Footer />
       <TransactionModal />
-      <FxConverterModal />
       <ToastStack />
     </div>
   );

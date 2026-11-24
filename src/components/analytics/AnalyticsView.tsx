@@ -24,20 +24,15 @@ import {
   computePercentDelta,
 } from "../../utils/calculations";
 import {
-  formatCompactCurrency,
+  formatCompactIdr,
   formatIdr,
-  formatIdrAsUsd,
   formatMonthLabel,
-  formatUsd,
   shiftMonthKey,
 } from "../../utils/format";
 import { MoneyDisplay } from "../common/MoneyDisplay";
 
 export const AnalyticsView: React.FC = () => {
-  const { store, fx, selectedMonth, t, locale } = useCashflow();
-
-  const chartCurrencyMode: "IDR" | "USD" =
-    store.settings.displayCurrency === "USD" ? "USD" : "IDR";
+  const { store, selectedMonth, t, locale } = useCashflow();
 
   const sixMonthData = useMemo(
     () =>
@@ -63,19 +58,6 @@ export const AnalyticsView: React.FC = () => {
     [store.transactions, selectedMonth]
   );
 
-  const usdExposure = useMemo(() => {
-    const usdTxs = store.transactions.filter(
-      (tx) => tx.date.startsWith(selectedMonth) && tx.originalCurrency === "USD"
-    );
-    const expenseUsd = usdTxs
-      .filter((tx) => tx.type === "expense")
-      .reduce((s, tx) => s + tx.originalAmount, 0);
-    const incomeUsd = usdTxs
-      .filter((tx) => tx.type === "income")
-      .reduce((s, tx) => s + tx.originalAmount, 0);
-    return { count: usdTxs.length, expenseUsd, incomeUsd };
-  }, [store.transactions, selectedMonth]);
-
   const insights = useMemo(() => {
     const list: string[] = [];
     const top = expenseBreakdown[0];
@@ -83,8 +65,8 @@ export const AnalyticsView: React.FC = () => {
       const catName = getCategoryLabel(top.categoryId, locale);
       list.push(
         locale === "id"
-          ? `Pengeluaran terbesar bulan ini: "${catName}" (${top.percentage.toFixed(1)}% · ${formatIdr(top.amountIdr)} / ${formatIdrAsUsd(top.amountIdr, fx.usdToIdr)}).`
-          : `Largest spending category this month: "${catName}" (${top.percentage.toFixed(1)}% · ${formatIdr(top.amountIdr)} / ${formatIdrAsUsd(top.amountIdr, fx.usdToIdr)}).`
+          ? `Pengeluaran terbesar bulan ini: "${catName}" (${top.percentage.toFixed(1)}% · ${formatIdr(top.amountIdr)}).`
+          : `Largest spending category this month: "${catName}" (${top.percentage.toFixed(1)}% · ${formatIdr(top.amountIdr)}).`
       );
     }
 
@@ -107,24 +89,11 @@ export const AnalyticsView: React.FC = () => {
       );
     }
 
-    if (usdExposure.count > 0) {
-      list.push(
-        locale === "id"
-          ? `Tercatat ${usdExposure.count} entri USD bulan ini (masuk ${formatUsd(usdExposure.incomeUsd)}, keluar ${formatUsd(usdExposure.expenseUsd)}) pada kurs live ${formatIdr(fx.usdToIdr)}/USD.`
-          : `${usdExposure.count} USD entries this month (inflow ${formatUsd(usdExposure.incomeUsd)}, outflow ${formatUsd(usdExposure.expenseUsd)}) at live rate ${formatIdr(fx.usdToIdr)}/USD.`
-      );
-    }
-
     return list;
-  }, [expenseBreakdown, currentSummary, prevSummary, selectedMonth, locale, fx.usdToIdr, usdExposure]);
+  }, [expenseBreakdown, currentSummary, prevSummary, selectedMonth, locale]);
 
-  const formatTooltipAmount = (value: number) => {
-    if (store.settings.privacyMode) return "••••";
-    if (chartCurrencyMode === "USD") {
-      return `${formatIdrAsUsd(value, fx.usdToIdr)} (${formatIdr(value)})`;
-    }
-    return `${formatIdr(value)} (≈ ${formatIdrAsUsd(value, fx.usdToIdr)})`;
-  };
+  const formatTooltip = (value: number) =>
+    store.settings.privacyMode ? "Rp •••••••" : formatIdr(value);
 
   return (
     <div className="space-y-7">
@@ -153,9 +122,7 @@ export const AnalyticsView: React.FC = () => {
                 axisLine={false}
                 tickLine={false}
                 tickFormatter={(v: number) =>
-                  store.settings.privacyMode
-                    ? "••"
-                    : formatCompactCurrency(v, chartCurrencyMode, fx.usdToIdr, locale)
+                  store.settings.privacyMode ? "••" : formatCompactIdr(v, locale)
                 }
               />
               <Tooltip
@@ -166,7 +133,7 @@ export const AnalyticsView: React.FC = () => {
                   fontSize: "12px",
                 }}
                 formatter={(val: number, name: string) => [
-                  formatTooltipAmount(val),
+                  formatTooltip(val),
                   name === "incomeIdr"
                     ? t.analytics.incomeLegend
                     : name === "expenseIdr"
@@ -199,7 +166,7 @@ export const AnalyticsView: React.FC = () => {
         </div>
       </section>
 
-      {/* Donut Breakdown + Cumulative Balance Trajectory */}
+      {/* Donut Breakdown + Net Balance Growth */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
         <section className="gallery-sheet p-5 lg:col-span-6">
           <h2 className="font-nav text-base font-medium tracking-[0.15em] text-[#14100e] uppercase">
@@ -236,7 +203,7 @@ export const AnalyticsView: React.FC = () => {
                         fontSize: "12px",
                       }}
                       formatter={(val: number, name: string) => [
-                        formatTooltipAmount(val),
+                        formatTooltip(val),
                         getCategoryLabel(name, locale),
                       ]}
                     />
@@ -264,10 +231,9 @@ export const AnalyticsView: React.FC = () => {
                       <div className="shrink-0 text-right">
                         <MoneyDisplay
                           amountIdr={item.amountIdr}
-                          primaryClassName="text-xs font-medium text-[#14100e]"
-                          secondaryClassName="text-[10px] text-[#5f5368]"
+                          className="text-xs font-medium text-[#14100e]"
                         />
-                        <span className="ml-1 font-mono text-[10px] text-[#5f5368]">
+                        <span className="ml-1.5 font-mono text-[10px] text-[#5f5368]">
                           {item.percentage.toFixed(0)}%
                         </span>
                       </div>
@@ -300,9 +266,7 @@ export const AnalyticsView: React.FC = () => {
                   axisLine={false}
                   tickLine={false}
                   tickFormatter={(v: number) =>
-                    store.settings.privacyMode
-                      ? "••"
-                      : formatCompactCurrency(v, chartCurrencyMode, fx.usdToIdr, locale)
+                    store.settings.privacyMode ? "••" : formatCompactIdr(v, locale)
                   }
                 />
                 <Tooltip
@@ -312,7 +276,7 @@ export const AnalyticsView: React.FC = () => {
                     borderRadius: "0px",
                     fontSize: "12px",
                   }}
-                  formatter={(val: number) => [formatTooltipAmount(val), t.analytics.balanceLegend]}
+                  formatter={(val: number) => [formatTooltip(val), t.analytics.balanceLegend]}
                 />
                 <Area
                   type="monotone"
@@ -328,7 +292,7 @@ export const AnalyticsView: React.FC = () => {
         </section>
       </div>
 
-      {/* Monochrome Editorial Insights */}
+      {/* Insights */}
       {insights.length > 0 && (
         <section className="gallery-dark p-6">
           <h2 className="font-nav text-base font-medium tracking-[0.18em] text-white/85 uppercase">

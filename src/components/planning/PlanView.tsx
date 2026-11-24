@@ -2,14 +2,13 @@ import React, { useMemo, useState } from "react";
 import { Check, Copy, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useCashflow } from "../../context/CashflowContext";
 import { CATEGORIES, CATEGORY_MAP, getCategoryLabel } from "../../data/categories";
-import { idrToUsd, usdToIdrAmount } from "../../services/fxService";
-import type { EntryCurrency, SavingsGoal } from "../../types/cashflow";
+import type { SavingsGoal } from "../../types/cashflow";
 import {
   computeBudgetProgress,
   computeMonthlySummary,
   computeSafeToSpendDaily,
 } from "../../utils/calculations";
-import { formatMonthLabel, formatUsd } from "../../utils/format";
+import { formatMonthLabel } from "../../utils/format";
 import { MoneyDisplay } from "../common/MoneyDisplay";
 
 type PlanSubTab = "budgets" | "recurring" | "goals";
@@ -18,7 +17,6 @@ const GOAL_COLORS = ["#14100e", "#745bc7", "#b42e69", "#1e6c99", "#117a62"];
 export const PlanView: React.FC = () => {
   const {
     store,
-    fx,
     selectedMonth,
     t,
     locale,
@@ -36,23 +34,19 @@ export const PlanView: React.FC = () => {
 
   const [subTab, setSubTab] = useState<PlanSubTab>("budgets");
 
-  // Budget modal state
   const [budgetModal, setBudgetModal] = useState(false);
   const [budgetCat, setBudgetCat] = useState("food");
   const [budgetLimit, setBudgetLimit] = useState("1500000");
 
-  // Recurring modal state
   const [recModal, setRecModal] = useState(false);
   const [recTitle, setRecTitle] = useState("");
   const [recType, setRecType] = useState<"income" | "expense">("expense");
   const [recCat, setRecCat] = useState("subscriptions");
   const [recWallet, setRecWallet] = useState(store.wallets[0]?.id ?? "");
   const [recDay, setRecDay] = useState("10");
-  const [recCurrency, setRecCurrency] = useState<EntryCurrency>("IDR");
   const [recAmount, setRecAmount] = useState("");
   const [recNote, setRecNote] = useState("");
 
-  // Goal modal state
   const [goalModal, setGoalModal] = useState(false);
   const [goalName, setGoalName] = useState("");
   const [goalTarget, setGoalTarget] = useState("15000000");
@@ -61,7 +55,6 @@ export const PlanView: React.FC = () => {
   const [goalColor, setGoalColor] = useState(GOAL_COLORS[0]);
   const [goalNote, setGoalNote] = useState("");
 
-  // Contribute modal state
   const [contribGoal, setContribGoal] = useState<SavingsGoal | null>(null);
   const [contribAmount, setContribAmount] = useState("500000");
 
@@ -110,13 +103,11 @@ export const PlanView: React.FC = () => {
     let expenseIdr = 0;
     for (const item of store.recurring) {
       if (!item.active) continue;
-      const valIdr =
-        item.currency === "USD" ? usdToIdrAmount(item.amount, fx.usdToIdr) : item.amount;
-      if (item.type === "income") incomeIdr += valIdr;
-      else expenseIdr += valIdr;
+      if (item.type === "income") incomeIdr += item.amountIdr;
+      else expenseIdr += item.amountIdr;
     }
     return { incomeIdr, expenseIdr };
-  }, [store.recurring, fx.usdToIdr]);
+  }, [store.recurring]);
 
   const openBudgetModal = (catId?: string, existing?: number) => {
     const used = new Set(budgetItems.map((i) => i.budget.categoryId));
@@ -141,7 +132,7 @@ export const PlanView: React.FC = () => {
 
   const handleSaveRec = (e: React.FormEvent) => {
     e.preventDefault();
-    const num = Number(recAmount) || 0;
+    const num = Math.round(Number(recAmount) || 0);
     if (!recTitle.trim() || num <= 0) return;
     saveRecurring({
       title: recTitle.trim(),
@@ -149,8 +140,7 @@ export const PlanView: React.FC = () => {
       categoryId: recCat,
       walletId: recWallet || activeWallets[0]?.id || "",
       dayOfMonth: Math.min(28, Math.max(1, Number(recDay) || 1)),
-      currency: recCurrency,
-      amount: num,
+      amountIdr: num,
       note: recNote.trim() || undefined,
       active: true,
     });
@@ -194,7 +184,6 @@ export const PlanView: React.FC = () => {
 
   return (
     <div className="space-y-7">
-      {/* Header + Minimalist Sub-Nav */}
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <p className="font-mono text-[10px] tracking-[0.2em] text-[#5f5368] uppercase">
@@ -227,7 +216,7 @@ export const PlanView: React.FC = () => {
         </ul>
       </div>
 
-      {/* ================= SUB-TAB 1: BUDGETS ================= */}
+      {/* BUDGETS */}
       {subTab === "budgets" && (
         <div className="space-y-6">
           <div className="gallery-sheet grid grid-cols-2 divide-x divide-y divide-[#14100e]/10 lg:grid-cols-4 lg:divide-y-0">
@@ -238,8 +227,7 @@ export const PlanView: React.FC = () => {
               <div className="mt-1.5">
                 <MoneyDisplay
                   amountIdr={safeSummary.totalBudgetIdr}
-                  primaryClassName="text-base font-semibold text-[#14100e]"
-                  secondaryClassName="text-[10px] text-[#5f5368]"
+                  className="text-base font-semibold text-[#14100e]"
                 />
               </div>
             </div>
@@ -250,8 +238,7 @@ export const PlanView: React.FC = () => {
               <div className="mt-1.5">
                 <MoneyDisplay
                   amountIdr={safeSummary.totalSpentBudgetedIdr}
-                  primaryClassName="text-base font-semibold text-[#b42e69]"
-                  secondaryClassName="text-[10px] text-[#5f5368]"
+                  className="text-base font-semibold text-[#b42e69]"
                 />
               </div>
             </div>
@@ -262,10 +249,9 @@ export const PlanView: React.FC = () => {
               <div className="mt-1.5">
                 <MoneyDisplay
                   amountIdr={safeSummary.remainingIdr}
-                  primaryClassName={`text-base font-semibold ${
+                  className={`text-base font-semibold ${
                     safeSummary.remainingIdr >= 0 ? "text-[#117a62]" : "text-[#b42e69]"
                   }`}
-                  secondaryClassName="text-[10px] text-[#5f5368]"
                 />
               </div>
             </div>
@@ -276,8 +262,7 @@ export const PlanView: React.FC = () => {
               <div className="mt-1.5">
                 <MoneyDisplay
                   amountIdr={safeSummary.dailySafeIdr}
-                  primaryClassName="text-base font-semibold text-white"
-                  secondaryClassName="text-[10px] text-white/55"
+                  className="text-base font-semibold text-white"
                 />
               </div>
             </div>
@@ -372,8 +357,7 @@ export const PlanView: React.FC = () => {
                     <div className="mt-3 flex items-end justify-between text-xs">
                       <MoneyDisplay
                         amountIdr={item.spentIdr}
-                        primaryClassName="text-sm font-medium text-[#14100e]"
-                        secondaryClassName="text-[10px] text-[#5f5368]"
+                        className="text-sm font-medium text-[#14100e]"
                       />
                       <div className="text-right">
                         <p className="font-mono text-[10px] text-[#5f5368] uppercase">
@@ -381,10 +365,9 @@ export const PlanView: React.FC = () => {
                         </p>
                         <MoneyDisplay
                           amountIdr={Math.abs(item.remainingIdr)}
-                          primaryClassName={`text-xs font-semibold ${
+                          className={`text-xs font-semibold ${
                             item.remainingIdr >= 0 ? "text-[#117a62]" : "text-[#b42e69]"
                           }`}
-                          secondaryClassName="text-[10px] text-[#5f5368]"
                         />
                       </div>
                     </div>
@@ -396,7 +379,7 @@ export const PlanView: React.FC = () => {
         </div>
       )}
 
-      {/* ================= SUB-TAB 2: RECURRING ================= */}
+      {/* RECURRING */}
       {subTab === "recurring" && (
         <div className="space-y-5">
           <div className="gallery-sheet grid grid-cols-1 divide-y divide-[#14100e]/10 sm:grid-cols-2 sm:divide-x sm:divide-y-0">
@@ -407,8 +390,7 @@ export const PlanView: React.FC = () => {
               <div className="mt-1.5">
                 <MoneyDisplay
                   amountIdr={recurringTotals.incomeIdr}
-                  primaryClassName="text-base font-semibold text-[#117a62]"
-                  secondaryClassName="text-[10px] text-[#5f5368]"
+                  className="text-base font-semibold text-[#117a62]"
                 />
               </div>
             </div>
@@ -419,8 +401,7 @@ export const PlanView: React.FC = () => {
               <div className="mt-1.5">
                 <MoneyDisplay
                   amountIdr={recurringTotals.expenseIdr}
-                  primaryClassName="text-base font-semibold text-[#b42e69]"
-                  secondaryClassName="text-[10px] text-[#5f5368]"
+                  className="text-base font-semibold text-[#b42e69]"
                 />
               </div>
             </div>
@@ -441,24 +422,13 @@ export const PlanView: React.FC = () => {
             <ul className="divide-y divide-[#14100e]/10">
               {store.recurring.map((item) => {
                 const isLogged = loggedRecurringIds.has(item.id);
-                const amountIdr =
-                  item.currency === "USD"
-                    ? usdToIdrAmount(item.amount, fx.usdToIdr)
-                    : item.amount;
                 return (
                   <li
                     key={item.id}
                     className="flex flex-col justify-between gap-3 py-3.5 sm:flex-row sm:items-center"
                   >
                     <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-medium text-[#14100e]">{item.title}</span>
-                        {item.currency === "USD" && (
-                          <span className="font-mono text-[10px] text-[#745bc7]">
-                            [{formatUsd(item.amount)} · Live FX]
-                          </span>
-                        )}
-                      </div>
+                      <span className="text-sm font-medium text-[#14100e]">{item.title}</span>
                       <p className="mt-0.5 font-mono text-[11px] text-[#5f5368]">
                         {t.planning.dueDay} {item.dayOfMonth} {t.planning.everyMonth} ·{" "}
                         {getCategoryLabel(item.categoryId, locale)} ·{" "}
@@ -468,12 +438,11 @@ export const PlanView: React.FC = () => {
 
                     <div className="flex items-center justify-between gap-4 sm:justify-end">
                       <MoneyDisplay
-                        amountIdr={item.type === "income" ? amountIdr : -amountIdr}
+                        amountIdr={item.type === "income" ? item.amountIdr : -item.amountIdr}
                         showSign
-                        primaryClassName={`text-sm font-medium ${
+                        className={`text-sm font-medium ${
                           item.type === "income" ? "text-[#117a62]" : "text-[#14100e]"
                         }`}
-                        secondaryClassName="text-[10px] text-[#5f5368]"
                       />
                       <div className="flex items-center gap-2">
                         {isLogged ? (
@@ -507,7 +476,7 @@ export const PlanView: React.FC = () => {
         </div>
       )}
 
-      {/* ================= SUB-TAB 3: GOALS ================= */}
+      {/* GOALS */}
       {subTab === "goals" && (
         <div className="space-y-5">
           <div className="flex justify-end">
@@ -579,8 +548,7 @@ export const PlanView: React.FC = () => {
                         </p>
                         <MoneyDisplay
                           amountIdr={goal.savedIdr}
-                          primaryClassName="text-xs font-semibold text-[#14100e]"
-                          secondaryClassName="text-[10px] text-[#5f5368]"
+                          className="text-xs font-semibold text-[#14100e]"
                         />
                       </div>
                       <div className="text-right">
@@ -589,8 +557,7 @@ export const PlanView: React.FC = () => {
                         </p>
                         <MoneyDisplay
                           amountIdr={goal.targetIdr}
-                          primaryClassName="text-xs font-semibold text-[#14100e]"
-                          secondaryClassName="text-[10px] text-[#5f5368]"
+                          className="text-xs font-semibold text-[#14100e]"
                         />
                       </div>
                     </div>
@@ -615,7 +582,7 @@ export const PlanView: React.FC = () => {
         </div>
       )}
 
-      {/* ================= MODALS ================= */}
+      {/* MODALS */}
       {budgetModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-[#111015]/55 p-4 backdrop-blur-xs"
@@ -646,6 +613,9 @@ export const PlanView: React.FC = () => {
                 ))}
               </select>
               <div>
+                <label className="block font-mono text-[10px] text-[#5f5368] uppercase">
+                  {t.budgets.monthlyLimit}
+                </label>
                 <input
                   type="number"
                   min="1000"
@@ -653,13 +623,8 @@ export const PlanView: React.FC = () => {
                   required
                   value={budgetLimit}
                   onChange={(e) => setBudgetLimit(e.target.value)}
-                  className="font-mono-num w-full border border-[#14100e]/22 bg-white px-3 py-2 text-base font-semibold outline-none focus:border-[#14100e]"
+                  className="font-mono-num mt-1 w-full border border-[#14100e]/22 bg-white px-3 py-2 text-base font-semibold outline-none focus:border-[#14100e]"
                 />
-                {Number(budgetLimit) > 0 && (
-                  <p className="mt-1 font-mono text-[11px] text-[#5f5368]">
-                    ≈ {formatUsd(idrToUsd(Number(budgetLimit), fx.usdToIdr))}
-                  </p>
-                )}
               </div>
               <div className="flex justify-end gap-2">
                 <button type="button" onClick={() => setBudgetModal(false)} className="gallery-btn px-4 py-2 text-xs">
@@ -714,29 +679,22 @@ export const PlanView: React.FC = () => {
               <input
                 type="text"
                 required
-                placeholder="cth. Langganan Cloud / Kost"
+                placeholder="e.g. Internet / Rent"
                 value={recTitle}
                 onChange={(e) => setRecTitle(e.target.value)}
                 className="w-full border border-[#14100e]/22 bg-white px-3 py-2 text-sm outline-none focus:border-[#14100e]"
               />
-              <div className="grid grid-cols-3 gap-2">
-                <select
-                  value={recCurrency}
-                  onChange={(e) => setRecCurrency(e.target.value as EntryCurrency)}
-                  className="border border-[#14100e]/22 bg-white px-2.5 py-2 font-mono text-xs outline-none"
-                >
-                  <option value="IDR">IDR</option>
-                  <option value="USD">USD</option>
-                </select>
+              <div className="flex items-center border border-[#14100e]/22 bg-white px-3 py-2 focus-within:border-[#14100e]">
+                <span className="font-mono-num mr-2 text-xs font-semibold text-[#5f5368]">Rp</span>
                 <input
                   type="number"
                   required
                   min="0"
-                  step={recCurrency === "USD" ? "0.01" : "1000"}
-                  placeholder={recCurrency === "USD" ? "20" : "350000"}
+                  step="1000"
+                  placeholder="350000"
                   value={recAmount}
                   onChange={(e) => setRecAmount(e.target.value)}
-                  className="font-mono-num col-span-2 border border-[#14100e]/22 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-[#14100e]"
+                  className="font-mono-num w-full bg-transparent text-sm font-semibold outline-none"
                 />
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -776,7 +734,7 @@ export const PlanView: React.FC = () => {
                   type="text"
                   value={recNote}
                   onChange={(e) => setRecNote(e.target.value)}
-                  placeholder="Catatan opsional"
+                  placeholder={locale === "id" ? "Catatan opsional" : "Optional note"}
                   className="col-span-2 border border-[#14100e]/22 bg-white px-3 py-2 text-sm outline-none"
                 />
               </div>
@@ -814,7 +772,7 @@ export const PlanView: React.FC = () => {
               <input
                 type="text"
                 required
-                placeholder="cth. Dana Darurat / Trip Jepang"
+                placeholder="e.g. Emergency Fund / Japan Trip"
                 value={goalName}
                 onChange={(e) => setGoalName(e.target.value)}
                 className="w-full border border-[#14100e]/22 bg-white px-3 py-2 text-sm outline-none focus:border-[#14100e]"
@@ -834,7 +792,7 @@ export const PlanView: React.FC = () => {
                   min="0"
                   value={goalSaved}
                   onChange={(e) => setGoalSaved(e.target.value)}
-                  placeholder="Terkumpul IDR"
+                  placeholder="Saved IDR"
                   className="font-mono-num border border-[#14100e]/22 bg-white px-3 py-2 text-sm font-semibold outline-none"
                 />
               </div>
