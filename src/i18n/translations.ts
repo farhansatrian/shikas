@@ -9,6 +9,10 @@ export const TRANSLATIONS = {
       signIn: "SIGN IN",
       account: "ACCOUNT",
     },
+    home: {
+      lead: "SHIKAS is a personal IDR cashflow app in the SHIZUKU\u00A0(雫) ecosystem.",
+      body: "Built to stay quiet, clear, and free from cluttered spreadsheets. Record daily income and expenses, watch your monthly savings level shift in real time, and review your cashflow across months or all time. Explore freely in sandbox mode, or sign in with your SHIZUKU\u00A0ID to keep a private ledger across upcoming SHIZUKU apps.",
+    },
     actions: {
       addIncome: "Add Income",
       addExpense: "Add Expense",
@@ -140,6 +144,10 @@ export const TRANSLATIONS = {
       analytics: "ANALYTICS",
       signIn: "MASUK",
       account: "AKUN",
+    },
+    home: {
+      lead: "SHIKAS adalah catatan arus kas pribadi IDR dalam ekosistem SHIZUKU\u00A0(雫).",
+      body: "Dirancang tetap tenang, ringkas, dan bebas dari tampilan keuangan yang rumit. Catat pemasukan serta pengeluaran harian, pantau sisa tabungan bulanan secara langsung, dan tinjau arus kas dari beberapa bulan hingga keseluruhan waktu. Coba bebas di mode sandbox, atau masuk dengan SHIZUKU\u00A0ID untuk menyimpan buku kas pribadimu lintas aplikasi SHIZUKU.",
     },
     actions: {
       addIncome: "Catat Pemasukan",

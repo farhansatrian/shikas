@@ -9,4 +9,4 @@ Taruh file gambar / ilustrasi custom di folder `public/assets/` ini, lalu daftar
 - `bg-watercolor-band.jpg` — Strip cat air magenta-ungu (1024×171, dari footer SHIZUKU)
 - `shizuku-umbrella.png` — Ilustrasi payung cat air SHIZUKU untuk Raindrop Vessel & Dialogue Portrait
 - `raindrop-line.png` — Garis pemisah rintik hujan horizontal (dari SHIZUKU)
-- `tumblr_ohhlp7vvyH1qegob8o3_1280.jpg` — Ilustrasi utama di tengah halaman `HOME`
+- `tumblr_m3ulw1fZ071qegob8o1_r1_500.gif` — Animasi ilustrasi utama di tengah halaman `HOME`

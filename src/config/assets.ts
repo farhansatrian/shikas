@@ -16,7 +16,7 @@ export const SHIKAS_ASSETS = {
   umbrella: "/assets/shizuku-umbrella.png",
 
   /** Main centered artwork on the HOME gallery view */
-  heroMain: "/assets/tumblr_ohhlp7vvyH1qegob8o3_1280.jpg",
+  heroMain: "/assets/tumblr_m3ulw1fZ071qegob8o1_r1_500.gif",
 
   /** Optional extra slots */
   avatar: "" as string,
