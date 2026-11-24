@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Copy,
@@ -83,9 +84,29 @@ export const CashflowView: React.FC = () => {
 
   const [typeFilter, setTypeFilter] = useState<FilterType>("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [isCatMenuOpen, setCatMenuOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [selectedCmd, setSelectedCmd] = useState(0);
   const [dialogueIdx, setDialogueIdx] = useState(0);
+  const catMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!isCatMenuOpen) return;
+    const onPointerDown = (e: MouseEvent) => {
+      if (catMenuRef.current && !catMenuRef.current.contains(e.target as Node)) {
+        setCatMenuOpen(false);
+      }
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setCatMenuOpen(false);
+    };
+    window.addEventListener("mousedown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("mousedown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [isCatMenuOpen]);
 
   const monthTransactions = useMemo(
     () => store.transactions.filter((tx) => tx.date.startsWith(selectedMonth)),
@@ -112,14 +133,30 @@ export const CashflowView: React.FC = () => {
     [store.transactions]
   );
 
-  const activeMonthCategoryIds = useMemo(() => {
-    const ids = new Set<string>();
+  const activeMonthCategories = useMemo(() => {
+    const counts = new Map<string, number>();
     for (const tx of monthTransactions) {
       if (typeFilter !== "all" && tx.type !== typeFilter) continue;
-      ids.add(tx.categoryId);
+      counts.set(tx.categoryId, (counts.get(tx.categoryId) ?? 0) + 1);
     }
-    return Array.from(ids);
+    return Array.from(counts.entries()).map(([id, count]) => ({ id, count }));
   }, [monthTransactions, typeFilter]);
+
+  const totalTypeFilteredCount = useMemo(
+    () =>
+      monthTransactions.filter((tx) =>
+        typeFilter === "all" ? true : tx.type === typeFilter
+      ).length,
+    [monthTransactions, typeFilter]
+  );
+
+  const getFilterCategoryLabel = (catId: string) => {
+    if (catId === "all") return t.cashflow.allCategories;
+    const baseLabel = getCategoryLabel(catId, locale);
+    if (typeFilter === "all" && catId === "other_income") return `${baseLabel} (+)`;
+    if (typeFilter === "all" && catId === "other_expense") return `${baseLabel} (-)`;
+    return baseLabel;
+  };
 
   const filteredTransactions = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -548,7 +585,7 @@ export const CashflowView: React.FC = () => {
       {/* =====================================================================
           3. CLEAN COMPACT SHIZUKU LEDGER (Consistent Palette, Zero Zebra Clutter)
          ===================================================================== */}
-      <section className="vn-frame overflow-hidden">
+      <section className="vn-frame">
         {/* Consistent SHIZUKU Watercolor Band Header Strip */}
         <div className="shikas-band-strip flex flex-wrap items-center justify-between gap-2 px-4 py-2 text-white">
           <span className="font-mono text-[10px] font-semibold tracking-[0.2em] uppercase drop-shadow-2xs">
@@ -559,7 +596,7 @@ export const CashflowView: React.FC = () => {
           </span>
         </div>
 
-        {/* Single-Row Unified Toolbar (Tabs + Category + Search) */}
+        {/* Single-Row Unified Toolbar (Tabs + Custom RPG Category Menu + Search) */}
         <div className="flex flex-col gap-2.5 border-b border-[#745bc7]/20 bg-[#fdf9ff] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
           {/* Compact Sharp Type Tabs */}
           <div className="inline-flex w-fit border border-[#745bc7]/55 bg-white">
@@ -575,7 +612,10 @@ export const CashflowView: React.FC = () => {
                 <button
                   key={tab}
                   type="button"
-                  onClick={() => handleSetTypeFilter(tab)}
+                  onClick={() => {
+                    handleSetTypeFilter(tab);
+                    setCatMenuOpen(false);
+                  }}
                   className={`px-3 py-1 font-mono text-[10px] font-semibold tracking-[0.12em] uppercase transition ${
                     idx > 0 ? "border-l border-[#745bc7]/40" : ""
                   } ${
@@ -590,31 +630,132 @@ export const CashflowView: React.FC = () => {
             })}
           </div>
 
-          {/* Compact Category Select + Search */}
+          {/* Custom SHIZUKU RPG Category Dropdown + Search */}
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            {activeMonthCategoryIds.length > 0 && (
-              <select
-                aria-label={t.txModal.category}
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="border border-[#745bc7]/40 bg-white px-2.5 py-1.5 font-mono text-[11px] text-[#14100e] outline-none transition focus:border-[#745bc7]"
-              >
-                <option value="all">{t.cashflow.allCategories}</option>
-                {activeMonthCategoryIds.map((catId) => {
-                  const baseLabel = getCategoryLabel(catId, locale);
-                  const optionLabel =
-                    typeFilter === "all" && catId === "other_income"
-                      ? `${baseLabel} (+)`
-                      : typeFilter === "all" && catId === "other_expense"
-                        ? `${baseLabel} (-)`
-                        : baseLabel;
-                  return (
-                    <option key={catId} value={catId}>
-                      {optionLabel}
-                    </option>
-                  );
-                })}
-              </select>
+            {activeMonthCategories.length > 0 && (
+              <div ref={catMenuRef} className="relative">
+                <button
+                  type="button"
+                  aria-haspopup="listbox"
+                  aria-expanded={isCatMenuOpen}
+                  aria-label={t.txModal.category}
+                  onClick={() => setCatMenuOpen((o) => !o)}
+                  className={`flex w-full items-center justify-between gap-2.5 border bg-white px-3 py-1.5 font-mono text-[11px] transition sm:min-w-[168px] ${
+                    isCatMenuOpen || categoryFilter !== "all"
+                      ? "border-[#745bc7] text-[#14100e]"
+                      : "border-[#745bc7]/40 text-[#14100e] hover:border-[#745bc7]"
+                  }`}
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span
+                      className="h-2 w-2 shrink-0"
+                      style={{
+                        backgroundColor:
+                          categoryFilter === "all"
+                            ? "#745bc7"
+                            : CATEGORY_MAP[categoryFilter]?.color ?? "#745bc7",
+                      }}
+                    />
+                    <span className="truncate font-medium">
+                      {getFilterCategoryLabel(categoryFilter)}
+                    </span>
+                  </span>
+                  <ChevronDown
+                    className={`h-3.5 w-3.5 shrink-0 text-[#745bc7] transition-transform duration-150 ${
+                      isCatMenuOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+
+                {isCatMenuOpen && (
+                  <div
+                    role="listbox"
+                    aria-label={t.txModal.category}
+                    className="animate-modal-in absolute right-0 left-0 z-30 mt-1.5 border-[1.5px] border-[#745bc7] bg-[#fdf9ff] shadow-[4px_4px_0_0_rgba(116,91,199,0.22)] sm:left-auto sm:w-[224px]"
+                  >
+                    <div className="border-b border-[#745bc7]/20 bg-[#f3ecfd] px-3 py-1.5 font-mono text-[9px] font-semibold tracking-[0.18em] text-[#745bc7] uppercase">
+                      {locale === "id" ? "PILIH KATEGORI // 雫" : "CATEGORY // 雫"}
+                    </div>
+
+                    <ul className="max-h-[260px] divide-y divide-[#745bc7]/10 overflow-y-auto py-0.5">
+                      <li>
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={categoryFilter === "all"}
+                          onClick={() => {
+                            setCategoryFilter("all");
+                            setCatMenuOpen(false);
+                          }}
+                          className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left font-mono text-[11px] transition ${
+                            categoryFilter === "all"
+                              ? "bg-[#e5dcfb]/75 font-bold text-[#14100e]"
+                              : "text-[#4e4361] hover:bg-[#f5effe] hover:text-[#14100e]"
+                          }`}
+                        >
+                          <span className="flex min-w-0 items-center gap-2">
+                            <span
+                              className={`w-2.5 shrink-0 text-[9px] text-[#745bc7] ${
+                                categoryFilter === "all" ? "opacity-100" : "opacity-0"
+                              }`}
+                            >
+                              ▶
+                            </span>
+                            <span className="h-1.5 w-1.5 shrink-0 bg-[#745bc7]" />
+                            <span className="truncate">{t.cashflow.allCategories}</span>
+                          </span>
+                          <span className="shrink-0 text-[10px] text-[#5d5370]">
+                            {totalTypeFilteredCount}
+                          </span>
+                        </button>
+                      </li>
+
+                      {activeMonthCategories.map(({ id: catId, count }) => {
+                        const cat = CATEGORY_MAP[catId];
+                        const selected = categoryFilter === catId;
+                        return (
+                          <li key={catId}>
+                            <button
+                              type="button"
+                              role="option"
+                              aria-selected={selected}
+                              onClick={() => {
+                                setCategoryFilter(catId);
+                                setCatMenuOpen(false);
+                              }}
+                              className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left font-mono text-[11px] transition ${
+                                selected
+                                  ? "bg-[#e5dcfb]/75 font-bold text-[#14100e]"
+                                  : "text-[#4e4361] hover:bg-[#f5effe] hover:text-[#14100e]"
+                              }`}
+                            >
+                              <span className="flex min-w-0 items-center gap-2">
+                                <span
+                                  className={`w-2.5 shrink-0 text-[9px] text-[#745bc7] ${
+                                    selected ? "opacity-100" : "opacity-0"
+                                  }`}
+                                >
+                                  ▶
+                                </span>
+                                <span
+                                  className="h-1.5 w-1.5 shrink-0"
+                                  style={{ backgroundColor: cat?.color ?? "#745bc7" }}
+                                />
+                                <span className="truncate">
+                                  {getFilterCategoryLabel(catId)}
+                                </span>
+                              </span>
+                              <span className="shrink-0 text-[10px] text-[#5d5370]">
+                                {count}
+                              </span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
+              </div>
             )}
 
             <div className="flex items-center gap-2 border border-[#745bc7]/40 bg-white px-2.5 py-1.5 transition focus-within:border-[#745bc7] sm:w-56">
