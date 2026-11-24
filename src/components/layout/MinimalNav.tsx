@@ -1,8 +1,6 @@
 import React from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useCashflow } from "../../context/CashflowContext";
 import type { NavTab } from "../../types/cashflow";
-import { formatMonthLabel, shiftMonthKey } from "../../utils/format";
 
 const NAV_TABS: NavTab[] = ["home", "cashflow", "analytics", "data"];
 
@@ -31,17 +29,7 @@ function ShizukuUmbrellaMark({ className = "h-5 w-5" }: { className?: string }) 
 }
 
 export const MinimalNav: React.FC = () => {
-  const {
-    activeTab,
-    setActiveTab,
-    selectedMonth,
-    setSelectedMonth,
-    setLocale,
-    t,
-    locale,
-  } = useCashflow();
-
-  const showMonthBar = activeTab === "cashflow" || activeTab === "analytics";
+  const { activeTab, setActiveTab, setLocale, t, locale } = useCashflow();
 
   return (
     <header className="relative z-20 w-full">
@@ -105,8 +93,8 @@ export const MinimalNav: React.FC = () => {
                       onClick={() => setActiveTab(tab)}
                       className={`font-nav pb-0.5 text-[15px] tracking-[0.12em] uppercase transition sm:text-[16px] sm:tracking-[0.14em] ${
                         active
-                          ? "border-b-[1.5px] border-[#14100e] font-medium text-[#14100e]"
-                          : "border-b-[1.5px] border-transparent font-normal text-[#14100e]/65 hover:text-[#14100e]"
+                          ? "border-b-[1.5px] border-[#1a1423] font-medium text-[#1a1423]"
+                          : "border-b-[1.5px] border-transparent font-normal text-[#1a1423]/60 hover:text-[#1a1423]"
                       }`}
                     >
                       {t.nav[tab]}
@@ -149,36 +137,6 @@ export const MinimalNav: React.FC = () => {
           </div>
         </div>
       </div>
-
-      {/* Month Switcher Strip on CASHFLOW and ANALYTICS */}
-      {showMonthBar && (
-        <div className="mx-auto w-full max-w-[960px] px-5 pt-2 pb-4 sm:px-8">
-          <div className="flex items-center justify-between border-b border-[#14100e]/12 pb-2.5 font-mono text-[11px] text-[#5f5368]">
-            <div className="flex items-center gap-2 text-[#14100e]">
-              <button
-                type="button"
-                onClick={() => setSelectedMonth(shiftMonthKey(selectedMonth, -1))}
-                aria-label="Previous month"
-                className="p-0.5 text-[#5f5368] hover:text-[#14100e]"
-              >
-                <ChevronLeft className="h-3.5 w-3.5" />
-              </button>
-              <span className="min-w-[110px] text-center font-medium">
-                {formatMonthLabel(selectedMonth, locale)}
-              </span>
-              <button
-                type="button"
-                onClick={() => setSelectedMonth(shiftMonthKey(selectedMonth, 1))}
-                aria-label="Next month"
-                className="p-0.5 text-[#5f5368] hover:text-[#14100e]"
-              >
-                <ChevronRight className="h-3.5 w-3.5" />
-              </button>
-            </div>
-            <span className="tracking-[0.14em] uppercase">IDR</span>
-          </div>
-        </div>
-      )}
     </header>
   );
 };

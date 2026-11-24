@@ -1,4 +1,5 @@
 import React, { useMemo } from "react";
+import { ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
 import {
   Area,
   AreaChart,
@@ -32,7 +33,7 @@ import {
 import { MoneyDisplay } from "../common/MoneyDisplay";
 
 export const AnalyticsView: React.FC = () => {
-  const { store, selectedMonth, t, locale } = useCashflow();
+  const { store, selectedMonth, setSelectedMonth, t, locale } = useCashflow();
 
   const sixMonthData = useMemo(
     () =>
@@ -65,8 +66,8 @@ export const AnalyticsView: React.FC = () => {
       const catName = getCategoryLabel(top.categoryId, locale);
       list.push(
         locale === "id"
-          ? `Pengeluaran terbesar bulan ini: "${catName}" (${top.percentage.toFixed(1)}% · ${formatIdr(top.amountIdr)}).`
-          : `Largest spending category this month: "${catName}" (${top.percentage.toFixed(1)}% · ${formatIdr(top.amountIdr)}).`
+          ? `Pengeluaran terbesar bulan ini ada di "${catName}" (${top.percentage.toFixed(1)}% · ${formatIdr(top.amountIdr)}).`
+          : `Largest spending category this month is "${catName}" (${top.percentage.toFixed(1)}% · ${formatIdr(top.amountIdr)}).`
       );
     }
 
@@ -77,15 +78,15 @@ export const AnalyticsView: React.FC = () => {
       list.push(
         locale === "id"
           ? `Total pengeluaran ${verbId} ${Math.abs(expDelta).toFixed(1)}% dibanding ${formatMonthLabel(shiftMonthKey(selectedMonth, -1), locale)}.`
-          : `Total spending ${verbEn} by ${Math.abs(expDelta).toFixed(1)}% vs ${formatMonthLabel(shiftMonthKey(selectedMonth, -1), locale)}.`
+          : `Total spending ${verbEn} by ${Math.abs(expDelta).toFixed(1)}% compared to ${formatMonthLabel(shiftMonthKey(selectedMonth, -1), locale)}.`
       );
     }
 
     if (currentSummary.incomeIdr > 0) {
       list.push(
         locale === "id"
-          ? `Rasio tabungan bulan ini ${currentSummary.savingsRate.toFixed(1)}% (${currentSummary.savingsRate >= 20 ? "di atas patokan sehat 20%" : "target ideal minimal 20%"}).`
-          : `Savings rate sits at ${currentSummary.savingsRate.toFixed(1)}% (${currentSummary.savingsRate >= 20 ? "above the 20% healthy benchmark" : "20%+ is recommended"}).`
+          ? `Rasio tabungan bulan ini ${currentSummary.savingsRate.toFixed(1)}% (${currentSummary.savingsRate >= 20 ? "di atas target sehat 20%" : "disarankan menjaga minimal 20%"}).`
+          : `Savings rate sits at ${currentSummary.savingsRate.toFixed(1)}% (${currentSummary.savingsRate >= 20 ? "above the 20% healthy benchmark" : "aiming for 20%+ is recommended"}).`
       );
     }
 
@@ -96,29 +97,51 @@ export const AnalyticsView: React.FC = () => {
     store.settings.privacyMode ? "Rp •••••••" : formatIdr(value);
 
   return (
-    <div className="space-y-7">
-      <div>
-        <p className="font-mono text-[10px] tracking-[0.2em] text-[#5f5368] uppercase">
-          CASHFLOW VISUALS · {formatMonthLabel(selectedMonth, locale)}
-        </p>
-        <h1 className="font-nav mt-1 text-2xl font-medium tracking-[0.16em] text-[#14100e] uppercase sm:text-3xl">
-          {t.analytics.title}
-        </h1>
+    <div className="space-y-6">
+      {/* Integrated Title + Month Pill */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="font-nav text-2xl font-medium tracking-[0.14em] text-[#1a1423] uppercase sm:text-[28px]">
+            {t.analytics.title}
+          </h1>
+
+          <div className="inline-flex items-center gap-1 rounded-full border border-[#745bc7]/20 bg-white/80 px-1.5 py-1 shadow-2xs backdrop-blur-md">
+            <button
+              type="button"
+              onClick={() => setSelectedMonth(shiftMonthKey(selectedMonth, -1))}
+              aria-label="Previous month"
+              className="flex h-6.5 w-6.5 items-center justify-center rounded-full text-[#655978] transition hover:bg-[#745bc7]/10 hover:text-[#745bc7]"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </button>
+            <span className="min-w-[116px] text-center text-xs font-semibold text-[#1a1423]">
+              {formatMonthLabel(selectedMonth, locale)}
+            </span>
+            <button
+              type="button"
+              onClick={() => setSelectedMonth(shiftMonthKey(selectedMonth, 1))}
+              aria-label="Next month"
+              className="flex h-6.5 w-6.5 items-center justify-center rounded-full text-[#655978] transition hover:bg-[#745bc7]/10 hover:text-[#745bc7]"
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* 6-Month Composed Chart */}
-      <section className="gallery-sheet p-5 sm:p-6">
-        <h2 className="font-nav text-base font-medium tracking-[0.15em] text-[#14100e] uppercase">
+      <section className="glass-card rounded-2xl p-5 sm:p-6">
+        <h2 className="text-xs font-bold tracking-[0.12em] text-[#655978] uppercase">
           {t.analytics.monthlyFlowChart}
         </h2>
         <div className="mt-4 h-[270px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={sixMonthData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="2 3" stroke="rgba(20,16,14,0.1)" vertical={false} />
-              <XAxis dataKey="label" tick={{ fill: "#5f5368", fontSize: 11 }} axisLine={false} tickLine={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(116,91,199,0.12)" vertical={false} />
+              <XAxis dataKey="label" tick={{ fill: "#655978", fontSize: 11 }} axisLine={false} tickLine={false} />
               <YAxis
                 width={68}
-                tick={{ fill: "#5f5368", fontSize: 10 }}
+                tick={{ fill: "#655978", fontSize: 10 }}
                 axisLine={false}
                 tickLine={false}
                 tickFormatter={(v: number) =>
@@ -126,10 +149,12 @@ export const AnalyticsView: React.FC = () => {
                 }
               />
               <Tooltip
+                cursor={{ fill: "rgba(116,91,199,0.06)" }}
                 contentStyle={{
-                  backgroundColor: "rgba(255,255,255,0.96)",
-                  borderColor: "rgba(20,16,14,0.22)",
-                  borderRadius: "0px",
+                  backgroundColor: "rgba(255,255,255,0.97)",
+                  borderColor: "rgba(116,91,199,0.22)",
+                  borderRadius: "14px",
+                  boxShadow: "0 12px 30px -14px rgba(84,54,152,0.25)",
                   fontSize: "12px",
                 }}
                 formatter={(val: number, name: string) => [
@@ -151,55 +176,55 @@ export const AnalyticsView: React.FC = () => {
                 }
                 wrapperStyle={{ fontSize: "11px" }}
               />
-              <Bar dataKey="incomeIdr" fill="#14100e" maxBarSize={22} animationDuration={420} />
-              <Bar dataKey="expenseIdr" fill="#d749d5" fillOpacity={0.78} maxBarSize={22} animationDuration={420} />
+              <Bar dataKey="incomeIdr" fill="#745bc7" radius={[8, 8, 0, 0]} maxBarSize={24} animationDuration={420} />
+              <Bar dataKey="expenseIdr" fill="#e26cc6" radius={[8, 8, 0, 0]} maxBarSize={24} animationDuration={420} />
               <Line
                 type="monotone"
                 dataKey="netIdr"
-                stroke="#117a62"
-                strokeWidth={2}
+                stroke="#108469"
+                strokeWidth={2.5}
                 animationDuration={420}
-                dot={{ r: 3.5, fill: "#117a62", strokeWidth: 1.5, stroke: "#ffffff" }}
+                dot={{ r: 4, fill: "#108469", strokeWidth: 2, stroke: "#ffffff" }}
               />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
       </section>
 
-      {/* Donut Breakdown + Cumulative Balance Growth */}
+      {/* Donut Breakdown + Cumulative Balance Area */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
-        <section className="gallery-sheet p-5 lg:col-span-6">
-          <h2 className="font-nav text-base font-medium tracking-[0.15em] text-[#14100e] uppercase">
+        <section className="glass-card rounded-2xl p-5 sm:p-6 lg:col-span-6">
+          <h2 className="text-xs font-bold tracking-[0.12em] text-[#655978] uppercase">
             {t.analytics.categoryBreakdown}
           </h2>
           {expenseBreakdown.length === 0 ? (
-            <p className="py-16 text-center text-xs text-[#5f5368]">{t.analytics.noExpenseData}</p>
+            <p className="py-16 text-center text-xs text-[#655978]">{t.analytics.noExpenseData}</p>
           ) : (
-            <div className="mt-4 grid grid-cols-1 items-center gap-4 sm:grid-cols-2">
-              <div className="h-[205px] w-full">
+            <div className="mt-4 grid grid-cols-1 items-center gap-4 sm:grid-cols-[152px_1fr]">
+              <div className="mx-auto h-[168px] w-[152px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
                       data={expenseBreakdown}
                       dataKey="amountIdr"
                       nameKey="categoryId"
-                      innerRadius={52}
-                      outerRadius={80}
-                      paddingAngle={2}
+                      innerRadius={44}
+                      outerRadius={68}
+                      paddingAngle={3}
                       animationDuration={420}
                     >
                       {expenseBreakdown.map((entry) => (
                         <Cell
                           key={entry.categoryId}
-                          fill={CATEGORY_MAP[entry.categoryId]?.color ?? "#14100e"}
+                          fill={CATEGORY_MAP[entry.categoryId]?.color ?? "#745bc7"}
                         />
                       ))}
                     </Pie>
                     <Tooltip
                       contentStyle={{
-                        backgroundColor: "rgba(255,255,255,0.96)",
-                        borderColor: "rgba(20,16,14,0.22)",
-                        borderRadius: "0px",
+                        backgroundColor: "rgba(255,255,255,0.97)",
+                        borderColor: "rgba(116,91,199,0.22)",
+                        borderRadius: "14px",
                         fontSize: "12px",
                       }}
                       formatter={(val: number, name: string) => [
@@ -221,19 +246,19 @@ export const AnalyticsView: React.FC = () => {
                     >
                       <div className="flex min-w-0 items-center gap-2">
                         <span
-                          className="h-2 w-2 shrink-0 rounded-full"
-                          style={{ backgroundColor: cat?.color ?? "#14100e" }}
+                          className="h-2.5 w-2.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: cat?.color ?? "#745bc7" }}
                         />
-                        <span className="truncate text-[#14100e]">
+                        <span className="truncate font-medium text-[#1a1423]">
                           {getCategoryLabel(item.categoryId, locale)}
                         </span>
                       </div>
                       <div className="shrink-0 text-right">
                         <MoneyDisplay
                           amountIdr={item.amountIdr}
-                          className="text-xs font-medium text-[#14100e]"
+                          className="text-xs font-semibold text-[#1a1423]"
                         />
-                        <span className="ml-1.5 font-mono text-[10px] text-[#5f5368]">
+                        <span className="ml-1.5 font-mono text-[10px] text-[#745bc7]">
                           {item.percentage.toFixed(0)}%
                         </span>
                       </div>
@@ -245,24 +270,24 @@ export const AnalyticsView: React.FC = () => {
           )}
         </section>
 
-        <section className="gallery-sheet p-5 lg:col-span-6">
-          <h2 className="font-nav text-base font-medium tracking-[0.15em] text-[#14100e] uppercase">
+        <section className="glass-card rounded-2xl p-5 sm:p-6 lg:col-span-6">
+          <h2 className="text-xs font-bold tracking-[0.12em] text-[#655978] uppercase">
             {t.analytics.balanceGrowth}
           </h2>
           <div className="mt-4 h-[215px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={sixMonthData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <defs>
-                  <linearGradient id="shikasInkGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#14100e" stopOpacity={0.22} />
-                    <stop offset="95%" stopColor="#14100e" stopOpacity={0.01} />
+                  <linearGradient id="shikasIrisGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#745bc7" stopOpacity={0.32} />
+                    <stop offset="95%" stopColor="#d958b8" stopOpacity={0.03} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="2 3" stroke="rgba(20,16,14,0.1)" vertical={false} />
-                <XAxis dataKey="label" tick={{ fill: "#5f5368", fontSize: 11 }} axisLine={false} tickLine={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(116,91,199,0.12)" vertical={false} />
+                <XAxis dataKey="label" tick={{ fill: "#655978", fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis
                   width={68}
-                  tick={{ fill: "#5f5368", fontSize: 10 }}
+                  tick={{ fill: "#655978", fontSize: 10 }}
                   axisLine={false}
                   tickLine={false}
                   tickFormatter={(v: number) =>
@@ -271,9 +296,9 @@ export const AnalyticsView: React.FC = () => {
                 />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: "rgba(255,255,255,0.96)",
-                    borderColor: "rgba(20,16,14,0.22)",
-                    borderRadius: "0px",
+                    backgroundColor: "rgba(255,255,255,0.97)",
+                    borderColor: "rgba(116,91,199,0.22)",
+                    borderRadius: "14px",
                     fontSize: "12px",
                   }}
                   formatter={(val: number) => [formatTooltip(val), t.analytics.balanceLegend]}
@@ -281,10 +306,10 @@ export const AnalyticsView: React.FC = () => {
                 <Area
                   type="monotone"
                   dataKey="cumulativeBalanceIdr"
-                  stroke="#14100e"
-                  strokeWidth={2}
+                  stroke="#745bc7"
+                  strokeWidth={2.5}
                   animationDuration={420}
-                  fill="url(#shikasInkGrad)"
+                  fill="url(#shikasIrisGrad)"
                 />
               </AreaChart>
             </ResponsiveContainer>
@@ -292,17 +317,23 @@ export const AnalyticsView: React.FC = () => {
         </section>
       </div>
 
-      {/* Insights */}
+      {/* Twilight Insights Card */}
       {insights.length > 0 && (
-        <section className="gallery-dark p-6">
-          <h2 className="font-nav text-base font-medium tracking-[0.18em] text-white/85 uppercase">
-            {t.analytics.insightsTitle}
-          </h2>
-          <ul className="mt-4 divide-y divide-white/12">
+        <section className="glass-twilight rounded-2xl p-6">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-[#f0a3e8]" />
+            <h2 className="text-xs font-bold tracking-[0.14em] text-white/85 uppercase">
+              {t.analytics.insightsTitle}
+            </h2>
+          </div>
+          <ul className="mt-4 space-y-2.5">
             {insights.map((line, i) => (
-              <li key={i} className="py-2.5 text-sm text-white/85">
-                <span className="mr-2.5 font-mono text-xs text-white/40">0{i + 1}</span>
-                {line}
+              <li
+                key={i}
+                className="flex items-start gap-3 rounded-xl bg-white/[0.06] px-4 py-3 text-sm text-white/90"
+              >
+                <span className="mt-0.5 font-mono text-xs text-[#e2a5f5]">0{i + 1}</span>
+                <span>{line}</span>
               </li>
             ))}
           </ul>

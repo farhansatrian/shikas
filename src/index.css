@@ -1,17 +1,13 @@
 @import "tailwindcss";
 
 :root {
-  --shikas-ink: #14100e;
-  --shikas-muted: #5f5368;
+  --shikas-ink: #1a1423;
+  --shikas-muted: #655978;
   --shikas-iris: #745bc7;
   --shikas-violet: #7650f3;
-  --shikas-line: rgba(20, 16, 14, 0.14);
-  --shikas-line-strong: rgba(20, 16, 14, 0.28);
-
-  --shikas-income: #117a62;
-  --shikas-expense: #b42e69;
-  --shikas-transfer: #1e6c99;
-  --shikas-warn: #a66a14;
+  --shikas-blush: #d958b8;
+  --shikas-income: #108469;
+  --shikas-expense: #c43673;
 }
 
 @theme inline {
@@ -32,7 +28,7 @@ body {
   background-color: transparent;
   color: var(--shikas-ink);
   overflow-x: hidden;
-  letter-spacing: 0.2px;
+  letter-spacing: 0.15px;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -49,9 +45,7 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* ============================================================================
-   High-Resolution Pink Watercolor Backdrop (copied from SHIZUKU project)
-   ============================================================================ */
+/* High-Resolution Pink Watercolor Backdrop (from SHIZUKU) */
 .shikas-watercolor-bg {
   position: fixed;
   inset: 0;
@@ -75,65 +69,89 @@ body {
 }
 
 /* ============================================================================
-   Minimalist Gallery Surfaces (Quiet, Crisp Hairlines, Zero SaaS Clutter)
+   Refined Tactile Frosted Glass Surfaces (Airy, Delicate, Harmonious with Pink)
    ============================================================================ */
-.gallery-sheet {
-  background-color: rgba(255, 255, 255, 0.78);
-  border: 1px solid var(--shikas-line);
-  backdrop-filter: blur(8px);
-  transition: background-color 0.2s ease, border-color 0.2s ease;
+.glass-card {
+  background: rgba(255, 255, 255, 0.84);
+  border: 1px solid rgba(116, 91, 199, 0.16);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 14px 36px -24px rgba(84, 54, 152, 0.26);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
 }
 
-.gallery-sheet-hover:hover {
-  background-color: rgba(255, 255, 255, 0.92);
-  border-color: var(--shikas-line-strong);
+.glass-card-interactive:hover {
+  background: rgba(255, 255, 255, 0.94);
+  border-color: rgba(116, 91, 199, 0.34);
+  box-shadow: 0 18px 40px -22px rgba(84, 54, 152, 0.34);
 }
 
-.gallery-dark {
-  background-color: #111015;
-  color: #f7f4fb;
-  border: 1px solid rgba(20, 16, 14, 0.24);
+.glass-twilight {
+  background:
+    radial-gradient(circle at 90% 10%, rgba(217, 88, 184, 0.24) 0%, transparent 48%),
+    radial-gradient(circle at 12% 95%, rgba(118, 80, 243, 0.26) 0%, transparent 50%),
+    linear-gradient(145deg, #1d162e 0%, #2a2045 100%);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #f9f6ff;
+  box-shadow: 0 22px 46px -26px rgba(29, 22, 46, 0.65);
 }
 
-.gallery-btn {
+.shikas-btn-primary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.45rem;
-  border: 1px solid rgba(20, 16, 14, 0.34);
-  background: rgba(255, 255, 255, 0.65);
+  border-radius: 9999px;
+  background: linear-gradient(135deg, #745bc7 0%, #7f5af0 65%, #b557dc 100%);
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 10px 24px -12px rgba(116, 91, 199, 0.72);
+  transition: transform 0.15s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+
+.shikas-btn-primary:hover {
+  opacity: 0.95;
+  transform: translateY(-1px);
+  box-shadow: 0 14px 28px -12px rgba(116, 91, 199, 0.84);
+}
+
+.shikas-btn-primary:active {
+  transform: translateY(0);
+}
+
+.shikas-btn-soft {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(116, 91, 199, 0.24);
+  background: rgba(255, 255, 255, 0.8);
   color: var(--shikas-ink);
-  font-family: var(--font-condensed);
-  font-weight: 500;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+  font-weight: 600;
+  transition: all 0.18s ease;
 }
 
-.gallery-btn:hover {
-  background: var(--shikas-ink);
-  border-color: var(--shikas-ink);
-  color: #ffffff;
+.shikas-btn-soft:hover {
+  background: #ffffff;
+  border-color: rgba(116, 91, 199, 0.5);
+  color: var(--shikas-iris);
 }
 
-.gallery-btn-solid {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.45rem;
-  border: 1px solid var(--shikas-ink);
-  background: var(--shikas-ink);
-  color: #ffffff;
-  font-family: var(--font-condensed);
-  font-weight: 500;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  transition: background-color 0.18s ease, border-color 0.18s ease, opacity 0.18s ease;
+/* Modal pop animation */
+@keyframes modalPopIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
-.gallery-btn-solid:hover {
-  background: #2b2434;
-  border-color: #2b2434;
+.animate-modal-in {
+  animation: modalPopIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* Authentic SHIZUKU Raindrop Horizontal Divider */
@@ -144,20 +162,20 @@ body {
   background-repeat: repeat-x;
   background-position: left center;
   background-size: 460px 6px;
-  opacity: 0.55;
+  opacity: 0.42;
 }
 
-/* Subtle Pure-CSS Falling Vertical Raindrops (optional toggle) */
+/* Subtle Pure-CSS Falling Vertical Raindrops */
 @keyframes shizukuRainFall {
   0% {
     transform: translateY(-80px);
     opacity: 0;
   }
   12% {
-    opacity: 0.24;
+    opacity: 0.22;
   }
   85% {
-    opacity: 0.2;
+    opacity: 0.18;
   }
   100% {
     transform: translateY(105vh);
@@ -170,7 +188,7 @@ body {
   top: -80px;
   width: 1px;
   height: 50px;
-  background: linear-gradient(180deg, transparent 0%, rgba(116, 91, 199, 0.5) 100%);
+  background: linear-gradient(180deg, transparent 0%, rgba(116, 91, 199, 0.45) 100%);
   animation-name: shizukuRainFall;
   animation-timing-function: linear;
   animation-iteration-count: infinite;
@@ -178,8 +196,11 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .shizuku-rain-drop {
+  .shizuku-rain-drop,
+  .animate-modal-in {
     animation: none;
+  }
+  .shizuku-rain-drop {
     display: none;
   }
 }
@@ -194,11 +215,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(20, 16, 14, 0.22);
+  background: rgba(116, 91, 199, 0.28);
+  border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(20, 16, 14, 0.42);
+  background: rgba(116, 91, 199, 0.48);
 }
 
 input,

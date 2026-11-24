@@ -25,7 +25,7 @@ const ToastStack: React.FC = () => {
         return (
           <div
             key={toast.id}
-            className={`pointer-events-auto border border-white/15 px-4 py-2 font-mono text-xs shadow-lg ${bg}`}
+            className={`pointer-events-auto rounded-full px-4 py-2 text-xs font-semibold shadow-lg ${bg}`}
           >
             {toast.message}
           </div>

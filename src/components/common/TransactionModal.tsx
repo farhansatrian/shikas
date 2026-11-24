@@ -1,9 +1,25 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { X } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Calendar, X } from "lucide-react";
 import { useCashflow } from "../../context/CashflowContext";
 import { CATEGORIES } from "../../data/categories";
 import type { TransactionType } from "../../types/cashflow";
 import { todayIsoDate } from "../../utils/format";
+import { CategoryIcon } from "./CategoryIcon";
+
+function formatDigitsWithDots(digits: string): string {
+  const clean = digits.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+  if (!clean) return "";
+  return clean.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+}
+
+function getOffsetIsoDate(daysOffset: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + daysOffset);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 
 export const TransactionModal: React.FC = () => {
   const {
@@ -17,7 +33,7 @@ export const TransactionModal: React.FC = () => {
   } = useCashflow();
 
   const [type, setType] = useState<TransactionType>("expense");
-  const [amountInput, setAmountInput] = useState("");
+  const [rawDigits, setRawDigits] = useState("");
   const [date, setDate] = useState(todayIsoDate());
   const [categoryId, setCategoryId] = useState("food");
   const [merchant, setMerchant] = useState("");
@@ -29,20 +45,30 @@ export const TransactionModal: React.FC = () => {
     setError(null);
     if (editingTx) {
       setType(editingTx.type);
-      setAmountInput(String(editingTx.amountIdr));
+      setRawDigits(String(editingTx.amountIdr));
       setDate(editingTx.date);
       setCategoryId(editingTx.categoryId);
       setMerchant(editingTx.merchant ?? "");
       setNote(editingTx.note);
     } else {
       setType(defaultTxType);
-      setAmountInput("");
+      setRawDigits("");
       setDate(todayIsoDate());
       setCategoryId(defaultTxType === "income" ? "salary" : "food");
       setMerchant("");
       setNote("");
     }
   }, [isTxModalOpen, editingTx, defaultTxType]);
+
+  // Close cleanly on Escape key
+  useEffect(() => {
+    if (!isTxModalOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeTxModal();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isTxModalOpen, closeTxModal]);
 
   const filteredCategories = useMemo(
     () => CATEGORIES.filter((c) => c.type === type),
@@ -57,7 +83,36 @@ export const TransactionModal: React.FC = () => {
 
   if (!isTxModalOpen) return null;
 
-  const parsedAmount = Math.round(Number(amountInput) || 0);
+  const parsedAmount = Number(rawDigits) || 0;
+  const formattedAmount = formatDigitsWithDots(rawDigits);
+  const today = todayIsoDate();
+  const yesterday = getOffsetIsoDate(-1);
+
+  const quickAdds =
+    type === "income"
+      ? [
+          { label: locale === "id" ? "+500rb" : "+500k", val: 500_000 },
+          { label: locale === "id" ? "+1jt" : "+1M", val: 1_000_000 },
+          { label: locale === "id" ? "+5jt" : "+5M", val: 5_000_000 },
+          { label: locale === "id" ? "+10jt" : "+10M", val: 10_000_000 },
+        ]
+      : [
+          { label: locale === "id" ? "+25rb" : "+25k", val: 25_000 },
+          { label: locale === "id" ? "+50rb" : "+50k", val: 50_000 },
+          { label: locale === "id" ? "+100rb" : "+100k", val: 100_000 },
+          { label: locale === "id" ? "+500rb" : "+500k", val: 500_000 },
+        ];
+
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const digitsOnly = e.target.value.replace(/\D/g, "").slice(0, 12);
+    setRawDigits(digitsOnly);
+    if (error) setError(null);
+  };
+
+  const addQuickAmount = (delta: number) => {
+    setRawDigits(String(parsedAmount + delta));
+    if (error) setError(null);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,151 +140,258 @@ export const TransactionModal: React.FC = () => {
     closeTxModal();
   };
 
+  const isIncome = type === "income";
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-[#111015]/55 p-4 backdrop-blur-xs"
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-[#1a1423]/45 p-4 backdrop-blur-sm"
       onClick={closeTxModal}
     >
       <div
-        className="my-auto w-full max-w-md border border-[#14100e]/25 bg-[#fdfbfd] p-6 shadow-2xl"
+        role="dialog"
+        aria-modal="true"
+        className="animate-modal-in my-auto w-full max-w-[530px] rounded-3xl border border-[#745bc7]/20 bg-white/96 p-6 shadow-[0_30px_80px_-24px_rgba(38,22,74,0.38)] backdrop-blur-xl sm:p-7"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-[#14100e]/12 pb-3">
+        {/* Header */}
+        <div className="flex items-center justify-between">
           <div>
-            <p className="font-mono text-[10px] tracking-[0.18em] text-[#5f5368] uppercase">
-              SHIKAS CASHFLOW
-            </p>
-            <h2 className="font-nav mt-0.5 text-lg font-medium tracking-[0.15em] text-[#14100e] uppercase">
-              {editingTx ? t.txModal.editTitle : t.txModal.newTitle}
+            <h2 className="text-base font-bold tracking-tight text-[#1a1423]">
+              {editingTx
+                ? locale === "id"
+                  ? "Ubah Catatan"
+                  : "Edit Entry"
+                : locale === "id"
+                  ? "Catat Arus Kas"
+                  : "Record Cashflow"}
             </h2>
+            <p className="text-xs text-[#655978]">
+              {locale === "id"
+                ? "Pilih tipe, ketik nominal, lalu tap kategori."
+                : "Choose type, enter IDR amount, and tap a category."}
+            </p>
           </div>
           <button
             type="button"
             onClick={closeTxModal}
             aria-label={t.actions.close}
-            className="p-1 text-[#5f5368] hover:text-[#14100e]"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f4effc] text-[#655978] transition hover:bg-[#e9dffb] hover:text-[#1a1423]"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="mt-5 space-y-4">
-          <div className="grid grid-cols-2 gap-2">
-            {(["expense", "income"] as const).map((item) => {
-              const active = type === item;
-              return (
-                <button
-                  key={item}
-                  type="button"
-                  onClick={() => setType(item)}
-                  className={`border py-2 font-nav text-xs tracking-[0.14em] uppercase transition ${
-                    active
-                      ? item === "income"
-                        ? "border-[#117a62] bg-[#117a62] text-white"
-                        : "border-[#14100e] bg-[#14100e] text-white"
-                      : "border-[#14100e]/20 bg-white text-[#5f5368] hover:text-[#14100e]"
-                  }`}
-                >
-                  {t.cashflow[item]}
-                </button>
-              );
-            })}
+        <form onSubmit={handleSubmit} className="mt-5 space-y-5">
+          {/* Tactile Segmented Pill: Expense vs Income */}
+          <div className="grid grid-cols-2 gap-1.5 rounded-2xl bg-[#f4effc] p-1">
+            <button
+              type="button"
+              onClick={() => setType("expense")}
+              className={`flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold transition ${
+                !isIncome
+                  ? "bg-white text-[#c43673] shadow-xs"
+                  : "text-[#655978] hover:text-[#1a1423]"
+              }`}
+            >
+              <ArrowUpRight className="h-4 w-4" />
+              {t.cashflow.expense}
+            </button>
+            <button
+              type="button"
+              onClick={() => setType("income")}
+              className={`flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold transition ${
+                isIncome
+                  ? "bg-white text-[#108469] shadow-xs"
+                  : "text-[#655978] hover:text-[#1a1423]"
+              }`}
+            >
+              <ArrowDownLeft className="h-4 w-4" />
+              {t.cashflow.income}
+            </button>
           </div>
 
-          <div>
-            <label className="block font-mono text-[10px] tracking-[0.14em] text-[#5f5368] uppercase">
+          {/* Hero Formatted IDR Amount Input + Quick Additive Chips */}
+          <div className="rounded-2xl border border-[#745bc7]/16 bg-[#f9f6fe] px-4 py-4 text-center transition focus-within:border-[#745bc7]/45 focus-within:bg-white">
+            <label className="block font-mono text-[10px] font-semibold tracking-[0.16em] text-[#655978] uppercase">
               {t.txModal.amount}
             </label>
-            <div className="mt-1.5 flex items-center border border-[#14100e]/25 bg-white px-3.5 py-2.5 focus-within:border-[#14100e]">
-              <span className="font-mono-num mr-2 text-sm font-semibold text-[#5f5368]">Rp</span>
+            <div className="mt-1.5 flex items-baseline justify-center gap-1.5">
+              <span
+                className={`font-mono-num text-xl font-bold ${
+                  isIncome ? "text-[#108469]" : "text-[#745bc7]"
+                }`}
+              >
+                Rp
+              </span>
               <input
-                type="number"
+                type="text"
                 inputMode="numeric"
-                step="1000"
-                min="0"
-                required
-                placeholder="150000"
-                value={amountInput}
-                onChange={(e) => setAmountInput(e.target.value)}
-                className="font-mono-num w-full bg-transparent text-lg font-semibold text-[#14100e] outline-none"
+                autoFocus
+                placeholder="0"
+                value={formattedAmount}
+                onChange={handleAmountChange}
+                className="font-mono-num w-full max-w-[260px] bg-transparent text-center text-3xl font-bold tracking-tight text-[#1a1423] outline-none placeholder:text-[#655978]/35"
               />
+            </div>
+
+            <div className="mt-3.5 flex flex-wrap items-center justify-center gap-1.5">
+              {quickAdds.map((chip) => (
+                <button
+                  key={chip.label}
+                  type="button"
+                  onClick={() => addQuickAmount(chip.val)}
+                  className="rounded-full border border-[#745bc7]/18 bg-white px-2.5 py-1 font-mono text-[11px] font-medium text-[#1a1423] transition hover:border-[#745bc7] hover:text-[#745bc7]"
+                >
+                  {chip.label}
+                </button>
+              ))}
+              {parsedAmount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setRawDigits("")}
+                  className="rounded-full px-2.5 py-1 font-mono text-[11px] font-medium text-[#655978] transition hover:bg-[#c43673]/10 hover:text-[#c43673]"
+                >
+                  {locale === "id" ? "Reset" : "Clear"}
+                </button>
+              )}
             </div>
           </div>
 
+          {/* Visual Tappable Category Chip Grid */}
+          <div>
+            <label className="block text-xs font-semibold text-[#1a1423]">
+              {t.txModal.category}
+            </label>
+            <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {filteredCategories.map((c) => {
+                const selected = categoryId === c.id;
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setCategoryId(c.id)}
+                    className={`flex items-center gap-2 rounded-xl border px-2.5 py-2 text-left text-xs font-medium transition ${
+                      selected
+                        ? "border-[#745bc7] bg-[#745bc7]/10 text-[#1a1423] shadow-2xs"
+                        : "border-[#745bc7]/12 bg-[#f9f6fe]/75 text-[#655978] hover:border-[#745bc7]/35 hover:bg-white hover:text-[#1a1423]"
+                    }`}
+                  >
+                    <span
+                      className="flex h-6.5 w-6.5 shrink-0 items-center justify-center rounded-lg"
+                      style={{
+                        backgroundColor: selected ? c.color : `${c.color}18`,
+                        color: selected ? "#ffffff" : c.color,
+                      }}
+                    >
+                      <CategoryIcon name={c.icon} className="h-3.5 w-3.5" />
+                    </span>
+                    <span className="truncate">
+                      {locale === "id" ? c.nameId : c.nameEn}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Smart Date Shortcuts + Compact Date Input */}
+          <div>
+            <label className="block text-xs font-semibold text-[#1a1423]">
+              {t.txModal.date}
+            </label>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setDate(today)}
+                className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                  date === today
+                    ? "bg-[#745bc7] text-white"
+                    : "bg-[#f4effc] text-[#655978] hover:text-[#1a1423]"
+                }`}
+              >
+                {locale === "id" ? "Hari ini" : "Today"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setDate(yesterday)}
+                className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                  date === yesterday
+                    ? "bg-[#745bc7] text-white"
+                    : "bg-[#f4effc] text-[#655978] hover:text-[#1a1423]"
+                }`}
+              >
+                {locale === "id" ? "Kemarin" : "Yesterday"}
+              </button>
+              <div className="flex flex-1 items-center gap-1.5 rounded-full border border-[#745bc7]/16 bg-[#f9f6fe] px-3 py-1.5 focus-within:border-[#745bc7]/45 focus-within:bg-white">
+                <Calendar className="h-3.5 w-3.5 text-[#745bc7]" />
+                <input
+                  type="date"
+                  required
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="w-full bg-transparent text-xs font-medium text-[#1a1423] outline-none"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Note & Merchant side-by-side */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label className="block font-mono text-[10px] tracking-[0.14em] text-[#5f5368] uppercase">
-                {t.txModal.date}
+              <label className="block text-xs font-semibold text-[#1a1423]">
+                {t.txModal.note}
               </label>
               <input
-                type="date"
-                required
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="mt-1 w-full border border-[#14100e]/22 bg-white px-3 py-2 text-sm text-[#14100e] outline-none focus:border-[#14100e]"
+                type="text"
+                placeholder={t.txModal.notePlaceholder}
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                className="mt-1.5 w-full rounded-xl border border-[#745bc7]/14 bg-[#f9f6fe] px-3.5 py-2.5 text-xs text-[#1a1423] outline-none transition placeholder:text-[#655978]/65 focus:border-[#745bc7]/45 focus:bg-white"
               />
             </div>
 
             <div>
-              <label className="block font-mono text-[10px] tracking-[0.14em] text-[#5f5368] uppercase">
-                {t.txModal.category}
+              <label className="block text-xs font-semibold text-[#1a1423]">
+                {t.txModal.merchant}
               </label>
-              <select
-                value={categoryId}
-                onChange={(e) => setCategoryId(e.target.value)}
-                className="mt-1 w-full border border-[#14100e]/22 bg-white px-3 py-2 text-sm text-[#14100e] outline-none focus:border-[#14100e]"
-              >
-                {filteredCategories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {locale === "id" ? c.nameId : c.nameEn}
-                  </option>
-                ))}
-              </select>
+              <input
+                type="text"
+                placeholder={t.txModal.merchantPlaceholder}
+                value={merchant}
+                onChange={(e) => setMerchant(e.target.value)}
+                className="mt-1.5 w-full rounded-xl border border-[#745bc7]/14 bg-[#f9f6fe] px-3.5 py-2.5 text-xs text-[#1a1423] outline-none transition placeholder:text-[#655978]/65 focus:border-[#745bc7]/45 focus:bg-white"
+              />
             </div>
-          </div>
-
-          <div>
-            <label className="block font-mono text-[10px] tracking-[0.14em] text-[#5f5368] uppercase">
-              {t.txModal.note}
-            </label>
-            <input
-              type="text"
-              placeholder={t.txModal.notePlaceholder}
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              className="mt-1 w-full border border-[#14100e]/22 bg-white px-3 py-2 text-sm text-[#14100e] outline-none focus:border-[#14100e]"
-            />
-          </div>
-
-          <div>
-            <label className="block font-mono text-[10px] tracking-[0.14em] text-[#5f5368] uppercase">
-              {t.txModal.merchant}
-            </label>
-            <input
-              type="text"
-              placeholder={t.txModal.merchantPlaceholder}
-              value={merchant}
-              onChange={(e) => setMerchant(e.target.value)}
-              className="mt-1 w-full border border-[#14100e]/22 bg-white px-3 py-2 text-sm text-[#14100e] outline-none focus:border-[#14100e]"
-            />
           </div>
 
           {error && (
-            <p className="border border-[#b42e69]/30 bg-[#b42e69]/8 px-3 py-2 text-xs text-[#b42e69]">
+            <p className="rounded-xl bg-[#c43673]/10 px-3.5 py-2 text-xs font-medium text-[#c43673]">
               {error}
             </p>
           )}
 
-          <div className="flex items-center justify-end gap-2 pt-2">
+          {/* Footer Buttons */}
+          <div className="flex items-center justify-end gap-2.5 pt-1">
             <button
               type="button"
               onClick={closeTxModal}
-              className="gallery-btn px-4 py-2 text-xs"
+              className="shikas-btn-soft px-4.5 py-2.5 text-xs"
             >
               {t.actions.cancel}
             </button>
-            <button type="submit" className="gallery-btn-solid px-5 py-2 text-xs">
-              {t.actions.save}
+            <button
+              type="submit"
+              className={`inline-flex items-center justify-center rounded-full px-6 py-2.5 text-xs font-semibold text-white shadow-md transition hover:opacity-95 ${
+                isIncome
+                  ? "bg-gradient-to-r from-[#108469] to-[#1ca384] shadow-[#108469]/30"
+                  : "bg-gradient-to-r from-[#745bc7] via-[#7f5af0] to-[#b557dc] shadow-[#745bc7]/35"
+              }`}
+            >
+              {editingTx
+                ? t.actions.save
+                : isIncome
+                  ? t.actions.addIncome
+                  : t.actions.addExpense}
             </button>
           </div>
         </form>

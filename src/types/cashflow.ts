@@ -10,6 +10,7 @@ export interface CategoryDefinition {
   nameId: string;
   nameEn: string;
   color: string;
+  icon: string;
 }
 
 export interface Transaction {
