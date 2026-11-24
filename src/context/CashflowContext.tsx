@@ -11,15 +11,25 @@ import type {
   CashflowStoreData,
   Locale,
   NavTab,
+  ShizukuUser,
   Transaction,
   TransactionType,
 } from "../types/cashflow";
+import { SHIZUKU_ECOSYSTEM } from "../config/ecosystem";
 import { normalizeCategoryId } from "../data/categories";
 import { createDemoSeedData, createFreshEmptyData } from "../data/seedData";
 import { getMonthKey } from "../utils/format";
 import { TRANSLATIONS, type TranslationDict } from "../i18n/translations";
+import {
+  getCurrentSession,
+  loadUserLedger,
+  registerShizukuId,
+  saveUserLedger,
+  signInWithShizukuId,
+  signOutShizukuId,
+} from "../services/shizukuAuth";
 
-const STORE_KEY = "shikas_store_v4";
+const SANDBOX_STORE_KEY = "shikas_store_v4";
 
 function generateId(prefix: string): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -28,9 +38,9 @@ function generateId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
-function loadStoreFromStorage(): CashflowStoreData {
+function loadSandboxStore(): CashflowStoreData {
   try {
-    const raw = localStorage.getItem(STORE_KEY);
+    const raw = localStorage.getItem(SANDBOX_STORE_KEY);
     if (!raw) return createDemoSeedData();
     const parsed = JSON.parse(raw) as Partial<CashflowStoreData>;
     if (!Array.isArray(parsed.transactions)) return createDemoSeedData();
@@ -44,6 +54,8 @@ function loadStoreFromStorage(): CashflowStoreData {
       settings: {
         ...defaults,
         ...(parsed.settings ?? {}),
+        shizukuWebsiteUrl:
+          parsed.settings?.shizukuWebsiteUrl || SHIZUKU_ECOSYSTEM.hubUrl,
       },
     };
   } catch {
@@ -65,6 +77,8 @@ export interface TxBurstEvent {
   action: "created" | "updated" | "duplicated";
 }
 
+export type AuthModalMode = "signin" | "register";
+
 interface CashflowContextValue {
   store: CashflowStoreData;
   activeTab: NavTab;
@@ -73,7 +87,25 @@ interface CashflowContextValue {
   setSelectedMonth: (month: string) => void;
   t: TranslationDict;
   locale: Locale;
-  // Modal
+  // SHIZUKU ID Auth & Account Panel
+  user: ShizukuUser | null;
+  authReady: boolean;
+  isAuthModalOpen: boolean;
+  authModalMode: AuthModalMode;
+  openAuthModal: (mode?: AuthModalMode) => void;
+  closeAuthModal: () => void;
+  isAccountPanelOpen: boolean;
+  openAccountPanel: () => void;
+  closeAccountPanel: () => void;
+  signIn: (email: string, password: string) => Promise<void>;
+  register: (
+    email: string,
+    displayName: string,
+    password: string,
+    importSandbox: boolean
+  ) => Promise<void>;
+  signOut: () => Promise<void>;
+  // Transaction Modal
   isTxModalOpen: boolean;
   editingTx: Transaction | null;
   defaultTxType: TransactionType;
@@ -106,9 +138,16 @@ const CashflowContext = createContext<CashflowContextValue | null>(null);
 export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const [store, setStore] = useState<CashflowStoreData>(loadStoreFromStorage);
+  const [store, setStore] = useState<CashflowStoreData>(loadSandboxStore);
   const [activeTab, setActiveTab] = useState<NavTab>("home");
   const [selectedMonth, setSelectedMonth] = useState<string>(() => getMonthKey());
+  const [user, setUser] = useState<ShizukuUser | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+
+  const [isAuthModalOpen, setAuthModalOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<AuthModalMode>("signin");
+  const [isAccountPanelOpen, setAccountPanelOpen] = useState(false);
+
   const [isTxModalOpen, setTxModalOpen] = useState(false);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
   const [defaultTxType, setDefaultTxType] = useState<TransactionType>("expense");
@@ -123,17 +162,145 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
     }, 3200);
   }, []);
 
+  // Restore active SHIZUKU ID session on boot
   useEffect(() => {
-    try {
-      localStorage.setItem(STORE_KEY, JSON.stringify(store));
-    } catch {
-      // Ignore quota issues
+    let active = true;
+    (async () => {
+      const existing = await getCurrentSession();
+      if (!active) return;
+      if (existing) {
+        const ledger = await loadUserLedger(existing);
+        if (!active) return;
+        setUser(existing);
+        setStore(
+          ledger ?? {
+            ...createFreshEmptyData(),
+            settings: {
+              ...createFreshEmptyData().settings,
+              shizukuWebsiteUrl: SHIZUKU_ECOSYSTEM.hubUrl,
+            },
+          }
+        );
+      }
+      setAuthReady(true);
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Persist to either authenticated user ledger or local sandbox storage
+  useEffect(() => {
+    if (!authReady) return;
+    if (user) {
+      void saveUserLedger(user, store);
+    } else {
+      try {
+        localStorage.setItem(SANDBOX_STORE_KEY, JSON.stringify(store));
+      } catch {
+        // Ignore quota issues
+      }
     }
-  }, [store]);
+  }, [store, user, authReady]);
 
   useEffect(() => {
     document.documentElement.lang = store.settings.locale;
   }, [store.settings.locale]);
+
+  const openAuthModal = useCallback((mode: AuthModalMode = "signin") => {
+    setAccountPanelOpen(false);
+    setAuthModalMode(mode);
+    setAuthModalOpen(true);
+  }, []);
+
+  const closeAuthModal = useCallback(() => {
+    setAuthModalOpen(false);
+  }, []);
+
+  const openAccountPanel = useCallback(() => {
+    setAuthModalOpen(false);
+    setAccountPanelOpen(true);
+  }, []);
+
+  const closeAccountPanel = useCallback(() => {
+    setAccountPanelOpen(false);
+  }, []);
+
+  const signIn = useCallback(
+    async (email: string, password: string) => {
+      const signedUser = await signInWithShizukuId(email, password);
+      const existingLedger = await loadUserLedger(signedUser);
+      const nextStore: CashflowStoreData = existingLedger ?? {
+        ...createFreshEmptyData(),
+        settings: {
+          ...store.settings,
+          shizukuWebsiteUrl:
+            store.settings.shizukuWebsiteUrl || SHIZUKU_ECOSYSTEM.hubUrl,
+        },
+      };
+      setUser(signedUser);
+      setStore(nextStore);
+      setLastTxEvent(null);
+      setAuthModalOpen(false);
+      notify(
+        store.settings.locale === "id"
+          ? `Selamat datang kembali, ${signedUser.displayName}.`
+          : `Welcome back, ${signedUser.displayName}.`,
+        "success"
+      );
+    },
+    [notify, store.settings]
+  );
+
+  const register = useCallback(
+    async (
+      email: string,
+      displayName: string,
+      password: string,
+      importSandbox: boolean
+    ) => {
+      const createdUser = await registerShizukuId(email, displayName, password);
+      const base = createFreshEmptyData();
+      const nextStore: CashflowStoreData = {
+        ...base,
+        transactions: importSandbox ? store.transactions : [],
+        settings: {
+          ...store.settings,
+          shizukuWebsiteUrl:
+            store.settings.shizukuWebsiteUrl || SHIZUKU_ECOSYSTEM.hubUrl,
+        },
+      };
+      await saveUserLedger(createdUser, nextStore);
+      setUser(createdUser);
+      setStore(nextStore);
+      setLastTxEvent(null);
+      setAuthModalOpen(false);
+      notify(
+        store.settings.locale === "id"
+          ? `SHIZUKU ID dibuat untuk ${createdUser.displayName}.`
+          : `SHIZUKU ID created for ${createdUser.displayName}.`,
+        "success"
+      );
+    },
+    [notify, store.settings, store.transactions]
+  );
+
+  const signOut = useCallback(async () => {
+    const currentLocale = store.settings.locale;
+    await signOutShizukuId();
+    setUser(null);
+    const sandbox = loadSandboxStore();
+    sandbox.settings.locale = currentLocale;
+    setStore(sandbox);
+    setLastTxEvent(null);
+    setAccountPanelOpen(false);
+    notify(
+      currentLocale === "id"
+        ? "Keluar dari akun. Kembali ke mode Sandbox."
+        : "Signed out. Switched back to Sandbox mode.",
+      "iris"
+    );
+  }, [notify, store.settings.locale]);
 
   const openNewTxModal = useCallback((type: TransactionType = "expense") => {
     setEditingTx(null);
@@ -256,9 +423,11 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
   const resetToDemoData = useCallback(() => {
     const demo = createDemoSeedData();
     demo.settings.locale = store.settings.locale;
-    demo.settings.shizukuWebsiteUrl = store.settings.shizukuWebsiteUrl;
+    demo.settings.shizukuWebsiteUrl =
+      store.settings.shizukuWebsiteUrl || SHIZUKU_ECOSYSTEM.hubUrl;
     setStore(demo);
     setSelectedMonth(getMonthKey());
+    setLastTxEvent(null);
     notify(
       store.settings.locale === "id"
         ? "Dataset demo 6 bulan dimuat."
@@ -270,9 +439,11 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
   const resetToFreshEmpty = useCallback(() => {
     const fresh = createFreshEmptyData();
     fresh.settings.locale = store.settings.locale;
-    fresh.settings.shizukuWebsiteUrl = store.settings.shizukuWebsiteUrl;
+    fresh.settings.shizukuWebsiteUrl =
+      store.settings.shizukuWebsiteUrl || SHIZUKU_ECOSYSTEM.hubUrl;
     setStore(fresh);
     setSelectedMonth(getMonthKey());
+    setLastTxEvent(null);
     notify(
       store.settings.locale === "id"
         ? "Semua catatan dikosongkan."
@@ -305,6 +476,18 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
       setSelectedMonth,
       t: TRANSLATIONS[store.settings.locale],
       locale: store.settings.locale,
+      user,
+      authReady,
+      isAuthModalOpen,
+      authModalMode,
+      openAuthModal,
+      closeAuthModal,
+      isAccountPanelOpen,
+      openAccountPanel,
+      closeAccountPanel,
+      signIn,
+      register,
+      signOut,
       isTxModalOpen,
       editingTx,
       defaultTxType,
@@ -328,6 +511,18 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
       store,
       activeTab,
       selectedMonth,
+      user,
+      authReady,
+      isAuthModalOpen,
+      authModalMode,
+      openAuthModal,
+      closeAuthModal,
+      isAccountPanelOpen,
+      openAccountPanel,
+      closeAccountPanel,
+      signIn,
+      register,
+      signOut,
       isTxModalOpen,
       editingTx,
       defaultTxType,

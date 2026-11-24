@@ -1,14 +1,16 @@
 import React from "react";
 import { ArrowUpRight } from "lucide-react";
+import { SHIZUKU_ECOSYSTEM } from "../../config/ecosystem";
 import { useCashflow } from "../../context/CashflowContext";
 
 export const Footer: React.FC = () => {
   const { activeTab, store, t, notify } = useCashflow();
 
-  // Only show quiet minimal text footer on HOME; hide on CASHFLOW / ANALYTICS / DATA
+  // Only show quiet minimal text footer on HOME; hide on CASHFLOW / ANALYTICS
   if (activeTab !== "home") return null;
 
-  const shizukuUrl = store.settings.shizukuWebsiteUrl.trim();
+  const shizukuUrl =
+    SHIZUKU_ECOSYSTEM.hubUrl || store.settings.shizukuWebsiteUrl.trim();
 
   const renderShizukuLink = () => {
     if (shizukuUrl) {

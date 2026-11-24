@@ -33,6 +33,7 @@ import {
   shiftMonthKey,
 } from "../../utils/format";
 import { MoneyDisplay } from "../common/MoneyDisplay";
+import { SandboxBanner } from "../common/SandboxBanner";
 
 const RANGE_OPTIONS: Array<{ id: AnalyticsRange; en: string; idLabel: string }> = [
   { id: "3m", en: "3M", idLabel: "3 BLN" },
@@ -154,6 +155,8 @@ export const AnalyticsView: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <SandboxBanner />
+
       {/* Primary Analytics Frame (Starts directly below nav — 100% consistent with CASHFLOW) */}
       <section className="vn-frame overflow-hidden">
         {/* Vivid SHIZUKU Watercolor Band Header Strip + Integrated Month Switcher */}

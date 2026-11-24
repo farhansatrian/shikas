@@ -1,8 +1,9 @@
 import React from "react";
+import { ChevronDown, User } from "lucide-react";
 import { useCashflow } from "../../context/CashflowContext";
 import type { NavTab } from "../../types/cashflow";
 
-const NAV_TABS: NavTab[] = ["home", "cashflow", "analytics", "data"];
+const NAV_TABS: NavTab[] = ["home", "cashflow", "analytics"];
 
 function ShizukuUmbrellaMark({ className = "h-5 w-5" }: { className?: string }) {
   return (
@@ -29,7 +30,53 @@ function ShizukuUmbrellaMark({ className = "h-5 w-5" }: { className?: string }) 
 }
 
 export const MinimalNav: React.FC = () => {
-  const { activeTab, setActiveTab, setLocale, t, locale } = useCashflow();
+  const {
+    activeTab,
+    setActiveTab,
+    setLocale,
+    t,
+    locale,
+    user,
+    openAuthModal,
+    openAccountPanel,
+  } = useCashflow();
+
+  const renderAccountTrigger = (compact = false) => {
+    if (user) {
+      return (
+        <button
+          type="button"
+          onClick={openAccountPanel}
+          aria-label={t.nav.account}
+          className={`inline-flex items-center gap-1.5 border border-[#745bc7] bg-[#fdf9ff]/92 font-mono font-semibold tracking-[0.08em] text-[#14100e] shadow-[2px_2px_0_0_rgba(116,91,199,0.22)] transition hover:-translate-x-0.5 hover:-translate-y-0.5 hover:bg-white ${
+            compact ? "px-2 py-1 text-[10px]" : "px-2.5 py-1 text-[11px]"
+          }`}
+        >
+          <span
+            className="h-1.5 w-1.5 shrink-0"
+            style={{
+              backgroundColor: user.mode === "cloud" ? "#2276a8" : "#745bc7",
+            }}
+          />
+          <span className="max-w-[96px] truncate">{user.displayName}</span>
+          <ChevronDown className="h-3 w-3 shrink-0 text-[#745bc7]" />
+        </button>
+      );
+    }
+
+    return (
+      <button
+        type="button"
+        onClick={() => openAuthModal("signin")}
+        className={`inline-flex items-center gap-1.5 border border-[#745bc7] bg-[#fdf9ff]/90 font-mono font-semibold tracking-[0.12em] text-[#745bc7] uppercase shadow-[2px_2px_0_0_rgba(116,91,199,0.22)] transition hover:-translate-x-0.5 hover:-translate-y-0.5 hover:bg-[#745bc7] hover:text-white ${
+          compact ? "px-2 py-1 text-[10px]" : "px-2.5 py-1 text-[10.5px]"
+        }`}
+      >
+        <User className="h-3 w-3 shrink-0" />
+        <span>{t.nav.signIn}</span>
+      </button>
+    );
+  };
 
   return (
     <header className="relative z-20 w-full">
@@ -49,11 +96,73 @@ export const MinimalNav: React.FC = () => {
               <ShizukuUmbrellaMark className="h-5 w-5 sm:h-6 sm:w-6" />
             </button>
 
-            {/* Mobile Language Switcher */}
+            {/* Mobile Right Controls: Account / Sign In + EN | ID */}
+            <div className="flex items-center gap-2.5 md:hidden">
+              {renderAccountTrigger(true)}
+              <div
+                role="group"
+                aria-label="Language switcher"
+                className="flex items-center gap-1 font-editorial text-xs font-bold tracking-[0.16em]"
+              >
+                <button
+                  type="button"
+                  onClick={() => setLocale("en")}
+                  className={
+                    locale === "en"
+                      ? "text-[#745bc7]"
+                      : "text-[#745bc7]/40 transition hover:text-[#745bc7]/80"
+                  }
+                >
+                  EN
+                </button>
+                <span className="text-[#745bc7]/30">|</span>
+                <button
+                  type="button"
+                  onClick={() => setLocale("id")}
+                  className={
+                    locale === "id"
+                      ? "text-[#745bc7]"
+                      : "text-[#745bc7]/40 transition hover:text-[#745bc7]/80"
+                  }
+                >
+                  ID
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Dead-Center 3-Tab Nav (HOME · CASHFLOW · ANALYTICS) */}
+          <nav aria-label="Primary navigation" className="flex justify-center">
+            <ul className="flex flex-wrap items-center justify-center gap-x-7 gap-y-1.5 sm:gap-x-11">
+              {NAV_TABS.map((tab) => {
+                const active = activeTab === tab;
+                return (
+                  <li key={tab}>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab(tab)}
+                      className={`font-nav pb-0.5 text-[15px] tracking-[0.12em] uppercase transition sm:text-[16px] sm:tracking-[0.14em] ${
+                        active
+                          ? "border-b-[1.5px] border-[#14100e] font-medium text-[#14100e]"
+                          : "border-b-[1.5px] border-transparent font-normal text-[#14100e]/60 hover:text-[#14100e]"
+                      }`}
+                    >
+                      {t.nav[tab]}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </nav>
+
+          {/* Desktop Right: Noticeable SHIZUKU ID Trigger + EN | ID */}
+          <div className="hidden items-center justify-end gap-4 md:flex">
+            {renderAccountTrigger(false)}
+
             <div
               role="group"
               aria-label="Language switcher"
-              className="flex items-center gap-1.5 font-editorial text-xs font-bold tracking-[0.18em] md:hidden"
+              className="flex items-center gap-2 font-editorial text-[13px] font-bold tracking-[0.18em]"
             >
               <button
                 type="button"
@@ -79,61 +188,6 @@ export const MinimalNav: React.FC = () => {
                 ID
               </button>
             </div>
-          </div>
-
-          {/* Dead-Center 4-Tab Nav */}
-          <nav aria-label="Primary navigation" className="flex justify-center">
-            <ul className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1.5 sm:gap-x-10">
-              {NAV_TABS.map((tab) => {
-                const active = activeTab === tab;
-                return (
-                  <li key={tab}>
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab(tab)}
-                      className={`font-nav pb-0.5 text-[15px] tracking-[0.12em] uppercase transition sm:text-[16px] sm:tracking-[0.14em] ${
-                        active
-                          ? "border-b-[1.5px] border-[#1a1423] font-medium text-[#1a1423]"
-                          : "border-b-[1.5px] border-transparent font-normal text-[#1a1423]/60 hover:text-[#1a1423]"
-                      }`}
-                    >
-                      {t.nav[tab]}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </nav>
-
-          {/* Desktop Right: EN | ID switcher */}
-          <div
-            role="group"
-            aria-label="Language switcher"
-            className="hidden items-center justify-end gap-2 font-editorial text-[13px] font-bold tracking-[0.18em] md:flex"
-          >
-            <button
-              type="button"
-              onClick={() => setLocale("en")}
-              className={
-                locale === "en"
-                  ? "text-[#745bc7]"
-                  : "text-[#745bc7]/40 transition hover:text-[#745bc7]/80"
-              }
-            >
-              EN
-            </button>
-            <span className="text-[#745bc7]/30">|</span>
-            <button
-              type="button"
-              onClick={() => setLocale("id")}
-              className={
-                locale === "id"
-                  ? "text-[#745bc7]"
-                  : "text-[#745bc7]/40 transition hover:text-[#745bc7]/80"
-              }
-            >
-              ID
-            </button>
           </div>
         </div>
       </div>

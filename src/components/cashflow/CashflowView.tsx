@@ -25,6 +25,7 @@ import {
   shiftMonthKey,
 } from "../../utils/format";
 import { MoneyDisplay } from "../common/MoneyDisplay";
+import { SandboxBanner } from "../common/SandboxBanner";
 import { RaindropVessel, type VesselMood } from "./RaindropVessel";
 import { VnDialogueBox } from "./VnDialogueBox";
 
@@ -79,6 +80,8 @@ export const CashflowView: React.FC = () => {
     duplicateTransaction,
     deleteTransaction,
     isTxModalOpen,
+    isAuthModalOpen,
+    isAccountPanelOpen,
     lastTxEvent,
   } = useCashflow();
 
@@ -330,10 +333,10 @@ export const CashflowView: React.FC = () => {
     [locale, openNewTxModal, typeFilter]
   );
 
-  // Silent RPG Keyboard Navigation (↑ ↓ Enter) when modal & inputs are inactive
+  // Silent RPG Keyboard Navigation (↑ ↓ Enter) when modals & inputs are inactive
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (isTxModalOpen) return;
+      if (isTxModalOpen || isAuthModalOpen || isAccountPanelOpen) return;
       const target = e.target as HTMLElement | null;
       if (
         target &&
@@ -359,13 +362,15 @@ export const CashflowView: React.FC = () => {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isTxModalOpen, commands, selectedCmd]);
+  }, [isTxModalOpen, isAuthModalOpen, isAccountPanelOpen, commands, selectedCmd]);
 
   const hasActiveFilter =
     typeFilter !== "all" || categoryFilter !== "all" || query.trim() !== "";
 
   return (
     <div className="space-y-6">
+      <SandboxBanner />
+
       {/* =====================================================================
           1. INTERACTIVE STAGE: SHIZUKU Raindrop Vessel + Anime RPG Status Menu
          ===================================================================== */}

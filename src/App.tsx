@@ -4,10 +4,11 @@ import { ShizukuRainLayer } from "./components/layout/ShizukuRainLayer";
 import { MinimalNav } from "./components/layout/MinimalNav";
 import { Footer } from "./components/layout/Footer";
 import { TransactionModal } from "./components/common/TransactionModal";
+import { AuthModal } from "./components/auth/AuthModal";
+import { AccountPanel } from "./components/auth/AccountPanel";
 import { DashboardView } from "./components/dashboard/DashboardView";
 import { CashflowView } from "./components/cashflow/CashflowView";
 import { AnalyticsView } from "./components/analytics/AnalyticsView";
-import { SettingsView } from "./components/settings/SettingsView";
 
 const ToastStack: React.FC = () => {
   const { toasts } = useCashflow();
@@ -59,11 +60,12 @@ const ShiKasShell: React.FC = () => {
         {activeTab === "home" && <DashboardView />}
         {activeTab === "cashflow" && <CashflowView />}
         {activeTab === "analytics" && <AnalyticsView />}
-        {activeTab === "data" && <SettingsView />}
       </main>
 
       <Footer />
       <TransactionModal />
+      <AuthModal />
+      <AccountPanel />
       <ToastStack />
     </div>
   );

@@ -2,7 +2,15 @@ export type Locale = "en" | "id";
 
 export type TransactionType = "income" | "expense";
 
-export type NavTab = "home" | "cashflow" | "analytics" | "data";
+export type NavTab = "home" | "cashflow" | "analytics";
+
+export interface ShizukuUser {
+  id: string;
+  email: string;
+  displayName: string;
+  mode: "cloud" | "local";
+  createdAt: string;
+}
 
 export interface CategoryDefinition {
   id: string;

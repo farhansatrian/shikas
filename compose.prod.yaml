@@ -1,0 +1,29 @@
+# =============================================================================
+# shikas (雫) — Ultra-Light Production Stack (compose.prod.yaml)
+# =============================================================================
+# Dirancang untuk jalan berdampingan dengan shizuku di VM 1 GB RAM:
+# - Hanya ~15 MB RAM (limit 64 MB) karena static bundle via nginx:alpine
+# - Zero DB container terpisah (siap tersambung ke SHIZUKU Hub SSO/API)
+# - Prebuilt image dari GHCR (tidak compile di VM):
+#     docker compose -f compose.prod.yaml pull && docker compose -f compose.prod.yaml up -d
+# =============================================================================
+
+services:
+  shikas:
+    image: ${SHIKAS_IMAGE:-ghcr.io/farhansatrian/shikas:latest}
+    container_name: shikas-app
+    restart: unless-stopped
+    ports:
+      - "${APP_BIND_IP:-0.0.0.0}:${APP_PORT:-3001}:8080"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 64M
+        reservations:
+          memory: 16M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
