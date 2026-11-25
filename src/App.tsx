@@ -4,6 +4,7 @@ import { ShizukuRainLayer } from "./components/layout/ShizukuRainLayer";
 import { MinimalNav } from "./components/layout/MinimalNav";
 import { Footer } from "./components/layout/Footer";
 import { TransactionModal } from "./components/common/TransactionModal";
+import { ManagePocketsModal } from "./components/cashflow/ManagePocketsModal";
 import { AuthModal } from "./components/auth/AuthModal";
 import { AccountPanel } from "./components/auth/AccountPanel";
 import { DashboardView } from "./components/dashboard/DashboardView";
@@ -64,6 +65,7 @@ const ShiKasShell: React.FC = () => {
 
       <Footer />
       <TransactionModal />
+      <ManagePocketsModal />
       <AuthModal />
       <AccountPanel />
       <ToastStack />

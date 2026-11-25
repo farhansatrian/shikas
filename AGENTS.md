@@ -7,7 +7,11 @@
 - **After Sign-In (`SHIZUKU ID`)**: Reads and writes strictly per-account data from the central **SHIZUKU** backend (`../portofolio`, Prisma SQLite `data/shizuku.db`) via:
   - Email/Password: `POST /api/ecosystem/register`, `POST /api/ecosystem/login`, `POST /api/ecosystem/logout`, `GET /api/ecosystem/me`
   - **Sign in with Google (OAuth 2.0 + PKCE via SHIZUKU)**: Redirects to `${VITE_SHIZUKU_API_URL}/api/ecosystem/google?redirect=${encodeURIComponent(window.location.origin + "/")}`; on callback, `shikas` reads `#shizuku_token=<jwt>` from `window.location.hash`, stores it as Bearer token, fetches `/api/ecosystem/me` + `/api/shikas/store`, and cleans the hash via `window.history.replaceState`.
-  - Cashflow Store: `GET /api/shikas/store`, `PUT /api/shikas/store`
+  - Cashflow Store: `GET /api/shikas/store`, `PUT /api/shikas/store` (v5 payload includes `accounts[]` with `daily | savings` role & `openingBalanceIdr`, plus `transactions[]` supporting `income | expense | transfer`, `accountId`, `toAccountId`, and optional transfer `feeIdr`).
+- **Pockets & Cashflow Accounting Rules**:
+  - Each pocket (`Wondr`, `GoPay`, `BCA`, or custom) holds an `openingBalanceIdr` that contributes to live `Total Balance` and `Cumulative Net Balance` without inflating monthly `Income` or `Savings Level`.
+  - Pocket-to-pocket `transfer` moves funds between pockets without inflating monthly `Expense` or `Income`; optional transfer `feeIdr` deducts from the source pocket and rolls into monthly `Expense` under `Bank & Admin` (`fees`).
+  - `SAVINGS FLOW` tracks exact monthly net change across `savings`-role pockets (transfers/income in minus withdrawals/expenses/fees out).
 - **Local Dev Env (`.env`, gitignored)**:
   - `VITE_SHIZUKU_URL=http://localhost:3000`
   - `VITE_SHIZUKU_API_URL=http://localhost:3000`

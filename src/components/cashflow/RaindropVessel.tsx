@@ -152,6 +152,17 @@ export const RaindropVessel: React.FC<RaindropVesselProps> = ({
         });
       }
       waveEnergyRef.current = Math.min(2.5, waveEnergyRef.current + 1.25);
+    } else if (burstEvent.type === "transfer") {
+      for (let i = 0; i < 4; i++) {
+        ripplesRef.current.push({
+          x: width * (0.2 + i * 0.2),
+          rx: 5,
+          maxRx: 44 + Math.random() * 18,
+          color: "#745bc7",
+          alpha: 0.75,
+        });
+      }
+      waveEnergyRef.current = Math.min(2.0, waveEnergyRef.current + 0.75);
     } else {
       for (let i = 0; i < 14; i++) {
         const sx = width * (0.18 + Math.random() * 0.64);

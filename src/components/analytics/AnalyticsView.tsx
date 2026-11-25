@@ -48,11 +48,16 @@ export const AnalyticsView: React.FC = () => {
 
   const seriesData = useMemo(
     () =>
-      computeTimeRangeSeries(store.transactions, selectedMonth, range).map((item) => ({
+      computeTimeRangeSeries(
+        store.transactions,
+        selectedMonth,
+        range,
+        store.accounts
+      ).map((item) => ({
         ...item,
         label: formatMonthLabel(item.month, locale, true),
       })),
-    [store.transactions, selectedMonth, range, locale]
+    [store.transactions, store.accounts, selectedMonth, range, locale]
   );
 
   const rangeMonths = useMemo(
@@ -78,13 +83,18 @@ export const AnalyticsView: React.FC = () => {
   );
 
   const currentSummary = useMemo(
-    () => computeMonthlySummary(store.transactions, selectedMonth),
-    [store.transactions, selectedMonth]
+    () => computeMonthlySummary(store.transactions, selectedMonth, store.accounts),
+    [store.transactions, store.accounts, selectedMonth]
   );
 
   const prevSummary = useMemo(
-    () => computeMonthlySummary(store.transactions, shiftMonthKey(selectedMonth, -1)),
-    [store.transactions, selectedMonth]
+    () =>
+      computeMonthlySummary(
+        store.transactions,
+        shiftMonthKey(selectedMonth, -1),
+        store.accounts
+      ),
+    [store.transactions, store.accounts, selectedMonth]
   );
 
   const rangeTag = useMemo(() => {
@@ -451,12 +461,14 @@ export const AnalyticsView: React.FC = () => {
                   <CartesianGrid strokeDasharray="2 4" stroke="rgba(116,91,199,0.2)" vertical={false} />
                   <XAxis
                     dataKey="label"
+                    interval="preserveStartEnd"
+                    minTickGap={22}
                     tick={{ fill: "#5d5370", fontSize: 10, fontFamily: "JetBrains Mono, monospace" }}
                     axisLine={{ stroke: "rgba(116,91,199,0.35)" }}
                     tickLine={false}
                   />
                   <YAxis
-                    width={68}
+                    width={76}
                     tick={{ fill: "#5d5370", fontSize: 10, fontFamily: "JetBrains Mono, monospace" }}
                     axisLine={false}
                     tickLine={false}

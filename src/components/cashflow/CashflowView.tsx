@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ArrowLeftRight,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -26,6 +27,7 @@ import {
 } from "../../utils/format";
 import { MoneyDisplay } from "../common/MoneyDisplay";
 import { SandboxBanner } from "../common/SandboxBanner";
+import { PocketsStrip } from "./PocketsStrip";
 import { RaindropVessel, type VesselMood } from "./RaindropVessel";
 import { VnDialogueBox } from "./VnDialogueBox";
 
@@ -84,10 +86,23 @@ export const CashflowView: React.FC = () => {
 
   const [typeFilter, setTypeFilter] = useState<FilterType>("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [accountFilter, setAccountFilter] = useState("all");
   const [isCatMenuOpen, setCatMenuOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [dialogueIdx, setDialogueIdx] = useState(0);
   const catMenuRef = useRef<HTMLDivElement | null>(null);
+
+  const accountMap = useMemo(
+    () => new Map(store.accounts.map((acc) => [acc.id, acc])),
+    [store.accounts]
+  );
+
+  // Clear stale account filter if the selected account was deleted
+  useEffect(() => {
+    if (accountFilter !== "all" && !accountMap.has(accountFilter)) {
+      setAccountFilter("all");
+    }
+  }, [accountFilter, accountMap]);
 
   useEffect(() => {
     if (!isCatMenuOpen) return;
@@ -113,13 +128,18 @@ export const CashflowView: React.FC = () => {
   );
 
   const monthSummary = useMemo(
-    () => computeMonthlySummary(store.transactions, selectedMonth),
-    [store.transactions, selectedMonth]
+    () => computeMonthlySummary(store.transactions, selectedMonth, store.accounts),
+    [store.transactions, selectedMonth, store.accounts]
   );
 
   const prevSummary = useMemo(
-    () => computeMonthlySummary(store.transactions, shiftMonthKey(selectedMonth, -1)),
-    [store.transactions, selectedMonth]
+    () =>
+      computeMonthlySummary(
+        store.transactions,
+        shiftMonthKey(selectedMonth, -1),
+        store.accounts
+      ),
+    [store.transactions, selectedMonth, store.accounts]
   );
 
   const topExpenseCat = useMemo(
@@ -127,26 +147,41 @@ export const CashflowView: React.FC = () => {
     [store.transactions, selectedMonth]
   );
 
-  const cumulativeBalance = useMemo(
-    () => computeCumulativeNetBalance(store.transactions),
-    [store.transactions]
+  const totalLiveBalance = useMemo(
+    () => computeCumulativeNetBalance(store.transactions, store.accounts),
+    [store.transactions, store.accounts]
   );
 
   const activeMonthCategories = useMemo(() => {
     const counts = new Map<string, number>();
     for (const tx of monthTransactions) {
       if (typeFilter !== "all" && tx.type !== typeFilter) continue;
+      if (
+        accountFilter !== "all" &&
+        tx.accountId !== accountFilter &&
+        tx.toAccountId !== accountFilter
+      ) {
+        continue;
+      }
       counts.set(tx.categoryId, (counts.get(tx.categoryId) ?? 0) + 1);
     }
     return Array.from(counts.entries()).map(([id, count]) => ({ id, count }));
-  }, [monthTransactions, typeFilter]);
+  }, [monthTransactions, typeFilter, accountFilter]);
 
   const totalTypeFilteredCount = useMemo(
     () =>
-      monthTransactions.filter((tx) =>
-        typeFilter === "all" ? true : tx.type === typeFilter
-      ).length,
-    [monthTransactions, typeFilter]
+      monthTransactions.filter((tx) => {
+        if (typeFilter !== "all" && tx.type !== typeFilter) return false;
+        if (
+          accountFilter !== "all" &&
+          tx.accountId !== accountFilter &&
+          tx.toAccountId !== accountFilter
+        ) {
+          return false;
+        }
+        return true;
+      }).length,
+    [monthTransactions, typeFilter, accountFilter]
   );
 
   const getFilterCategoryLabel = (catId: string) => {
@@ -162,19 +197,48 @@ export const CashflowView: React.FC = () => {
     return monthTransactions
       .filter((tx) => {
         if (typeFilter !== "all" && tx.type !== typeFilter) return false;
-        if (categoryFilter !== "all" && tx.categoryId !== categoryFilter) return false;
+        if (categoryFilter !== "all" && tx.categoryId !== categoryFilter) {
+          return false;
+        }
+        if (
+          accountFilter !== "all" &&
+          tx.accountId !== accountFilter &&
+          tx.toAccountId !== accountFilter
+        ) {
+          return false;
+        }
         if (!q) return true;
         const catLabel = getCategoryLabel(tx.categoryId, locale).toLowerCase();
+        const fromName = tx.accountId
+          ? (accountMap.get(tx.accountId)?.name ?? "").toLowerCase()
+          : "";
+        const toName = tx.toAccountId
+          ? (accountMap.get(tx.toAccountId)?.name ?? "").toLowerCase()
+          : "";
         return (
           tx.note.toLowerCase().includes(q) ||
           (tx.merchant ?? "").toLowerCase().includes(q) ||
-          catLabel.includes(q)
+          catLabel.includes(q) ||
+          fromName.includes(q) ||
+          toName.includes(q)
         );
       })
       .sort((a, b) =>
-        a.date < b.date ? 1 : a.date > b.date ? -1 : b.createdAt.localeCompare(a.createdAt)
+        a.date < b.date
+          ? 1
+          : a.date > b.date
+            ? -1
+            : b.createdAt.localeCompare(a.createdAt)
       );
-  }, [monthTransactions, typeFilter, categoryFilter, query, locale]);
+  }, [
+    monthTransactions,
+    typeFilter,
+    categoryFilter,
+    accountFilter,
+    query,
+    locale,
+    accountMap,
+  ]);
 
   const spentRatio =
     monthSummary.incomeIdr > 0
@@ -187,9 +251,10 @@ export const CashflowView: React.FC = () => {
     monthSummary.incomeIdr > 0 ? Math.max(0, 100 - spentRatio) : 0;
 
   const isDeficit = monthSummary.netCashflowIdr < 0;
-  const hasData = monthSummary.txCount > 0;
+  const hasFlowData =
+    monthSummary.incomeIdr > 0 || monthSummary.expenseIdr > 0;
 
-  const mood: VesselMood = !hasData
+  const mood: VesselMood = !hasFlowData
     ? "quiet"
     : isDeficit || savedRatio < 15
       ? "drained"
@@ -200,32 +265,78 @@ export const CashflowView: React.FC = () => {
   const mask = (amount: number) =>
     store.settings.privacyMode ? "Rp •••••••" : formatIdr(amount);
 
-  // Dynamic Visual Novel chronicle lines (reacts to transactions & monthly health)
+  const savingsPocketNames = useMemo(() => {
+    const names = store.accounts
+      .filter((a) => a.role === "savings")
+      .map((a) => a.name);
+    return names.join(", ");
+  }, [store.accounts]);
+
+  // Dynamic Visual Novel chronicle lines (reacts to transactions, transfers & savings flow)
   const dialogueLines = useMemo(() => {
     const monthLabel = formatMonthLabel(selectedMonth, locale);
     const lines: string[] = [];
 
     if (lastTxEvent) {
       if (lastTxEvent.type === "income") {
+        const target = lastTxEvent.accountId
+          ? accountMap.get(lastTxEvent.accountId)?.name
+          : undefined;
         lines.push(
           locale === "id"
-            ? `Pemasukan baru dicatat: +${mask(lastTxEvent.amountIdr)} (${lastTxEvent.note}). Sisa bulan ini bertambah.`
-            : `Income recorded: +${mask(lastTxEvent.amountIdr)} (${lastTxEvent.note}). Monthly savings level rose.`
+            ? `Pemasukan baru dicatat: +${mask(lastTxEvent.amountIdr)}${target ? ` ke ${target}` : ""} (${lastTxEvent.note}).`
+            : `Income recorded: +${mask(lastTxEvent.amountIdr)}${target ? ` into ${target}` : ""} (${lastTxEvent.note}).`
         );
+      } else if (lastTxEvent.type === "transfer") {
+        const fromAcc = lastTxEvent.accountId
+          ? accountMap.get(lastTxEvent.accountId)
+          : undefined;
+        const toAcc = lastTxEvent.toAccountId
+          ? accountMap.get(lastTxEvent.toAccountId)
+          : undefined;
+        const feeNote =
+          lastTxEvent.feeIdr && lastTxEvent.feeIdr > 0
+            ? locale === "id"
+              ? ` (admin ${mask(lastTxEvent.feeIdr)} masuk pengeluaran)`
+              : ` (${mask(lastTxEvent.feeIdr)} fee counted in expense)`
+            : "";
+
+        if (toAcc?.role === "savings" && fromAcc?.role !== "savings") {
+          lines.push(
+            locale === "id"
+              ? `Transfer ${mask(lastTxEvent.amountIdr)} dari ${fromAcc?.name ?? "asal"} ke tabungan ${toAcc.name}${feeNote}. Arus kas bersih tetap utuh.`
+              : `Moved ${mask(lastTxEvent.amountIdr)} from ${fromAcc?.name ?? "source"} into ${toAcc.name} savings${feeNote}. Net cashflow stays intact.`
+          );
+        } else if (fromAcc?.role === "savings" && toAcc?.role !== "savings") {
+          lines.push(
+            locale === "id"
+              ? `Penarikan ${mask(lastTxEvent.amountIdr)} dari tabungan ${fromAcc.name} ke ${toAcc?.name ?? "tujuan"}${feeNote}.`
+              : `Withdrew ${mask(lastTxEvent.amountIdr)} from ${fromAcc.name} savings to ${toAcc?.name ?? "target"}${feeNote}.`
+          );
+        } else {
+          lines.push(
+            locale === "id"
+              ? `Transfer ${mask(lastTxEvent.amountIdr)} dari ${fromAcc?.name ?? "asal"} ke ${toAcc?.name ?? "tujuan"}${feeNote}.`
+              : `Transferred ${mask(lastTxEvent.amountIdr)} from ${fromAcc?.name ?? "source"} to ${toAcc?.name ?? "target"}${feeNote}.`
+          );
+        }
       } else {
+        const src = lastTxEvent.accountId
+          ? accountMap.get(lastTxEvent.accountId)
+          : undefined;
         lines.push(
           locale === "id"
-            ? `Pengeluaran dicatat: -${mask(lastTxEvent.amountIdr)} untuk "${lastTxEvent.note}".`
-            : `Expense recorded: -${mask(lastTxEvent.amountIdr)} for "${lastTxEvent.note}".`
+            ? `Pengeluaran dicatat: -${mask(lastTxEvent.amountIdr)}${src ? ` dari ${src.name}` : ""} untuk "${lastTxEvent.note}".`
+            : `Expense recorded: -${mask(lastTxEvent.amountIdr)}${src ? ` from ${src.name}` : ""} for "${lastTxEvent.note}".`
         );
       }
     }
 
-    if (!hasData) {
+    if (!hasFlowData) {
       lines.push(
         locale === "id"
-          ? `Belum ada transaksi di ${monthLabel}. Klik "+ Catat Pemasukan" atau "- Catat Pengeluaran" untuk mulai.`
-          : `No entries in ${monthLabel} yet. Click "+ Add Income" or "- Add Expense" to start tracking.`
+          ? `Belum ada pemasukan/pengeluaran di ${monthLabel}. Klik "+ Catat Pemasukan", "- Catat Pengeluaran", atau "⇄ Transfer" untuk mulai.`
+          : `No income or expense in ${monthLabel} yet. Click "+ Add Income", "- Add Expense", or "⇄ Transfer" to start.`
       );
     } else if (isDeficit) {
       lines.push(
@@ -241,6 +352,32 @@ export const CashflowView: React.FC = () => {
       );
     }
 
+    if (
+      monthSummary.hasSavingsPockets &&
+      (monthSummary.savingsInflowIdr > 0 || monthSummary.savingsOutflowIdr > 0)
+    ) {
+      const tag = savingsPocketNames || (locale === "id" ? "Tabungan" : "Savings");
+      if (monthSummary.savingsNetFlowIdr > 0 && monthSummary.savingsOutflowIdr === 0) {
+        lines.push(
+          locale === "id"
+            ? `Tabungan (${tag}) bertambah bersih +${mask(monthSummary.savingsNetFlowIdr)} bulan ini tanpa tersentuh.`
+            : `Secured +${mask(monthSummary.savingsNetFlowIdr)} into Savings (${tag}) this month — untouched.`
+        );
+      } else if (monthSummary.savingsNetFlowIdr > 0) {
+        lines.push(
+          locale === "id"
+            ? `Arus bersih tabungan (${tag}) bulan ini +${mask(monthSummary.savingsNetFlowIdr)} (dengan penarikan/keluar ${mask(monthSummary.savingsOutflowIdr)}).`
+            : `Net +${mask(monthSummary.savingsNetFlowIdr)} added to Savings (${tag}) this month (${mask(monthSummary.savingsOutflowIdr)} drawn).`
+        );
+      } else if (monthSummary.savingsNetFlowIdr < 0) {
+        lines.push(
+          locale === "id"
+            ? `Bulan ini ada penarikan bersih ${mask(Math.abs(monthSummary.savingsNetFlowIdr))} dari kantong tabungan (${tag}).`
+            : `Net ${mask(Math.abs(monthSummary.savingsNetFlowIdr))} was drawn from Savings (${tag}) this month.`
+        );
+      }
+    }
+
     if (topExpenseCat) {
       const catName = getCategoryLabel(topExpenseCat.categoryId, locale);
       lines.push(
@@ -250,7 +387,10 @@ export const CashflowView: React.FC = () => {
       );
     }
 
-    const expDelta = computePercentDelta(monthSummary.expenseIdr, prevSummary.expenseIdr);
+    const expDelta = computePercentDelta(
+      monthSummary.expenseIdr,
+      prevSummary.expenseIdr
+    );
     if (expDelta !== null) {
       const prevLabel = formatMonthLabel(shiftMonthKey(selectedMonth, -1), locale);
       lines.push(
@@ -265,12 +405,14 @@ export const CashflowView: React.FC = () => {
     selectedMonth,
     locale,
     lastTxEvent,
-    hasData,
+    hasFlowData,
     isDeficit,
     monthSummary,
     prevSummary,
     savedRatio,
     topExpenseCat,
+    savingsPocketNames,
+    accountMap,
     store.settings.privacyMode,
   ]);
 
@@ -286,8 +428,14 @@ export const CashflowView: React.FC = () => {
     setCategoryFilter("all");
   };
 
+  const selectedAccountObj =
+    accountFilter !== "all" ? accountMap.get(accountFilter) : undefined;
+
   const hasActiveFilter =
-    typeFilter !== "all" || categoryFilter !== "all" || query.trim() !== "";
+    typeFilter !== "all" ||
+    categoryFilter !== "all" ||
+    accountFilter !== "all" ||
+    query.trim() !== "";
 
   return (
     <div className="space-y-6">
@@ -304,7 +452,7 @@ export const CashflowView: React.FC = () => {
             incomeIdr={monthSummary.incomeIdr}
             netCashflowIdr={monthSummary.netCashflowIdr}
             privacyMode={store.settings.privacyMode}
-            hasData={hasData}
+            hasData={hasFlowData}
             isDeficit={isDeficit}
             mood={mood}
             locale={locale}
@@ -350,7 +498,7 @@ export const CashflowView: React.FC = () => {
           </div>
 
           <div className="flex flex-1 flex-col justify-between gap-4 p-4 sm:p-5">
-            {/* Net Balance + Cumulative Header */}
+            {/* Net Cashflow (Monthly) + Live Total Balance (All Pockets) */}
             <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[#745bc7]/20 pb-3.5">
               <div>
                 <p className="font-mono text-[10px] tracking-[0.18em] text-[#5d5370] uppercase">
@@ -372,7 +520,7 @@ export const CashflowView: React.FC = () => {
                   {t.cashflow.totalSaved}
                 </p>
                 <MoneyDisplay
-                  amountIdr={cumulativeBalance}
+                  amountIdr={totalLiveBalance}
                   className="mt-0.5 text-sm font-bold text-[#745bc7]"
                 />
               </div>
@@ -405,8 +553,14 @@ export const CashflowView: React.FC = () => {
               </div>
             </div>
 
-            {/* Inline Interactive IN / OUT Stat Strip */}
-            <div className="grid grid-cols-2 border border-[#745bc7]/30 bg-white/60">
+            {/* Inline Interactive Stat Strip: INCOME | EXPENSE (+ SAVINGS FLOW when savings pocket exists) */}
+            <div
+              className={`grid border border-[#745bc7]/30 bg-white/60 ${
+                monthSummary.hasSavingsPockets
+                  ? "grid-cols-2 sm:grid-cols-3"
+                  : "grid-cols-2"
+              }`}
+            >
               <button
                 type="button"
                 onClick={() =>
@@ -418,7 +572,7 @@ export const CashflowView: React.FC = () => {
                     : "hover:bg-[#e5dcfb]/45"
                 }`}
               >
-                <span className="flex items-center justify-between font-mono text-[9px] tracking-[0.16em] text-[#5d5370] uppercase">
+                <span className="flex items-center justify-between font-mono text-[9px] tracking-[0.14em] text-[#5d5370] uppercase">
                   <span>{t.cashflow.income}</span>
                   {typeFilter === "income" && (
                     <span className="text-[#2276a8]">▶</span>
@@ -426,22 +580,28 @@ export const CashflowView: React.FC = () => {
                 </span>
                 <MoneyDisplay
                   amountIdr={monthSummary.incomeIdr}
-                  className="mt-0.5 text-sm font-bold text-[#2276a8] sm:text-base"
+                  className="mt-0.5 text-sm font-bold text-[#2276a8] sm:text-[15px]"
                 />
               </button>
 
               <button
                 type="button"
                 onClick={() =>
-                  handleSetTypeFilter(typeFilter === "expense" ? "all" : "expense")
+                  handleSetTypeFilter(
+                    typeFilter === "expense" ? "all" : "expense"
+                  )
                 }
                 className={`px-3 py-2 text-left transition ${
+                  monthSummary.hasSavingsPockets
+                    ? "sm:border-r sm:border-[#745bc7]/30"
+                    : ""
+                } ${
                   typeFilter === "expense"
                     ? "bg-[#d749d5]/12"
                     : "hover:bg-[#e5dcfb]/45"
                 }`}
               >
-                <span className="flex items-center justify-between font-mono text-[9px] tracking-[0.16em] text-[#5d5370] uppercase">
+                <span className="flex items-center justify-between font-mono text-[9px] tracking-[0.14em] text-[#5d5370] uppercase">
                   <span>{t.cashflow.expense}</span>
                   {typeFilter === "expense" && (
                     <span className="text-[#c837a5]">▶</span>
@@ -449,28 +609,73 @@ export const CashflowView: React.FC = () => {
                 </span>
                 <MoneyDisplay
                   amountIdr={monthSummary.expenseIdr}
-                  className="mt-0.5 text-sm font-bold text-[#c837a5] sm:text-base"
+                  className="mt-0.5 text-sm font-bold text-[#c837a5] sm:text-[15px]"
                 />
               </button>
+
+              {monthSummary.hasSavingsPockets && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleSetTypeFilter(
+                      typeFilter === "transfer" ? "all" : "transfer"
+                    )
+                  }
+                  title={
+                    locale === "id"
+                      ? `Arus bersih ke/dari kantong tabungan (${savingsPocketNames})`
+                      : `Net monthly flow into/out of savings pockets (${savingsPocketNames})`
+                  }
+                  className={`col-span-2 border-t border-[#745bc7]/30 px-3 py-2 text-left transition sm:col-span-1 sm:border-t-0 ${
+                    typeFilter === "transfer"
+                      ? "bg-[#745bc7]/12"
+                      : "hover:bg-[#e5dcfb]/45"
+                  }`}
+                >
+                  <span className="flex items-center justify-between font-mono text-[9px] tracking-[0.14em] text-[#5d5370] uppercase">
+                    <span className="truncate">{t.cashflow.savingsFlow}</span>
+                    {typeFilter === "transfer" && (
+                      <span className="text-[#745bc7]">▶</span>
+                    )}
+                  </span>
+                  <MoneyDisplay
+                    amountIdr={monthSummary.savingsNetFlowIdr}
+                    showSign
+                    className={`mt-0.5 text-sm font-bold sm:text-[15px] ${
+                      monthSummary.savingsNetFlowIdr < 0
+                        ? "text-[#c837a5]"
+                        : "text-[#745bc7]"
+                    }`}
+                  />
+                </button>
+              )}
             </div>
 
-            {/* 2 Clear Primary Action Buttons (Zero Clutter) */}
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {/* 3 Clear Primary Action Buttons (INCOME · EXPENSE · TRANSFER) */}
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               <button
                 type="button"
                 onClick={() => openNewTxModal("income")}
-                className="inline-flex items-center justify-center gap-1.5 border-[1.5px] border-[#2276a8] bg-white px-4 py-2.5 font-mono text-[11px] font-bold tracking-[0.12em] text-[#2276a8] uppercase shadow-[2px_2px_0_0_rgba(34,118,168,0.22)] transition hover:-translate-x-0.5 hover:-translate-y-0.5 hover:bg-[#2276a8] hover:text-white"
+                className="inline-flex items-center justify-center gap-1 border-[1.5px] border-[#2276a8] bg-white px-3 py-2.5 font-mono text-[10.5px] font-bold tracking-[0.1em] text-[#2276a8] uppercase shadow-[2px_2px_0_0_rgba(34,118,168,0.22)] transition hover:-translate-x-0.5 hover:-translate-y-0.5 hover:bg-[#2276a8] hover:text-white"
               >
                 <span>+</span>
-                <span>{t.actions.addIncome}</span>
+                <span className="truncate">{t.actions.addIncome}</span>
               </button>
               <button
                 type="button"
                 onClick={() => openNewTxModal("expense")}
-                className="vn-btn-band px-4 py-2.5"
+                className="vn-btn-band px-3 py-2.5 text-[10.5px] tracking-[0.1em]"
               >
                 <span>-</span>
-                <span>{t.actions.addExpense}</span>
+                <span className="truncate">{t.actions.addExpense}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => openNewTxModal("transfer")}
+                className="col-span-2 inline-flex items-center justify-center gap-1.5 border-[1.5px] border-[#745bc7] bg-white px-3 py-2.5 font-mono text-[10.5px] font-bold tracking-[0.1em] text-[#745bc7] uppercase shadow-[2px_2px_0_0_rgba(116,91,199,0.2)] transition hover:-translate-x-0.5 hover:-translate-y-0.5 hover:bg-[#745bc7] hover:text-white sm:col-span-1"
+              >
+                <ArrowLeftRight className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">{t.actions.transfer}</span>
               </button>
             </div>
           </div>
@@ -478,7 +683,15 @@ export const CashflowView: React.FC = () => {
       </section>
 
       {/* =====================================================================
-          2. VISUAL NOVEL DIALOGUE BOX (Silent Typewriter Chronicle)
+          2. REALTIME POCKETS STRIP (Wondr / GoPay / BCA / Custom Pockets)
+         ===================================================================== */}
+      <PocketsStrip
+        selectedAccountId={accountFilter}
+        onSelectAccount={setAccountFilter}
+      />
+
+      {/* =====================================================================
+          3. VISUAL NOVEL DIALOGUE BOX (Silent Typewriter Chronicle)
          ===================================================================== */}
       <VnDialogueBox
         lines={dialogueLines}
@@ -489,7 +702,7 @@ export const CashflowView: React.FC = () => {
       />
 
       {/* =====================================================================
-          3. CLEAN COMPACT SHIZUKU LEDGER (Consistent Palette, Zero Zebra Clutter)
+          4. CLEAN COMPACT SHIZUKU LEDGER
          ===================================================================== */}
       <section className="vn-frame">
         {/* Consistent SHIZUKU Watercolor Band Header Strip */}
@@ -502,43 +715,64 @@ export const CashflowView: React.FC = () => {
           </span>
         </div>
 
-        {/* Single-Row Unified Toolbar (Tabs + Custom RPG Category Menu + Search) */}
-        <div className="flex flex-col gap-2.5 border-b border-[#745bc7]/20 bg-[#fdf9ff] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-          {/* Compact Sharp Type Tabs */}
-          <div className="inline-flex w-fit border border-[#745bc7]/55 bg-white">
-            {(["all", "income", "expense"] as const).map((tab, idx) => {
-              const active = typeFilter === tab;
-              const label =
-                tab === "all"
-                  ? t.cashflow.all
-                  : tab === "income"
-                    ? t.cashflow.income
-                    : t.cashflow.expense;
-              return (
-                <button
-                  key={tab}
-                  type="button"
-                  onClick={() => {
-                    handleSetTypeFilter(tab);
-                    setCatMenuOpen(false);
-                  }}
-                  className={`px-3 py-1 font-mono text-[10px] font-semibold tracking-[0.12em] uppercase transition ${
-                    idx > 0 ? "border-l border-[#745bc7]/40" : ""
-                  } ${
-                    active
-                      ? "bg-[#745bc7] text-white"
-                      : "text-[#5d5370] hover:bg-[#f4effd] hover:text-[#14100e]"
-                  }`}
-                >
-                  {label}
-                </button>
-              );
-            })}
+        {/* Unified Toolbar (4 Type Tabs + Active Pocket Chip + Category Menu + Search) */}
+        <div className="flex flex-col gap-2.5 border-b border-[#745bc7]/20 bg-[#fdf9ff] px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-5">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Compact Sharp Type Tabs */}
+            <div className="inline-flex w-fit max-w-full overflow-x-auto border border-[#745bc7]/55 bg-white">
+              {(["all", "income", "expense", "transfer"] as const).map(
+                (tab, idx) => {
+                  const active = typeFilter === tab;
+                  const label =
+                    tab === "all"
+                      ? t.cashflow.all
+                      : tab === "income"
+                        ? t.cashflow.income
+                        : tab === "expense"
+                          ? t.cashflow.expense
+                          : t.cashflow.transfer;
+                  return (
+                    <button
+                      key={tab}
+                      type="button"
+                      onClick={() => {
+                        handleSetTypeFilter(tab);
+                        setCatMenuOpen(false);
+                      }}
+                      className={`shrink-0 px-2.5 py-1 font-mono text-[9.5px] font-semibold tracking-[0.1em] uppercase transition sm:px-3 sm:text-[10px] sm:tracking-[0.12em] ${
+                        idx > 0 ? "border-l border-[#745bc7]/40" : ""
+                      } ${
+                        active
+                          ? "bg-[#745bc7] text-white"
+                          : "text-[#5d5370] hover:bg-[#f4effd] hover:text-[#14100e]"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                }
+              )}
+            </div>
+
+            {selectedAccountObj && (
+              <button
+                type="button"
+                onClick={() => setAccountFilter("all")}
+                className="inline-flex items-center gap-1.5 border border-[#745bc7] bg-[#f4effe] px-2.5 py-1 font-mono text-[10px] font-bold tracking-[0.08em] text-[#745bc7] uppercase transition hover:bg-[#745bc7] hover:text-white"
+              >
+                <span
+                  className="h-1.5 w-1.5 shrink-0"
+                  style={{ backgroundColor: selectedAccountObj.color }}
+                />
+                <span>{selectedAccountObj.name}</span>
+                <X className="h-3 w-3" />
+              </button>
+            )}
           </div>
 
           {/* Custom SHIZUKU RPG Category Dropdown + Search */}
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            {activeMonthCategories.length > 0 && (
+            {activeMonthCategories.length > 0 && typeFilter !== "transfer" && (
               <div ref={catMenuRef} className="relative">
                 <button
                   type="button"
@@ -546,7 +780,7 @@ export const CashflowView: React.FC = () => {
                   aria-expanded={isCatMenuOpen}
                   aria-label={t.txModal.category}
                   onClick={() => setCatMenuOpen((o) => !o)}
-                  className={`flex w-full items-center justify-between gap-2.5 border bg-white px-3 py-1.5 font-mono text-[11px] transition sm:min-w-[168px] ${
+                  className={`flex w-full items-center justify-between gap-2.5 border bg-white px-3 py-1.5 font-mono text-[11px] transition sm:min-w-[164px] ${
                     isCatMenuOpen || categoryFilter !== "all"
                       ? "border-[#745bc7] text-[#14100e]"
                       : "border-[#745bc7]/40 text-[#14100e] hover:border-[#745bc7]"
@@ -580,7 +814,9 @@ export const CashflowView: React.FC = () => {
                     className="animate-modal-in absolute right-0 left-0 z-30 mt-1.5 border-[1.5px] border-[#745bc7] bg-[#fdf9ff] shadow-[4px_4px_0_0_rgba(116,91,199,0.22)] sm:left-auto sm:w-[224px]"
                   >
                     <div className="border-b border-[#745bc7]/20 bg-[#f3ecfd] px-3 py-1.5 font-mono text-[9px] font-semibold tracking-[0.18em] text-[#745bc7] uppercase">
-                      {locale === "id" ? "PILIH KATEGORI // 雫" : "CATEGORY // 雫"}
+                      {locale === "id"
+                        ? "PILIH KATEGORI // 雫"
+                        : "CATEGORY // 雫"}
                     </div>
 
                     <ul className="max-h-[260px] divide-y divide-[#745bc7]/10 overflow-y-auto py-0.5">
@@ -602,13 +838,17 @@ export const CashflowView: React.FC = () => {
                           <span className="flex min-w-0 items-center gap-2">
                             <span
                               className={`w-2.5 shrink-0 text-[9px] text-[#745bc7] ${
-                                categoryFilter === "all" ? "opacity-100" : "opacity-0"
+                                categoryFilter === "all"
+                                  ? "opacity-100"
+                                  : "opacity-0"
                               }`}
                             >
                               ▶
                             </span>
                             <span className="h-1.5 w-1.5 shrink-0 bg-[#745bc7]" />
-                            <span className="truncate">{t.cashflow.allCategories}</span>
+                            <span className="truncate">
+                              {t.cashflow.allCategories}
+                            </span>
                           </span>
                           <span className="shrink-0 text-[10px] text-[#5d5370]">
                             {totalTypeFilteredCount}
@@ -645,7 +885,9 @@ export const CashflowView: React.FC = () => {
                                 </span>
                                 <span
                                   className="h-1.5 w-1.5 shrink-0"
-                                  style={{ backgroundColor: cat?.color ?? "#745bc7" }}
+                                  style={{
+                                    backgroundColor: cat?.color ?? "#745bc7",
+                                  }}
                                 />
                                 <span className="truncate">
                                   {getFilterCategoryLabel(catId)}
@@ -664,7 +906,7 @@ export const CashflowView: React.FC = () => {
               </div>
             )}
 
-            <div className="flex items-center gap-2 border border-[#745bc7]/40 bg-white px-2.5 py-1.5 transition focus-within:border-[#745bc7] sm:w-56">
+            <div className="flex items-center gap-2 border border-[#745bc7]/40 bg-white px-2.5 py-1.5 transition focus-within:border-[#745bc7] sm:w-52">
               <Search className="h-3.5 w-3.5 shrink-0 text-[#745bc7]" />
               <input
                 type="text"
@@ -703,6 +945,7 @@ export const CashflowView: React.FC = () => {
                   onClick={() => {
                     setTypeFilter("all");
                     setCategoryFilter("all");
+                    setAccountFilter("all");
                     setQuery("");
                   }}
                   className="vn-btn-action px-4 py-2"
@@ -749,14 +992,25 @@ export const CashflowView: React.FC = () => {
               {filteredTransactions.map((tx) => {
                 const cat = CATEGORY_MAP[tx.categoryId];
                 const isIncome = tx.type === "income";
-                const hoverBar = isIncome ? "#2276a8" : "#745bc7";
+                const isTransfer = tx.type === "transfer";
+                const hoverBar = isIncome
+                  ? "#2276a8"
+                  : isTransfer
+                    ? "#745bc7"
+                    : "#c837a5";
+                const fromAcc = tx.accountId
+                  ? accountMap.get(tx.accountId)
+                  : undefined;
+                const toAcc = tx.toAccountId
+                  ? accountMap.get(tx.toAccountId)
+                  : undefined;
 
                 return (
                   <li
                     key={tx.id}
                     className="group relative flex items-center justify-between gap-3 px-4 py-3 transition hover:bg-[#f7f3fe] sm:gap-4 sm:px-5"
                   >
-                    {/* Crisp Left Hover Accent (Zero Layout Shift) */}
+                    {/* Crisp Left Hover Accent */}
                     <span
                       className="absolute top-0 bottom-0 left-0 w-[3px] opacity-0 transition group-hover:opacity-100"
                       style={{ backgroundColor: hoverBar }}
@@ -782,21 +1036,42 @@ export const CashflowView: React.FC = () => {
                           <span className="sm:hidden">
                             {formatShortDate(tx.date, locale)} ·{" "}
                           </span>
-                          {getCategoryLabel(tx.categoryId, locale)}
-                          {tx.merchant ? ` · ${tx.merchant}` : ""}
+                          {isTransfer ? (
+                            <>
+                              {fromAcc?.name ?? "—"} → {toAcc?.name ?? "—"}
+                              {tx.feeIdr && tx.feeIdr > 0
+                                ? ` · +${mask(tx.feeIdr)} ${locale === "id" ? "admin" : "fee"}`
+                                : ""}
+                            </>
+                          ) : (
+                            <>
+                              {getCategoryLabel(tx.categoryId, locale)}
+                              {fromAcc ? ` · ${fromAcc.name}` : ""}
+                              {tx.merchant ? ` · ${tx.merchant}` : ""}
+                            </>
+                          )}
                         </span>
                       </div>
                     </div>
 
                     {/* Crisp Right Amount + Quiet Actions */}
                     <div className="flex shrink-0 items-center gap-2 sm:gap-4">
-                      <MoneyDisplay
-                        amountIdr={isIncome ? tx.amountIdr : -tx.amountIdr}
-                        showSign
-                        className={`text-[13.5px] font-bold sm:text-sm ${
-                          isIncome ? "text-[#2276a8]" : "text-[#14100e]"
-                        }`}
-                      />
+                      {isTransfer ? (
+                        <span className="inline-flex items-center gap-1 text-[13.5px] font-bold text-[#745bc7] sm:text-sm">
+                          <span className="font-mono text-[11px] opacity-80">
+                            ⇄
+                          </span>
+                          <MoneyDisplay amountIdr={tx.amountIdr} />
+                        </span>
+                      ) : (
+                        <MoneyDisplay
+                          amountIdr={isIncome ? tx.amountIdr : -tx.amountIdr}
+                          showSign
+                          className={`text-[13.5px] font-bold sm:text-sm ${
+                            isIncome ? "text-[#2276a8]" : "text-[#14100e]"
+                          }`}
+                        />
+                      )}
 
                       <div className="flex items-center gap-0.5 sm:w-[82px] sm:justify-end sm:opacity-45 sm:transition sm:group-hover:opacity-100">
                         <button

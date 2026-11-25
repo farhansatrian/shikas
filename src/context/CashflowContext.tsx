@@ -11,6 +11,7 @@ import type {
   CashflowStoreData,
   Locale,
   NavTab,
+  PocketAccount,
   ShizukuUser,
   Transaction,
   TransactionType,
@@ -18,6 +19,7 @@ import type {
 import { SHIZUKU_ECOSYSTEM } from "../config/ecosystem";
 import { normalizeCategoryId } from "../data/categories";
 import { createDemoSeedData, createFreshEmptyData } from "../data/seedData";
+import { sanitizeAccounts } from "../services/exportService";
 import { getMonthKey } from "../utils/format";
 import { TRANSLATIONS, type TranslationDict } from "../i18n/translations";
 import {
@@ -57,11 +59,26 @@ function loadLocalModeStore(): CashflowStoreData {
     }
     const defaults = createFreshEmptyData().settings;
     return {
-      version: 4,
-      transactions: parsed.transactions.map((tx) => ({
-        ...tx,
-        categoryId: normalizeCategoryId(tx.categoryId, tx.type),
-      })),
+      version: 5,
+      accounts: sanitizeAccounts(parsed.accounts),
+      transactions: parsed.transactions
+        .filter(
+          (tx) =>
+            tx &&
+            (tx.type === "income" ||
+              tx.type === "expense" ||
+              tx.type === "transfer")
+        )
+        .map((tx) => ({
+          ...tx,
+          categoryId: normalizeCategoryId(tx.categoryId, tx.type),
+          accountId: tx.accountId || undefined,
+          toAccountId: tx.toAccountId || undefined,
+          feeIdr:
+            tx.type === "transfer" && tx.feeIdr && tx.feeIdr > 0
+              ? Math.round(tx.feeIdr)
+              : undefined,
+        })),
       settings: {
         ...defaults,
         ...(parsed.settings ?? {}),
@@ -87,6 +104,9 @@ export interface TxBurstEvent {
   type: TransactionType;
   amountIdr: number;
   note: string;
+  accountId?: string;
+  toAccountId?: string;
+  feeIdr?: number;
   action: "created" | "updated" | "duplicated";
 }
 
@@ -118,6 +138,16 @@ interface CashflowContextValue {
     importSandbox: boolean
   ) => Promise<void>;
   signOut: () => Promise<void>;
+  // Pockets & Opening Balances Modal
+  isPocketsModalOpen: boolean;
+  openPocketsModal: () => void;
+  closePocketsModal: () => void;
+  saveAccount: (
+    payload: Omit<PocketAccount, "id">,
+    existingId?: string
+  ) => void;
+  deleteAccount: (id: string) => void;
+  setDefaultAccount: (id: string) => void;
   // Transaction Modal
   isTxModalOpen: boolean;
   editingTx: Transaction | null;
@@ -160,6 +190,7 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
   const [isAuthModalOpen, setAuthModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<AuthModalMode>("signin");
   const [isAccountPanelOpen, setAccountPanelOpen] = useState(false);
+  const [isPocketsModalOpen, setPocketsModalOpen] = useState(false);
 
   const [isTxModalOpen, setTxModalOpen] = useState(false);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
@@ -169,7 +200,10 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const notify = useCallback((message: string, tone: ToastNotice["tone"] = "iris") => {
     const id = generateId("toast");
-    setToasts((prev) => [...prev.slice(-2), { id, message, tone }]);
+    setToasts((prev) => {
+      if (prev.some((item) => item.message === message)) return prev;
+      return [...prev.slice(-2), { id, message, tone }];
+    });
     window.setTimeout(() => {
       setToasts((prev) => prev.filter((item) => item.id !== id));
     }, 3200);
@@ -325,6 +359,7 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
       const base = createFreshEmptyData();
       const nextStore: CashflowStoreData = {
         ...base,
+        accounts: importSandbox ? store.accounts : [],
         transactions: importSandbox ? store.transactions : [],
         settings: {
           ...store.settings,
@@ -344,7 +379,7 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
         "success"
       );
     },
-    [notify, store.settings, store.transactions]
+    [notify, store.accounts, store.settings, store.transactions]
   );
 
   const signOut = useCallback(async () => {
@@ -364,11 +399,120 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
     );
   }, [notify, store.settings.locale]);
 
-  const openNewTxModal = useCallback((type: TransactionType = "expense") => {
-    setEditingTx(null);
-    setDefaultTxType(type);
-    setTxModalOpen(true);
+  const openPocketsModal = useCallback(() => {
+    setPocketsModalOpen(true);
   }, []);
+
+  const closePocketsModal = useCallback(() => {
+    setPocketsModalOpen(false);
+  }, []);
+
+  const saveAccount = useCallback(
+    (payload: Omit<PocketAccount, "id">, existingId?: string) => {
+      setStore((prev) => {
+        const cleanOpening = Math.max(
+          0,
+          Math.round(Number(payload.openingBalanceIdr) || 0)
+        );
+        const wantDefault = Boolean(payload.isDefault) || prev.accounts.length === 0;
+
+        let nextAccounts: PocketAccount[];
+        if (existingId) {
+          nextAccounts = prev.accounts.map((acc) => {
+            if (acc.id === existingId) {
+              return {
+                ...acc,
+                ...payload,
+                name: payload.name.trim(),
+                openingBalanceIdr: cleanOpening,
+                isDefault: wantDefault,
+              };
+            }
+            return wantDefault ? { ...acc, isDefault: false } : acc;
+          });
+        } else {
+          const created: PocketAccount = {
+            ...payload,
+            id: generateId("acc"),
+            name: payload.name.trim(),
+            openingBalanceIdr: cleanOpening,
+            isDefault: wantDefault,
+          };
+          nextAccounts = [
+            ...(wantDefault
+              ? prev.accounts.map((acc) => ({ ...acc, isDefault: false }))
+              : prev.accounts),
+            created,
+          ];
+        }
+
+        // Ensure at least one account stays marked default when accounts exist
+        if (nextAccounts.length > 0 && !nextAccounts.some((a) => a.isDefault)) {
+          nextAccounts = nextAccounts.map((a, idx) => ({
+            ...a,
+            isDefault: idx === 0,
+          }));
+        }
+
+        return { ...prev, accounts: nextAccounts };
+      });
+      notify(
+        store.settings.locale === "id"
+          ? existingId
+            ? "Kantong dana diperbarui."
+            : "Kantong dana ditambahkan."
+          : existingId
+            ? "Pocket updated."
+            : "Pocket added.",
+        "success"
+      );
+    },
+    [notify, store.settings.locale]
+  );
+
+  const deleteAccount = useCallback(
+    (id: string) => {
+      setStore((prev) => {
+        let nextAccounts = prev.accounts.filter((acc) => acc.id !== id);
+        if (nextAccounts.length > 0 && !nextAccounts.some((a) => a.isDefault)) {
+          nextAccounts = nextAccounts.map((a, idx) => ({
+            ...a,
+            isDefault: idx === 0,
+          }));
+        }
+        return { ...prev, accounts: nextAccounts };
+      });
+      notify(
+        store.settings.locale === "id" ? "Kantong dihapus." : "Pocket deleted.",
+        "iris"
+      );
+    },
+    [notify, store.settings.locale]
+  );
+
+  const setDefaultAccount = useCallback((id: string) => {
+    setStore((prev) => ({
+      ...prev,
+      accounts: prev.accounts.map((acc) => ({
+        ...acc,
+        isDefault: acc.id === id,
+      })),
+    }));
+  }, []);
+
+  const openNewTxModal = useCallback(
+    (type: TransactionType = "expense") => {
+      if (type === "transfer" && store.accounts.length < 2) {
+        notify(TRANSLATIONS[store.settings.locale].pockets.needTwoError, "iris");
+        setPocketsModalOpen(true);
+        return;
+      }
+      setEditingTx(null);
+      setDefaultTxType(type);
+      setTxModalOpen(true);
+    },
+    [notify, store.accounts.length, store.settings.locale]
+  );
 
   const openEditTxModal = useCallback((tx: Transaction) => {
     setEditingTx(tx);
@@ -407,6 +551,9 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
         type: payload.type,
         amountIdr: payload.amountIdr,
         note: payload.note,
+        accountId: payload.accountId,
+        toAccountId: payload.toAccountId,
+        feeIdr: payload.feeIdr,
         action: existingId ? "updated" : "created",
       });
       notify(
@@ -453,6 +600,9 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
         type: tx.type,
         amountIdr: tx.amountIdr,
         note: tx.note,
+        accountId: tx.accountId,
+        toAccountId: tx.toAccountId,
+        feeIdr: tx.feeIdr,
         action: "duplicated",
       });
       notify(
@@ -518,6 +668,8 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
     (data: CashflowStoreData) => {
       const normalized: CashflowStoreData = {
         ...data,
+        version: 5,
+        accounts: sanitizeAccounts(data.accounts),
         transactions: data.transactions.map((tx) => ({
           ...tx,
           categoryId: normalizeCategoryId(tx.categoryId, tx.type),
@@ -550,6 +702,12 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
       signIn,
       register,
       signOut,
+      isPocketsModalOpen,
+      openPocketsModal,
+      closePocketsModal,
+      saveAccount,
+      deleteAccount,
+      setDefaultAccount,
       isTxModalOpen,
       editingTx,
       defaultTxType,
@@ -585,6 +743,12 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
       signIn,
       register,
       signOut,
+      isPocketsModalOpen,
+      openPocketsModal,
+      closePocketsModal,
+      saveAccount,
+      deleteAccount,
+      setDefaultAccount,
       isTxModalOpen,
       editingTx,
       defaultTxType,

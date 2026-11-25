@@ -311,7 +311,13 @@ export const AccountPanel: React.FC = () => {
               <div className="grid grid-cols-3 gap-2">
                 <button
                   type="button"
-                  onClick={() => exportTransactionsToCsv(store.transactions, locale)}
+                  onClick={() =>
+                    exportTransactionsToCsv(
+                      store.transactions,
+                      locale,
+                      store.accounts
+                    )
+                  }
                   className="vn-btn-band py-2 text-[10px]"
                 >
                   <FileSpreadsheet className="h-3.5 w-3.5" />

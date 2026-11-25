@@ -1,5 +1,6 @@
 import { SHIZUKU_ECOSYSTEM, isCloudSyncConfigured } from "../config/ecosystem";
 import { normalizeCategoryId } from "../data/categories";
+import { sanitizeAccounts } from "./exportService";
 import type { CashflowStoreData, ShizukuUser } from "../types/cashflow";
 
 const LOCAL_ACCOUNTS_KEY = "shizuku_local_accounts_v1";
@@ -352,6 +353,41 @@ export async function signOutShizukuId(): Promise<void> {
   localStorage.removeItem(LOCAL_SESSION_KEY);
 }
 
+function normalizeStorePayload(
+  parsed: Partial<CashflowStoreData>
+): CashflowStoreData | null {
+  if (!Array.isArray(parsed.transactions)) return null;
+  return {
+    version: 5,
+    accounts: sanitizeAccounts(parsed.accounts),
+    transactions: parsed.transactions
+      .filter(
+        (tx) =>
+          tx &&
+          (tx.type === "income" ||
+            tx.type === "expense" ||
+            tx.type === "transfer")
+      )
+      .map((tx) => ({
+        ...tx,
+        categoryId: normalizeCategoryId(tx.categoryId, tx.type),
+        accountId: tx.accountId || undefined,
+        toAccountId: tx.toAccountId || undefined,
+        feeIdr:
+          tx.type === "transfer" && tx.feeIdr && tx.feeIdr > 0
+            ? Math.round(tx.feeIdr)
+            : undefined,
+      })),
+    settings: {
+      locale: parsed.settings?.locale === "id" ? "id" : "en",
+      privacyMode: parsed.settings?.privacyMode ?? false,
+      rainEnabled: parsed.settings?.rainEnabled ?? true,
+      shizukuWebsiteUrl:
+        parsed.settings?.shizukuWebsiteUrl || SHIZUKU_ECOSYSTEM.hubUrl,
+    },
+  };
+}
+
 export async function loadUserLedger(
   user: ShizukuUser
 ): Promise<CashflowStoreData | null> {
@@ -364,21 +400,7 @@ export async function loadUserLedger(
       });
       if (!res.ok) return null;
       const parsed = (await res.json()) as Partial<CashflowStoreData>;
-      if (!Array.isArray(parsed.transactions)) return null;
-      return {
-        version: 4,
-        transactions: parsed.transactions.map((tx) => ({
-          ...tx,
-          categoryId: normalizeCategoryId(tx.categoryId, tx.type),
-        })),
-        settings: {
-          locale: parsed.settings?.locale ?? "en",
-          privacyMode: parsed.settings?.privacyMode ?? false,
-          rainEnabled: parsed.settings?.rainEnabled ?? true,
-          shizukuWebsiteUrl:
-            parsed.settings?.shizukuWebsiteUrl || SHIZUKU_ECOSYSTEM.hubUrl,
-        },
-      };
+      return normalizeStorePayload(parsed);
     } catch {
       return null;
     }
@@ -388,21 +410,7 @@ export async function loadUserLedger(
     const raw = localStorage.getItem(`${USER_LEDGER_PREFIX}${user.id}`);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<CashflowStoreData>;
-    if (!Array.isArray(parsed.transactions)) return null;
-    return {
-      version: 4,
-      transactions: parsed.transactions.map((tx) => ({
-        ...tx,
-        categoryId: normalizeCategoryId(tx.categoryId, tx.type),
-      })),
-      settings: {
-        locale: parsed.settings?.locale ?? "en",
-        privacyMode: parsed.settings?.privacyMode ?? false,
-        rainEnabled: parsed.settings?.rainEnabled ?? true,
-        shizukuWebsiteUrl:
-          parsed.settings?.shizukuWebsiteUrl || SHIZUKU_ECOSYSTEM.hubUrl,
-      },
-    };
+    return normalizeStorePayload(parsed);
   } catch {
     return null;
   }

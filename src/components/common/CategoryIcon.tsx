@@ -1,11 +1,13 @@
 import React from "react";
 import {
+  ArrowLeftRight,
   BookOpen,
   Briefcase,
   Cloud,
   Gift,
   HeartPulse,
   Home,
+  Landmark,
   Laptop,
   Music,
   PlusCircle,
@@ -22,6 +24,10 @@ export const CategoryIcon: React.FC<{
   className?: string;
 }> = ({ name, className = "h-4 w-4" }) => {
   switch (name) {
+    case "ArrowLeftRight":
+      return <ArrowLeftRight className={className} />;
+    case "Landmark":
+      return <Landmark className={className} />;
     case "Briefcase":
       return <Briefcase className={className} />;
     case "Laptop":

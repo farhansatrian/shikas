@@ -1,4 +1,4 @@
-import type { Transaction } from "../types/cashflow";
+import type { PocketAccount, Transaction } from "../types/cashflow";
 import { shiftMonthKey } from "./format";
 
 export type AnalyticsRange = "3m" | "6m" | "12m" | "all";
@@ -6,10 +6,29 @@ export type AnalyticsRange = "3m" | "6m" | "12m" | "all";
 export interface MonthlySummary {
   month: string;
   incomeIdr: number;
-  expenseIdr: number;
+  expenseIdr: number; // Regular expenses + transfer admin fees
+  transferFeeIdr: number;
+  transferVolumeIdr: number;
   netCashflowIdr: number;
   savingsRate: number;
+  savingsInflowIdr: number;
+  savingsOutflowIdr: number;
+  savingsNetFlowIdr: number; // Exact monthly net delta of SAVINGS pockets
+  hasSavingsPockets: boolean;
   txCount: number;
+}
+
+export interface AccountBalanceSnapshot {
+  account: PocketAccount;
+  balanceIdr: number;
+}
+
+export interface AccountsOverview {
+  items: AccountBalanceSnapshot[];
+  dailyTotalIdr: number;
+  savingsTotalIdr: number;
+  unassignedDeltaIdr: number;
+  totalBalanceIdr: number;
 }
 
 export interface CategorySpendItem {
@@ -27,43 +46,167 @@ export interface MonthlySeriesPoint {
   cumulativeBalanceIdr: number;
 }
 
+export function computeAccountBalances(
+  accounts: PocketAccount[],
+  transactions: Transaction[],
+  upToDateIso?: string
+): AccountsOverview {
+  const balances = new Map<string, number>();
+  for (const acc of accounts) {
+    balances.set(acc.id, Math.max(0, Math.round(acc.openingBalanceIdr || 0)));
+  }
+
+  let unassignedDeltaIdr = 0;
+
+  for (const tx of transactions) {
+    if (upToDateIso && tx.date > upToDateIso) continue;
+    const amt = Math.max(0, Math.round(tx.amountIdr || 0));
+    const fee = Math.max(0, Math.round(tx.feeIdr || 0));
+
+    if (tx.type === "income") {
+      if (tx.accountId && balances.has(tx.accountId)) {
+        balances.set(tx.accountId, (balances.get(tx.accountId) ?? 0) + amt);
+      } else {
+        unassignedDeltaIdr += amt;
+      }
+    } else if (tx.type === "expense") {
+      if (tx.accountId && balances.has(tx.accountId)) {
+        balances.set(tx.accountId, (balances.get(tx.accountId) ?? 0) - amt);
+      } else {
+        unassignedDeltaIdr -= amt;
+      }
+    } else if (tx.type === "transfer") {
+      if (tx.accountId && balances.has(tx.accountId)) {
+        balances.set(
+          tx.accountId,
+          (balances.get(tx.accountId) ?? 0) - (amt + fee)
+        );
+      } else {
+        unassignedDeltaIdr -= amt + fee;
+      }
+
+      if (tx.toAccountId && balances.has(tx.toAccountId)) {
+        balances.set(tx.toAccountId, (balances.get(tx.toAccountId) ?? 0) + amt);
+      } else {
+        unassignedDeltaIdr += amt;
+      }
+    }
+  }
+
+  const items: AccountBalanceSnapshot[] = accounts.map((account) => ({
+    account,
+    balanceIdr: balances.get(account.id) ?? 0,
+  }));
+
+  let dailyTotalIdr = 0;
+  let savingsTotalIdr = 0;
+  for (const item of items) {
+    if (item.account.role === "savings") savingsTotalIdr += item.balanceIdr;
+    else dailyTotalIdr += item.balanceIdr;
+  }
+
+  return {
+    items,
+    dailyTotalIdr,
+    savingsTotalIdr,
+    unassignedDeltaIdr,
+    totalBalanceIdr: dailyTotalIdr + savingsTotalIdr + unassignedDeltaIdr,
+  };
+}
+
 export function computeCumulativeNetBalance(
   transactions: Transaction[],
+  accounts: PocketAccount[] = [],
   upToDateIso?: string
 ): number {
   let total = 0;
+  for (const acc of accounts) {
+    total += Math.max(0, Math.round(acc.openingBalanceIdr || 0));
+  }
   for (const tx of transactions) {
     if (upToDateIso && tx.date > upToDateIso) continue;
-    if (tx.type === "income") total += tx.amountIdr;
-    else total -= tx.amountIdr;
+    if (tx.type === "income") {
+      total += tx.amountIdr;
+    } else if (tx.type === "expense") {
+      total -= tx.amountIdr;
+    } else if (tx.type === "transfer") {
+      total -= Math.max(0, Math.round(tx.feeIdr || 0));
+    }
   }
   return total;
 }
 
 export function computeMonthlySummary(
   transactions: Transaction[],
-  monthKey: string
+  monthKey: string,
+  accounts: PocketAccount[] = []
 ): MonthlySummary {
+  const savingsIds = new Set(
+    accounts.filter((a) => a.role === "savings").map((a) => a.id)
+  );
+  const hasSavingsPockets = savingsIds.size > 0;
+
   let incomeIdr = 0;
   let expenseIdr = 0;
+  let transferFeeIdr = 0;
+  let transferVolumeIdr = 0;
+  let savingsInflowIdr = 0;
+  let savingsOutflowIdr = 0;
   let txCount = 0;
 
   for (const tx of transactions) {
     if (!tx.date.startsWith(monthKey)) continue;
     txCount += 1;
-    if (tx.type === "income") incomeIdr += tx.amountIdr;
-    else expenseIdr += tx.amountIdr;
+    const fee = Math.max(0, Math.round(tx.feeIdr || 0));
+
+    if (tx.type === "income") {
+      incomeIdr += tx.amountIdr;
+      if (tx.accountId && savingsIds.has(tx.accountId)) {
+        savingsInflowIdr += tx.amountIdr;
+      }
+    } else if (tx.type === "expense") {
+      expenseIdr += tx.amountIdr;
+      if (tx.accountId && savingsIds.has(tx.accountId)) {
+        savingsOutflowIdr += tx.amountIdr;
+      }
+    } else if (tx.type === "transfer") {
+      transferVolumeIdr += tx.amountIdr;
+      if (fee > 0) {
+        transferFeeIdr += fee;
+        expenseIdr += fee;
+      }
+
+      const fromSavings = Boolean(tx.accountId && savingsIds.has(tx.accountId));
+      const toSavings = Boolean(
+        tx.toAccountId && savingsIds.has(tx.toAccountId)
+      );
+
+      if (toSavings && !fromSavings) {
+        savingsInflowIdr += tx.amountIdr;
+      } else if (fromSavings && !toSavings) {
+        savingsOutflowIdr += tx.amountIdr + fee;
+      } else if (fromSavings && toSavings && fee > 0) {
+        savingsOutflowIdr += fee;
+      }
+    }
   }
 
   const netCashflowIdr = incomeIdr - expenseIdr;
   const savingsRate = incomeIdr > 0 ? (netCashflowIdr / incomeIdr) * 100 : 0;
+  const savingsNetFlowIdr = savingsInflowIdr - savingsOutflowIdr;
 
   return {
     month: monthKey,
     incomeIdr,
     expenseIdr,
+    transferFeeIdr,
+    transferVolumeIdr,
     netCashflowIdr,
     savingsRate,
+    savingsInflowIdr,
+    savingsOutflowIdr,
+    savingsNetFlowIdr,
+    hasSavingsPockets,
     txCount,
   };
 }
@@ -86,15 +229,27 @@ export function computeCategoryBreakdownForMonths(
   let total = 0;
 
   for (const tx of transactions) {
-    if (tx.type !== type) continue;
     const txMonth = tx.date.slice(0, 7);
     if (allowed && !allowed.has(txMonth)) continue;
-    const prev = bucket.get(tx.categoryId) ?? { amountIdr: 0, count: 0 };
-    bucket.set(tx.categoryId, {
-      amountIdr: prev.amountIdr + tx.amountIdr,
-      count: prev.count + 1,
-    });
-    total += tx.amountIdr;
+
+    if (tx.type === type) {
+      const prev = bucket.get(tx.categoryId) ?? { amountIdr: 0, count: 0 };
+      bucket.set(tx.categoryId, {
+        amountIdr: prev.amountIdr + tx.amountIdr,
+        count: prev.count + 1,
+      });
+      total += tx.amountIdr;
+    } else if (type === "expense" && tx.type === "transfer") {
+      const fee = Math.max(0, Math.round(tx.feeIdr || 0));
+      if (fee > 0) {
+        const prev = bucket.get("fees") ?? { amountIdr: 0, count: 0 };
+        bucket.set("fees", {
+          amountIdr: prev.amountIdr + fee,
+          count: prev.count + 1,
+        });
+        total += fee;
+      }
+    }
   }
 
   return Array.from(bucket.entries())
@@ -109,13 +264,18 @@ export function computeCategoryBreakdownForMonths(
 
 function buildSeriesPoint(
   transactions: Transaction[],
+  accounts: PocketAccount[],
   mKey: string
 ): MonthlySeriesPoint {
-  const summary = computeMonthlySummary(transactions, mKey);
+  const summary = computeMonthlySummary(transactions, mKey, accounts);
   const [y, m] = mKey.split("-").map(Number);
   const lastDay = new Date(y, m, 0).getDate();
   const endDateIso = `${mKey}-${String(lastDay).padStart(2, "0")}`;
-  const cumulativeBalanceIdr = computeCumulativeNetBalance(transactions, endDateIso);
+  const cumulativeBalanceIdr = computeCumulativeNetBalance(
+    transactions,
+    accounts,
+    endDateIso
+  );
 
   return {
     month: mKey,
@@ -129,12 +289,13 @@ function buildSeriesPoint(
 export function computeMultiMonthSeries(
   transactions: Transaction[],
   anchorMonthKey: string,
-  monthsCount = 6
+  monthsCount = 6,
+  accounts: PocketAccount[] = []
 ): MonthlySeriesPoint[] {
   const result: MonthlySeriesPoint[] = [];
   for (let i = monthsCount - 1; i >= 0; i -= 1) {
     const mKey = shiftMonthKey(anchorMonthKey, -i);
-    result.push(buildSeriesPoint(transactions, mKey));
+    result.push(buildSeriesPoint(transactions, accounts, mKey));
   }
   return result;
 }
@@ -142,15 +303,22 @@ export function computeMultiMonthSeries(
 export function computeTimeRangeSeries(
   transactions: Transaction[],
   anchorMonthKey: string,
-  range: AnalyticsRange
+  range: AnalyticsRange,
+  accounts: PocketAccount[] = []
 ): MonthlySeriesPoint[] {
-  if (range === "3m") return computeMultiMonthSeries(transactions, anchorMonthKey, 3);
-  if (range === "6m") return computeMultiMonthSeries(transactions, anchorMonthKey, 6);
-  if (range === "12m") return computeMultiMonthSeries(transactions, anchorMonthKey, 12);
+  if (range === "3m") {
+    return computeMultiMonthSeries(transactions, anchorMonthKey, 3, accounts);
+  }
+  if (range === "6m") {
+    return computeMultiMonthSeries(transactions, anchorMonthKey, 6, accounts);
+  }
+  if (range === "12m") {
+    return computeMultiMonthSeries(transactions, anchorMonthKey, 12, accounts);
+  }
 
   // All Time: build contiguous month span from earliest to latest transaction month
   if (transactions.length === 0) {
-    return [buildSeriesPoint(transactions, anchorMonthKey)];
+    return [buildSeriesPoint(transactions, accounts, anchorMonthKey)];
   }
 
   let minMonth = transactions[0].date.slice(0, 7);
@@ -165,14 +333,17 @@ export function computeTimeRangeSeries(
   let cursor = minMonth;
   let guard = 0;
   while (cursor <= maxMonth && guard < 120) {
-    result.push(buildSeriesPoint(transactions, cursor));
+    result.push(buildSeriesPoint(transactions, accounts, cursor));
     cursor = shiftMonthKey(cursor, 1);
     guard += 1;
   }
   return result;
 }
 
-export function computePercentDelta(current: number, previous: number): number | null {
+export function computePercentDelta(
+  current: number,
+  previous: number
+): number | null {
   if (previous === 0) return current === 0 ? 0 : null;
   return ((current - previous) / Math.abs(previous)) * 100;
 }
