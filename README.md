@@ -1,126 +1,182 @@
-<div align="center">
-
 # shikas (雫) — Personal Cashflow
 
-**Minimalist gallery-inspired personal cashflow, multi-pocket & payday cycle tracker in IDR — companion web app in the SHIZUKU (雫) ecosystem.**
+> **Aplikasi Pencatat Arus Kas Pribadi, Manajemen Multi-Kantong Dana, & Analitik Siklus Gajian dalam Rupiah (IDR) yang Tenang, Akurat, dan Terhubung dengan `SHIZUKU ID`**
 
-[![Live App](https://img.shields.io/badge/Live_App-shikas.sitezet.com-2276a8?style=for-the-badge&logo=googlechrome&logoColor=white)](https://shikas.sitezet.com)
-[![SHIZUKU Hub](https://img.shields.io/badge/SHIZUKU_Hub-shizuku.sitezet.com-745bc7?style=for-the-badge&logo=sparkles&logoColor=white)](https://shizuku.sitezet.com)
-[![React 19](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=14100e)](#tech-stack)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](#tech-stack)
-[![Tailwind CSS v4](https://img.shields.io/badge/Tailwind_CSS-v4-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)](#tech-stack)
+[![Live Deployment](https://img.shields.io/badge/Production-shikas.sitezet.com-2276a8?style=flat-square&logo=googlechrome&logoColor=white)](https://shikas.sitezet.com)
+[![SHIZUKU Hub](https://img.shields.io/badge/SHIZUKU_Hub-shizuku.sitezet.com-745bc7?style=flat-square&logo=sparkles&logoColor=white)](https://shizuku.sitezet.com)
+[![React 19](https://img.shields.io/badge/React-19-61dafb?style=flat-square&logo=react)](https://react.dev/)
+[![TypeScript 5](https://img.shields.io/badge/TypeScript-5.8-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Vite 6](https://img.shields.io/badge/Vite-6-646cff?style=flat-square&logo=vite&logoColor=white)](https://vite.dev/)
+[![Tailwind CSS v4](https://img.shields.io/badge/Tailwind_CSS-v4-38bdf8?style=flat-square&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![Recharts](https://img.shields.io/badge/Charts-Recharts_(Lazy)-22b5bf?style=flat-square)](https://recharts.org/)
 
-</div>
+**shikas (雫)** adalah aplikasi web pencatatan keuangan pribadi (*personal cashflow tracker*) yang menjadi aplikasi pendamping utama dalam ekosistem **SHIZUKU (雫)**. Dirancang dengan estetika galeri minimalis yang menenangkan dan perhitungan kas riil yang akurat, **SHIKAS** memisahkan secara tegas antara **uang harian**, **tabungan**, **perpindahan saldo antar-kantong (*transfer*)**, dan **biaya admin bank**—sehingga saldo setiap kantong, total pengeluaran, serta rasio tabungan selalu presisi tanpa kesalahan hitung ganda (*anti double-counting*).
 
----
-
-## Live Ecosystem
-
-| App | Description | Live URL | Repository |
-| :--- | :--- | :--- | :--- |
-| **SHIKAS (雫)** | Personal Cashflow, Pockets & IDR Analytics SPA | **[shikas.sitezet.com](https://shikas.sitezet.com)** | [`farhansatrian/shikas`](https://github.com/farhansatrian/shikas) |
-| **SHIZUKU (雫)** | Personal Hub, Portfolio CMS & Central `SHIZUKU ID` Server | **[shizuku.sitezet.com](https://shizuku.sitezet.com)** | [`farhansatrian/shizuku-php`](https://github.com/farhansatrian/shizuku-php) |
+🔗 **Akses Production Live**: [https://shikas.sitezet.com](https://shikas.sitezet.com)  
+🔗 **Pusat Ekosistem & Akun (SHIZUKU Hub)**: [https://shizuku.sitezet.com](https://shizuku.sitezet.com)
 
 ---
 
-## Highlights & Features
+## 🌟 Fitur & Modul Utama
 
-### 3 Clean Modules + Interactive Account Drawer
-- **`HOME`** — Serene gallery-framed cover over the SHIZUKU watercolor backdrop with instant entry into your cashflow ledger.
-- **`CASHFLOW`** — Fast IDR (`Rp`) money tracking built for real daily habits:
-  - **Multi-Pocket Accounts (`DAILY` & `SAVINGS`)** — Manage separate wallets/banks (e.g., *GoPay*, *Wondr*, *BCA*, *Cash*) with custom opening balances, role badges, and default pocket selection.
-  - **Income, Expense & Inter-Pocket Transfers** — Record transfers between pockets with optional **admin fee (`feeIdr`)** tracking that automatically deducts from the source pocket and counts accurately in monthly expenses.
-  - **Custom Payday Cycle (`Day 1–28`)** — Set your own monthly cycle start date (e.g. `25 Nov – 24 Dec`) synced per account instead of being forced into calendar month boundaries.
-  - **Instant Filtering & Grouping** — Underline filters (`ALL · INCOME · EXPENSE · TRANSFER`), pocket filter, search, daily transaction grouping, net cashflow & savings-flow ratio bar.
-- **`ANALYTICS`** *(lazy-loaded)* — Lightweight interactive Recharts visualizations (6-cycle income vs. expense bar/line trend, expense category donut breakdown, cumulative net balance area) plus automated spending insights.
+1. **Beranda Galeri Minimalis (`HOME`)**
+   - Tampilan sampul bergaya galeri yang tenang di atas latar *watercolor* khas SHIZUKU dengan efek rintik hujan lembut (*Shizuku rain layer*).
+   - Akses langsung menuju buku kas aktif tanpa distraksi elemen berlebihan.
 
-### Seamless `SHIZUKU ID` Cloud Sync & Offline-First Mode
-- **Works Immediately as Guest (`LOCAL MODE`)** — Try everything privately in your browser (`localStorage`) with zero sign-up required.
-- **Single Sign-On with `SHIZUKU ID`** — Sign in with email/password or **Continue with Google** via [`shizuku.sitezet.com`](https://shizuku.sitezet.com) to privately sync pockets, transactions, and payday cycle settings across devices (`DB SYNCED`).
-- **Utilities & Privacy Controls** — Instant **Bilingual `EN | ID`** toggle, **Privacy Mask** (`Rp ••••••`) for public viewing, ambient Shizuku rain toggle, **Export CSV**, and **Backup / Restore JSON**.
-- **Mobile-First & Featherweight** — Tested down to `360px` / `390px` viewports; initial JS bundle is ~`105 KB` gzipped with `recharts` deferred until opening Analytics.
+2. **Manajemen Multi-Kantong Dana (`Pockets`: `DAILY` & `SAVINGS`)**
+   - Kelola berbagai sumber dana secara terpisah (misal: *GoPay*, *Wondr*, *BCA*, *Tunai*, *Rekening Tabungan*) melalui **Manage Pockets Modal**.
+   - Setiap kantong memiliki peran khusus (**`DAILY`** untuk operasional harian atau **`SAVINGS`** untuk tabungan), warna identitas, saldo awal (*opening balance*), serta pengaturan kantong default.
+   - Strip saldo kantong (*Pockets Strip*) menghitung posisi saldo aktual tiap rekening secara *real-time* dari saldo awal + seluruh histori mutasi.
+
+3. **Pencatatan Pemasukan, Pengeluaran & Transfer Antar-Kantong (`CASHFLOW`)**
+   - Pencatatan cepat dalam format Rupiah (**IDR / `Rp`**) dengan **kategori ringkas & terstruktur**:
+     - **Pemasukan (2 kategori)**: 💼 Gaji (*Salary*) · ➕ Lainnya (*Other*)
+     - **Pengeluaran (7 kategori)**: 🍽️ Makan & Minum · 🏠 Tagihan & Kost · 🚆 Transportasi · 🛍️ Belanja · 🎵 Hiburan · 🏦 Admin Bank · 🧾 Lainnya
+     - **Transfer (1 kategori khusus)**: ⇄ Pindah saldo antar-kantong secara internal.
+   - **Biaya Admin Transfer Akurat (`feeIdr`)**: Saat melakukan transfer (misal Rp 1.000.000 dari *Daily* ke *Savings* dengan biaya admin Rp 2.500), saldo sumber berkurang `Rp 1.002.500`, saldo tujuan bertambah `Rp 1.000.000`, dan **hanya biaya admin Rp 2.500** yang dihitung sebagai pengeluaran—mencegah *double-counting* nominal transfer.
+   - **Raindrop Vessel & Filter Cepat**: Indikator visual rasio *Saved vs Spent*, filter jenis transaksi (`ALL · INCOME · EXPENSE · TRANSFER`), filter per kantong, pencarian catatan/merchant, serta pengelompokan harian.
+
+4. **Siklus Gajian Kustom per Akun (`Custom Payday Cycle: Day 1–28`)**
+   - Bebas menentukan tanggal mulai siklus bulanan sesuai jadwal gajian masing-masing pengguna (default tanggal `1`, dapat diubah ke `1–28`, misalnya tanggal `25` → periode aktif `25 Nov – 24 Dec`).
+   - Pengaturan siklus tersinkron otomatis ke akun **SHIZUKU ID** dan diterapkan konsisten di seluruh ringkasan **Cashflow** maupun grafik **Analytics**.
+
+5. **Analitik Arus Kas Interaktif (`ANALYTICS` — *Lazy-Loaded*)**
+   - Modul grafik `recharts` dimuat secara *lazy* (tidak membebani waktu muat awal aplikasi).
+   - Mendukung **4 rentang waktu dinamis**: `3M`, `6M`, `12M`, dan `ALL TIME` mengikuti tanggal siklus gajian pengguna.
+   - Visualisasi lengkap: **Composed Bar + Line Chart** (perbandingan Pemasukan vs Pengeluaran & Net), **Donut Chart** proporsi pengeluaran per kategori, **Area Chart** tren saldo kumulatif, serta ringkasan *Savings Rate* dan delta persentase antar-periode.
+
+6. **Mode Lokal Instan & Sinkronisasi Cloud Privat (`SHIZUKU ID` + Google Sign-In)**
+   - **Offline-First (`LOCAL MODE`)**: Langsung dapat dicoba tanpa wajib membuat akun; seluruh data tersimpan aman di `localStorage` browser.
+   - **Cloud Sync Privat (`DB SYNCED`)**: Masuk dengan email/password atau **Continue with Google** melalui [shizuku.sitezet.com](https://shizuku.sitezet.com) untuk menyinkronkan kantong dana, transaksi, dan siklus gajian ke database SQLite terisolasi per akun (`PUT /api/shikas/store` *debounced*).
+
+7. **Kontrol Privasi, Bahasa & Kenyamanan Harian (`Account Panel`)**
+   - **Dwibahasa Instan (`EN | ID`)**: Mendukung Bahasa Inggris (*default*) dan Bahasa Indonesia secara menyeluruh.
+   - **Privacy Mask (`Rp ••••••`)**: Sembunyikan seluruh angka nominal dalam satu klik saat membuka aplikasi di tempat umum.
+   - **Ambient Rain Toggle**: Aktifkan atau nonaktifkan animasi rintik hujan sesuai selera.
+
+8. **Ekspor CSV & Cadangan JSON Tervalidasi (`Export & Backup/Restore v5`)**
+   - **Ekspor CSV (UTF-8 BOM)**: Mengunduh riwayat transaksi (`shikas-cashflow-YYYY-MM-DD.csv`) berisi 9 kolom lengkap (*Date, Type, Category, Pocket, To Pocket, Merchant, Note, Amount (IDR), Admin Fee (IDR)*) siap buka di Excel / Google Sheets.
+   - **Backup & Restore JSON v5**: Unduh cadangan utuh seluruh kantong, transaksi, dan pengaturan (`shikas-backup-YYYY-MM-DD.json`), lengkap dengan sanitasi tipe data dan migrasi otomatis untuk kategori *legacy* saat *restore*.
 
 ---
 
-## Ecosystem Sync Flow
+## 🏗️ Arsitektur & Teknologi
 
 ```mermaid
 sequenceDiagram
-    participant U as User (shikas.sitezet.com)
-    participant S as SHIKAS SPA (React + Vite)
+    participant U as Pengguna (shikas.sitezet.com)
+    participant S as SHIKAS SPA (React 19 + Vite)
     participant H as SHIZUKU Hub (shizuku.sitezet.com)
 
-    U->>S: Click "Continue with Google" or Sign In
-    S->>H: /api/ecosystem/google?redirect=https://shikas.sitezet.com/
-    H-->>S: Redirect with #shizuku_token=<jwt> (+ .sitezet.com cookie)
-    S->>H: GET /api/shikas/store (Bearer JWT)
-    H-->>S: Restore pockets, payday cycle & transactions (v5)
-    U->>S: Add Income / Expense / Transfer + Fee
-    S->>H: PUT /api/shikas/store (debounced private cloud sync)
+    U->>S: Klik "Continue with Google" atau Sign In
+    S->>H: GET /api/ecosystem/google?redirect=https://shikas.sitezet.com/
+    H-->>S: Redirect kembali dengan #shizuku_token=<jwt> (+ cookie .sitezet.com)
+    S->>H: GET /api/shikas/store (Authorization: Bearer <jwt>)
+    H-->>S: Muat kantong dana, siklus gajian & transaksi (v5)
+    U->>S: Catat Pemasukan / Pengeluaran / Transfer + Biaya Admin
+    S->>H: PUT /api/shikas/store (sinkronisasi cloud privat)
 ```
 
+| Komponen | Teknologi | Keterangan |
+| :--- | :--- | :--- |
+| **UI Library** | [React 19](https://react.dev/) | Arsitektur SPA ringan dengan React Context & lazy-loaded route view |
+| **Bahasa** | [TypeScript 5.8](https://www.typescriptlang.org/) | *Strict type checking* penuh pada model transaksi v5 & kalkulasi kas |
+| **Build Tool** | [Vite 6](https://vite.dev/) | *Code splitting* otomatis (`index ~105 KB` gzip, `charts` dimuat terpisah) |
+| **Styling** | [Tailwind CSS v4](https://tailwindcss.com/) | Estetika *minimalist pastel gallery*, responsif `360px` hingga desktop |
+| **Visualisasi** | [Recharts](https://recharts.org/) & [Lucide React](https://lucide.dev/) | Grafik arus kas responsif yang dimuat *on-demand* di tab Analytics |
+| **Backend Sync** | [`shizuku-php`](https://github.com/farhansatrian/shizuku-php) (`shizuku.sitezet.com`) | REST API v5 + SSO `SHIZUKU ID` (Cookie `.sitezet.com` & Bearer JWT) |
+
 ---
 
-## Tech Stack
+## 🖥️ Infrastruktur & Spesifikasi Deployment
 
-- **Frontend:** React 19, TypeScript 5, Vite 6, Tailwind CSS v4
-- **Charts & Icons:** Recharts *(code-split / lazy-loaded)*, Lucide React
-- **Currency & Localization:** Indonesian Rupiah (`IDR / Rp`) · Bilingual `EN` (default) & `ID`
-- **Backend Sync Target:** [`shizuku-php`](https://github.com/farhansatrian/shizuku-php) (`https://shizuku.sitezet.com`) via REST API v5
+Karena **SHIKAS** terkompilasi menjadi berkas statis murni (`dist/`), aplikasi ini berjalan super ringan tanpa membutuhkan runtime Node.js maupun PHP di server:
+
+- **Alamat Domain Publik**: [https://shikas.sitezet.com](https://shikas.sitezet.com)
+- **Backend API & SSO Target**: [https://shizuku.sitezet.com](https://shizuku.sitezet.com)
+- **Tipe Hosting**: Shared Hosting (cPanel / Apache Static SPA dengan `.htaccess` *fallback* ke `index.html`, kompresi gzip, & *immutable cache* aset hash)
+- **Ukuran Initial Load**: ~`105 KB` gzipped JS + `~9.8 KB` gzipped CSS (paket `charts` ~`121 KB` gzip baru diunduh saat pengguna membuka tab **Analytics**)
+- **Opsi Alternatif Docker (VPS)**: Tersedia juga `Dockerfile` (`nginx:1.27-alpine`, ~`15 MB RAM`, port `8080`, endpoint `/health`) serta `compose.prod.yaml` jika suatu saat ingin dideploy di VPS.
 
 ---
 
-## Quick Start (Local Development)
+## 🚀 Menjalankan Proyek di Lingkungan Lokal (Development)
 
+### Prasyarat
+- **Node.js** v20.x atau lebih baru
+- **npm** v10.x atau lebih baru
+- *(Opsional)* Instance lokal [`shizuku-php`](https://github.com/farhansatrian/shizuku-php) di `http://127.0.0.1:8088` jika ingin menguji sinkronisasi cloud & login secara lokal.
+
+### 1. Klon Repository & Instal Dependensi
 ```bash
 git clone https://github.com/farhansatrian/shikas.git
 cd shikas
 npm install
 ```
 
-Optionally connect to a local or live `SHIZUKU` backend by creating `.env`:
+### 2. Konfigurasi Environment Variable (Opsional)
+Salin konfigurasi contoh jika ingin menghubungkan ke backend **SHIZUKU** (kosongkan kedua variabel jika hanya ingin menjalankan *Local Mode*):
+```bash
+cp .env.example .env
+```
 
-```dotenv
-# Leave blank to run in standalone Local Mode
+Isi variabel pada `.env`:
+```env
+# Arahkan ke backend SHIZUKU lokal (http://127.0.0.1:8088) atau production
 VITE_SHIZUKU_URL="https://shizuku.sitezet.com"
 VITE_SHIZUKU_API_URL="https://shizuku.sitezet.com"
 ```
 
-Run dev server or production build:
+### 3. Jalankan Development Server
+```bash
+npm run dev
+```
+Akses aplikasi di browser melalui [http://localhost:5173](http://localhost:5173).
+
+### 4. Build Production untuk Shared Hosting (`shikas.sitezet.com`)
+```bash
+VITE_SHIZUKU_URL="https://shizuku.sitezet.com" \
+VITE_SHIZUKU_API_URL="https://shizuku.sitezet.com" \
+npm run build
+```
+Unggah seluruh isi folder `dist/` beserta `.htaccess` SPA *rewrite* ke *document root* `shikas.sitezet.com`.
+
+---
+
+## 🧪 Verifikasi & Quality Gates
+
+Standar pemeriksaan kualitas sebelum kompilasi dan rilis ke production:
 
 ```bash
-npm run dev        # Start Vite dev server (http://localhost:5173)
-npm run typecheck  # TypeScript check
-npm run build      # Build static production bundle into dist/
+# 1. Pengecekan Type Safety TypeScript (strict)
+npm run typecheck
+
+# 2. Kompilasi penuh TypeScript & bundle production Vite (verifikasi code-splitting)
+npm run build
 ```
 
----
-
-## Production Deployment
-
-Because **SHIKAS** compiles to a pure static SPA (`dist/`), it deploys effortlessly to **any shared hosting (cPanel/Apache)**, **Cloudflare Pages**, **Vercel**, or **Docker/Nginx**:
-
-### Shared Hosting (cPanel / Apache)
-1. Build pointing at your live SHIZUKU Hub:
-   ```bash
-   VITE_SHIZUKU_URL="https://shizuku.sitezet.com" \
-   VITE_SHIZUKU_API_URL="https://shizuku.sitezet.com" \
-   npm run build
-   ```
-2. Upload the contents of `dist/` to your subdomain root (e.g. `shikas.sitezet.com`) with an SPA `.htaccess`:
-   ```apache
-   RewriteEngine On
-   RewriteCond %{REQUEST_FILENAME} !-f
-   RewriteCond %{REQUEST_FILENAME} !-d
-   RewriteRule ^ index.html [L]
-   ```
-3. Make sure `https://shikas.sitezet.com` is listed in `ECOSYSTEM_ALLOWED_ORIGINS` on your SHIZUKU Hub.
-
-### Docker / Nginx (Optional)
-A minimal `nginx:1.27-alpine` `Dockerfile` (`~15 MB RAM`, port `8080`, `/health` check) and `compose.prod.yaml` are also included for VPS deployments.
+### Cakupan Verifikasi End-to-End (Teruji Live dengan `shizuku-php`):
+- **Integrasi Cross-Origin (`CORS` & `Bearer JWT`)**: Pengujian penuh preflight `OPTIONS`, registrasi akun baru, login, logout, dan pembacaan `#shizuku_token` Google OAuth.
+- **Akurasi Ledger v5**: Verifikasi perhitungan saldo lintas kantong `DAILY` & `SAVINGS`, transfer beserta biaya admin (`feeIdr`), serta pergantian rentang tanggal siklus gajian (`cycleStartDay = 25`).
+- **Persistensi & Isolasi Data**: Hard-reload maupun logout → login ulang memulihkan 100% data dari SQLite `shizuku-php` tanpa bocor ke akun lain.
+- **Responsif Mobile**: Verifikasi viewport `360px` dan `390px` dengan *zero horizontal overflow*.
 
 ---
 
-<div align="center">
-  Crafted by <a href="https://shizuku.sitezet.com">Farhan Satria Nugraha</a> · Companion App of the <strong>SHIZUKU (雫)</strong> Ecosystem
-</div>
+## 📦 Cadangan & Pemulihan Data Pengguna (Backup & Restore)
+
+Selain tersinkron otomatis ke cloud **SHIZUKU ID**, setiap pengguna dapat mencadangkan datanya kapan saja langsung dari menu **Account Panel**:
+
+- **Export CSV**: Menghasilkan `shikas-cashflow-YYYY-MM-DD.csv` (UTF-8 BOM) untuk arsip spreadsheet atau analisis eksternal.
+- **Export JSON Backup**: Menghasilkan `shikas-backup-YYYY-MM-DD.json` berisi seluruh daftar kantong, histori transaksi, dan preferensi v5.
+- **Import / Restore JSON**: Mengunggah kembali file backup JSON dengan validasi struktur otomatis (`parseBackupJson`) dan langsung menyinkronkan ke cloud jika akun sedang masuk.
+
+---
+
+## 📄 Lisensi & Ekosistem
+
+Proyek ini dikembangkan oleh **Farhan Satria Nugraha** sebagai bagian dari ekosistem web personal **SHIZUKU (雫)**:
+
+- **SHIKAS Cashflow (Live)**: [https://shikas.sitezet.com](https://shikas.sitezet.com) · [`farhansatrian/shikas`](https://github.com/farhansatrian/shikas)
+- **SHIZUKU Hub (Live)**: [https://shizuku.sitezet.com](https://shizuku.sitezet.com) · [`farhansatrian/shizuku-php`](https://github.com/farhansatrian/shizuku-php)
+- **KostKas / SHIKOST**: [`farhansatrian/kostkas`](https://github.com/farhansatrian/kostkas)
