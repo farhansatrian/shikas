@@ -178,6 +178,11 @@ export const TRANSLATIONS = {
       privacyDesc: "Hide IDR amounts when viewing in public.",
       rainLabel: "Shizuku Rain Layer",
       rainDesc: "Subtle falling raindrop lines.",
+      cycleStartLabel: "Monthly Cycle Start",
+      cycleStartDesc:
+        "Default: 1st of month. Set to your payday (e.g. 25) to track payday-to-payday.",
+      cycleStartCalendar: "Standard calendar month (1st – end of month)",
+      cycleStartActive: "Active cycle",
       shizukuUrlLabel: "SHIZUKU Website URL",
       shizukuUrlPlaceholder: "https://shizuku.yourdomain.dev",
       shizukuNotDeployedToast: "SHIZUKU Hub URL will connect automatically once deployed.",
@@ -368,6 +373,11 @@ export const TRANSLATIONS = {
       privacyDesc: "Sembunyikan angka IDR saat dibuka di tempat umum.",
       rainLabel: "Efek Hujan Shizuku",
       rainDesc: "Garis rintik hujan halus khas SHIZUKU.",
+      cycleStartLabel: "Tanggal Awal Siklus",
+      cycleStartDesc:
+        "Default: tanggal 1. Ubah ke tanggal gajian (mis. 25) untuk hitung dari gajian ke gajian.",
+      cycleStartCalendar: "Bulan kalender standar (tgl 1 – akhir bulan)",
+      cycleStartActive: "Siklus aktif",
       shizukuUrlLabel: "URL Website SHIZUKU",
       shizukuUrlPlaceholder: "https://shizuku.domainkamu.dev",
       shizukuNotDeployedToast: "URL SHIZUKU Hub akan terhubung otomatis setelah deploy.",

@@ -50,6 +50,7 @@ export interface AppSettings {
   locale: Locale;
   privacyMode: boolean;
   rainEnabled: boolean;
+  cycleStartDay: number; // 1..28 (1 = calendar month; e.g. 25 = 25th to 24th next month)
   shizukuWebsiteUrl: string;
 }
 

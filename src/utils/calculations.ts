@@ -1,5 +1,10 @@
 import type { PocketAccount, Transaction } from "../types/cashflow";
-import { shiftMonthKey } from "./format";
+import {
+  getCycleDateRange,
+  getCycleKeyForDate,
+  isDateInCycle,
+  shiftMonthKey,
+} from "./format";
 
 export type AnalyticsRange = "3m" | "6m" | "12m" | "all";
 
@@ -139,7 +144,8 @@ export function computeCumulativeNetBalance(
 export function computeMonthlySummary(
   transactions: Transaction[],
   monthKey: string,
-  accounts: PocketAccount[] = []
+  accounts: PocketAccount[] = [],
+  cycleStartDay = 1
 ): MonthlySummary {
   const savingsIds = new Set(
     accounts.filter((a) => a.role === "savings").map((a) => a.id)
@@ -155,7 +161,7 @@ export function computeMonthlySummary(
   let txCount = 0;
 
   for (const tx of transactions) {
-    if (!tx.date.startsWith(monthKey)) continue;
+    if (!isDateInCycle(tx.date, monthKey, cycleStartDay)) continue;
     txCount += 1;
     const fee = Math.max(0, Math.round(tx.feeIdr || 0));
 
@@ -214,23 +220,30 @@ export function computeMonthlySummary(
 export function computeCategoryBreakdown(
   transactions: Transaction[],
   monthKey: string,
-  type: "expense" | "income" = "expense"
+  type: "expense" | "income" = "expense",
+  cycleStartDay = 1
 ): CategorySpendItem[] {
-  return computeCategoryBreakdownForMonths(transactions, [monthKey], type);
+  return computeCategoryBreakdownForMonths(
+    transactions,
+    [monthKey],
+    type,
+    cycleStartDay
+  );
 }
 
 export function computeCategoryBreakdownForMonths(
   transactions: Transaction[],
   monthKeys: string[] | null,
-  type: "expense" | "income" = "expense"
+  type: "expense" | "income" = "expense",
+  cycleStartDay = 1
 ): CategorySpendItem[] {
   const allowed = monthKeys ? new Set(monthKeys) : null;
   const bucket = new Map<string, { amountIdr: number; count: number }>();
   let total = 0;
 
   for (const tx of transactions) {
-    const txMonth = tx.date.slice(0, 7);
-    if (allowed && !allowed.has(txMonth)) continue;
+    const txCycle = getCycleKeyForDate(tx.date, cycleStartDay);
+    if (allowed && !allowed.has(txCycle)) continue;
 
     if (tx.type === type) {
       const prev = bucket.get(tx.categoryId) ?? { amountIdr: 0, count: 0 };
@@ -265,16 +278,20 @@ export function computeCategoryBreakdownForMonths(
 function buildSeriesPoint(
   transactions: Transaction[],
   accounts: PocketAccount[],
-  mKey: string
+  mKey: string,
+  cycleStartDay = 1
 ): MonthlySeriesPoint {
-  const summary = computeMonthlySummary(transactions, mKey, accounts);
-  const [y, m] = mKey.split("-").map(Number);
-  const lastDay = new Date(y, m, 0).getDate();
-  const endDateIso = `${mKey}-${String(lastDay).padStart(2, "0")}`;
+  const summary = computeMonthlySummary(
+    transactions,
+    mKey,
+    accounts,
+    cycleStartDay
+  );
+  const { endDate } = getCycleDateRange(mKey, cycleStartDay);
   const cumulativeBalanceIdr = computeCumulativeNetBalance(
     transactions,
     accounts,
-    endDateIso
+    endDate
   );
 
   return {
@@ -290,12 +307,13 @@ export function computeMultiMonthSeries(
   transactions: Transaction[],
   anchorMonthKey: string,
   monthsCount = 6,
-  accounts: PocketAccount[] = []
+  accounts: PocketAccount[] = [],
+  cycleStartDay = 1
 ): MonthlySeriesPoint[] {
   const result: MonthlySeriesPoint[] = [];
   for (let i = monthsCount - 1; i >= 0; i -= 1) {
     const mKey = shiftMonthKey(anchorMonthKey, -i);
-    result.push(buildSeriesPoint(transactions, accounts, mKey));
+    result.push(buildSeriesPoint(transactions, accounts, mKey, cycleStartDay));
   }
   return result;
 }
@@ -304,36 +322,57 @@ export function computeTimeRangeSeries(
   transactions: Transaction[],
   anchorMonthKey: string,
   range: AnalyticsRange,
-  accounts: PocketAccount[] = []
+  accounts: PocketAccount[] = [],
+  cycleStartDay = 1
 ): MonthlySeriesPoint[] {
   if (range === "3m") {
-    return computeMultiMonthSeries(transactions, anchorMonthKey, 3, accounts);
+    return computeMultiMonthSeries(
+      transactions,
+      anchorMonthKey,
+      3,
+      accounts,
+      cycleStartDay
+    );
   }
   if (range === "6m") {
-    return computeMultiMonthSeries(transactions, anchorMonthKey, 6, accounts);
+    return computeMultiMonthSeries(
+      transactions,
+      anchorMonthKey,
+      6,
+      accounts,
+      cycleStartDay
+    );
   }
   if (range === "12m") {
-    return computeMultiMonthSeries(transactions, anchorMonthKey, 12, accounts);
+    return computeMultiMonthSeries(
+      transactions,
+      anchorMonthKey,
+      12,
+      accounts,
+      cycleStartDay
+    );
   }
 
-  // All Time: build contiguous month span from earliest to latest transaction month
+  // All Time: build contiguous cycle span from earliest to latest transaction cycle
   if (transactions.length === 0) {
-    return [buildSeriesPoint(transactions, accounts, anchorMonthKey)];
+    return [
+      buildSeriesPoint(transactions, accounts, anchorMonthKey, cycleStartDay),
+    ];
   }
 
-  let minMonth = transactions[0].date.slice(0, 7);
-  let maxMonth = minMonth;
+  let minCycle = getCycleKeyForDate(transactions[0].date, cycleStartDay);
+  let maxCycle = minCycle;
   for (const tx of transactions) {
-    const mk = tx.date.slice(0, 7);
-    if (mk < minMonth) minMonth = mk;
-    if (mk > maxMonth) maxMonth = mk;
+    const ck = getCycleKeyForDate(tx.date, cycleStartDay);
+    if (ck < minCycle) minCycle = ck;
+    if (ck > maxCycle) maxCycle = ck;
   }
 
   const result: MonthlySeriesPoint[] = [];
-  let cursor = minMonth;
+  let cursor = minCycle;
   let guard = 0;
-  while (cursor <= maxMonth && guard < 120) {
-    result.push(buildSeriesPoint(transactions, accounts, cursor));
+  while (cursor <= maxCycle && guard < 120) {
+    result.push(buildSeriesPoint(transactions, accounts, cursor, cycleStartDay));
     cursor = shiftMonthKey(cursor, 1);
     guard += 1;
   }

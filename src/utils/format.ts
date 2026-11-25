@@ -25,6 +25,12 @@ export function formatCompactIdr(amountIdr: number, locale: Locale): string {
   return `${sign}Rp ${Math.round(abs)}`;
 }
 
+export function clampCycleStartDay(day?: number): number {
+  const num = Number(day);
+  if (!Number.isFinite(num)) return 1;
+  return Math.min(28, Math.max(1, Math.round(num)));
+}
+
 export function getMonthKey(date: Date = new Date()): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
@@ -37,13 +43,114 @@ export function shiftMonthKey(monthKey: string, deltaMonths: number): string {
   return getMonthKey(date);
 }
 
-export function formatMonthLabel(monthKey: string, locale: Locale, short = false): string {
+/**
+ * Returns inclusive ISO date boundaries [startDate, endDate] for a given cycleKey ("YYYY-MM").
+ * - cycleStartDay === 1: standard calendar month (YYYY-MM-01 .. YYYY-MM-<lastDay>)
+ * - cycleStartDay 2..28: custom payday cycle (YYYY-MM-<D> .. <nextMonth>-<D-1>)
+ */
+export function getCycleDateRange(
+  cycleKey: string,
+  cycleStartDay = 1
+): { startDate: string; endDate: string } {
+  const day = clampCycleStartDay(cycleStartDay);
+  if (day === 1) {
+    const [y, m] = cycleKey.split("-").map(Number);
+    const lastDay = new Date(y, m, 0).getDate();
+    return {
+      startDate: `${cycleKey}-01`,
+      endDate: `${cycleKey}-${String(lastDay).padStart(2, "0")}`,
+    };
+  }
+
+  const nextMonthKey = shiftMonthKey(cycleKey, 1);
+  return {
+    startDate: `${cycleKey}-${String(day).padStart(2, "0")}`,
+    endDate: `${nextMonthKey}-${String(day - 1).padStart(2, "0")}`,
+  };
+}
+
+/**
+ * Maps any ISO date ("YYYY-MM-DD") to its owning cycleKey ("YYYY-MM").
+ * Every calendar day maps to exactly one cycle with zero gaps or overlaps.
+ */
+export function getCycleKeyForDate(
+  dateIso: string,
+  cycleStartDay = 1
+): string {
+  const day = clampCycleStartDay(cycleStartDay);
+  const monthKey = dateIso.slice(0, 7);
+  if (day === 1) return monthKey;
+  const txDay = Number(dateIso.slice(8, 10)) || 1;
+  return txDay >= day ? monthKey : shiftMonthKey(monthKey, -1);
+}
+
+export function getCurrentCycleKey(
+  cycleStartDay = 1,
+  date: Date = new Date()
+): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return getCycleKeyForDate(`${y}-${m}-${d}`, cycleStartDay);
+}
+
+export function isDateInCycle(
+  dateIso: string,
+  cycleKey: string,
+  cycleStartDay = 1
+): boolean {
+  const { startDate, endDate } = getCycleDateRange(cycleKey, cycleStartDay);
+  return dateIso >= startDate && dateIso <= endDate;
+}
+
+export function formatMonthLabel(
+  monthKey: string,
+  locale: Locale,
+  short = false
+): string {
   const [yStr, mStr] = monthKey.split("-");
   const date = new Date(Number(yStr), Number(mStr) - 1, 1);
   return new Intl.DateTimeFormat(locale === "id" ? "id-ID" : "en-US", {
     month: short ? "short" : "long",
     year: short ? "2-digit" : "numeric",
   }).format(date);
+}
+
+/**
+ * Human-readable period label:
+ * - cycleStartDay === 1: "November 2026" (short: "Nov 26") — identical to standard calendar view
+ * - cycleStartDay > 1:   "25 Nov – 24 Dec 2026" (short: "25 Nov")
+ */
+export function formatCycleLabel(
+  cycleKey: string,
+  locale: Locale,
+  cycleStartDay = 1,
+  short = false
+): string {
+  const day = clampCycleStartDay(cycleStartDay);
+  if (day === 1) {
+    return formatMonthLabel(cycleKey, locale, short);
+  }
+
+  const { startDate, endDate } = getCycleDateRange(cycleKey, day);
+  const [sY, sM, sD] = startDate.split("-").map(Number);
+  const [eY, eM, eD] = endDate.split("-").map(Number);
+
+  const intlLocale = locale === "id" ? "id-ID" : "en-US";
+  const monthFmt = new Intl.DateTimeFormat(intlLocale, { month: "short" });
+  const startMon = monthFmt.format(new Date(sY, sM - 1, 1));
+
+  if (short) {
+    return `${sD} ${startMon}`;
+  }
+
+  const endMon = monthFmt.format(new Date(eY, eM - 1, 1));
+  if (sY === eY) {
+    return `${sD} ${startMon} – ${eD} ${endMon} ${eY}`;
+  }
+  const sYr = String(sY).slice(-2);
+  const eYr = String(eY).slice(-2);
+  return `${sD} ${startMon} ${sYr} – ${eD} ${endMon} ${eYr}`;
 }
 
 export function formatDateHeading(dateIso: string, locale: Locale): string {

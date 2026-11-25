@@ -21,7 +21,10 @@ import { SHIZUKU_ECOSYSTEM } from "../config/ecosystem";
 import { normalizeCategoryId } from "../data/categories";
 import { createDemoSeedData, createFreshEmptyData } from "../data/seedData";
 import { sanitizeAccounts } from "../services/exportService";
-import { getMonthKey } from "../utils/format";
+import {
+  clampCycleStartDay,
+  getCurrentCycleKey,
+} from "../utils/format";
 import { TRANSLATIONS, type TranslationDict } from "../i18n/translations";
 import {
   acknowledgeOAuthCallback,
@@ -83,6 +86,7 @@ function loadLocalModeStore(): CashflowStoreData {
       settings: {
         ...defaults,
         ...(parsed.settings ?? {}),
+        cycleStartDay: clampCycleStartDay(parsed.settings?.cycleStartDay),
         shizukuWebsiteUrl:
           parsed.settings?.shizukuWebsiteUrl || SHIZUKU_ECOSYSTEM.hubUrl,
       },
@@ -184,7 +188,9 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const [store, setStore] = useState<CashflowStoreData>(loadLocalModeStore);
   const [activeTab, setActiveTab] = useState<NavTab>("home");
-  const [selectedMonth, setSelectedMonth] = useState<string>(() => getMonthKey());
+  const [selectedMonth, setSelectedMonth] = useState<string>(() =>
+    getCurrentCycleKey(loadLocalModeStore().settings.cycleStartDay)
+  );
   const [user, setUser] = useState<ShizukuUser | null>(null);
   const [authReady, setAuthReady] = useState(false);
 
@@ -244,6 +250,9 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
         const ledger = await loadUserLedger(existing);
         if (!active) return;
         const resolvedLocale = ledger?.settings.locale ?? store.settings.locale;
+        const resolvedCycleStartDay = clampCycleStartDay(
+          ledger?.settings.cycleStartDay ?? 1
+        );
         skipNextPersistRef.current = true;
         setUser(existing);
         setStore(
@@ -252,10 +261,12 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
             settings: {
               ...createFreshEmptyData().settings,
               locale: resolvedLocale,
+              cycleStartDay: resolvedCycleStartDay,
               shizukuWebsiteUrl: SHIZUKU_ECOSYSTEM.hubUrl,
             },
           }
         );
+        setSelectedMonth(getCurrentCycleKey(resolvedCycleStartDay));
 
         if (tokenCaptured) {
           setAuthModalOpen(false);
@@ -392,6 +403,7 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
       skipNextPersistRef.current = true;
       setUser(signedUser);
       setStore(nextStore);
+      setSelectedMonth(getCurrentCycleKey(nextStore.settings.cycleStartDay));
       setLastTxEvent(null);
       setAuthModalOpen(false);
       notify(
@@ -457,6 +469,7 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
     const localData = loadLocalModeStore();
     localData.settings.locale = currentLocale;
     setStore(localData);
+    setSelectedMonth(getCurrentCycleKey(localData.settings.cycleStartDay));
     setLastTxEvent(null);
     setAccountPanelOpen(false);
     notify(
@@ -710,9 +723,15 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
   );
 
   const updateSettings = useCallback((patch: Partial<AppSettings>) => {
+    const cleanPatch: Partial<AppSettings> = { ...patch };
+    if (patch.cycleStartDay !== undefined) {
+      const clamped = clampCycleStartDay(patch.cycleStartDay);
+      cleanPatch.cycleStartDay = clamped;
+      setSelectedMonth(getCurrentCycleKey(clamped));
+    }
     setStore((prev) => ({
       ...prev,
-      settings: { ...prev.settings, ...patch },
+      settings: { ...prev.settings, ...cleanPatch },
     }));
   }, []);
 
@@ -731,10 +750,11 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
   const resetToDemoData = useCallback(() => {
     const demo = createDemoSeedData();
     demo.settings.locale = store.settings.locale;
+    demo.settings.cycleStartDay = store.settings.cycleStartDay;
     demo.settings.shizukuWebsiteUrl =
       store.settings.shizukuWebsiteUrl || SHIZUKU_ECOSYSTEM.hubUrl;
     setStore(demo);
-    setSelectedMonth(getMonthKey());
+    setSelectedMonth(getCurrentCycleKey(demo.settings.cycleStartDay));
     setLastTxEvent(null);
     notify(
       store.settings.locale === "id"
@@ -742,15 +762,21 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
         : "6-month demo dataset loaded.",
       "success"
     );
-  }, [notify, store.settings.locale, store.settings.shizukuWebsiteUrl]);
+  }, [
+    notify,
+    store.settings.cycleStartDay,
+    store.settings.locale,
+    store.settings.shizukuWebsiteUrl,
+  ]);
 
   const resetToFreshEmpty = useCallback(() => {
     const fresh = createFreshEmptyData();
     fresh.settings.locale = store.settings.locale;
+    fresh.settings.cycleStartDay = store.settings.cycleStartDay;
     fresh.settings.shizukuWebsiteUrl =
       store.settings.shizukuWebsiteUrl || SHIZUKU_ECOSYSTEM.hubUrl;
     setStore(fresh);
-    setSelectedMonth(getMonthKey());
+    setSelectedMonth(getCurrentCycleKey(fresh.settings.cycleStartDay));
     setLastTxEvent(null);
     notify(
       store.settings.locale === "id"
@@ -758,10 +784,16 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
         : "Cashflow cleared to a fresh start.",
       "iris"
     );
-  }, [notify, store.settings.locale, store.settings.shizukuWebsiteUrl]);
+  }, [
+    notify,
+    store.settings.cycleStartDay,
+    store.settings.locale,
+    store.settings.shizukuWebsiteUrl,
+  ]);
 
   const importStoreData = useCallback(
     (data: CashflowStoreData) => {
+      const cycleStartDay = clampCycleStartDay(data.settings.cycleStartDay);
       const normalized: CashflowStoreData = {
         ...data,
         version: 5,
@@ -770,8 +802,13 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
           ...tx,
           categoryId: normalizeCategoryId(tx.categoryId, tx.type),
         })),
+        settings: {
+          ...data.settings,
+          cycleStartDay,
+        },
       };
       setStore(normalized);
+      setSelectedMonth(getCurrentCycleKey(cycleStartDay));
       notify(TRANSLATIONS[data.settings.locale].settings.importSuccess, "success");
     },
     [notify]

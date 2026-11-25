@@ -1,5 +1,6 @@
 import { SHIZUKU_ECOSYSTEM, isCloudSyncConfigured } from "../config/ecosystem";
 import { normalizeCategoryId } from "../data/categories";
+import { clampCycleStartDay } from "../utils/format";
 import { sanitizeAccounts } from "./exportService";
 import type { CashflowStoreData, ShizukuUser } from "../types/cashflow";
 
@@ -382,6 +383,7 @@ function normalizeStorePayload(
       locale: parsed.settings?.locale === "id" ? "id" : "en",
       privacyMode: parsed.settings?.privacyMode ?? false,
       rainEnabled: parsed.settings?.rainEnabled ?? true,
+      cycleStartDay: clampCycleStartDay(parsed.settings?.cycleStartDay),
       shizukuWebsiteUrl:
         parsed.settings?.shizukuWebsiteUrl || SHIZUKU_ECOSYSTEM.hubUrl,
     },

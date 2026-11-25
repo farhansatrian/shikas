@@ -5,6 +5,7 @@ import type {
   Transaction,
 } from "../types/cashflow";
 import { getCategoryLabel, normalizeCategoryId } from "../data/categories";
+import { clampCycleStartDay } from "../utils/format";
 
 function escapeCsvCell(value: string | number | undefined): string {
   const str = String(value ?? "");
@@ -158,6 +159,7 @@ export function parseBackupJson(rawText: string): CashflowStoreData {
       locale: parsed.settings?.locale === "id" ? "id" : "en",
       privacyMode: Boolean(parsed.settings?.privacyMode),
       rainEnabled: parsed.settings?.rainEnabled ?? true,
+      cycleStartDay: clampCycleStartDay(parsed.settings?.cycleStartDay),
       shizukuWebsiteUrl:
         typeof parsed.settings?.shizukuWebsiteUrl === "string"
           ? parsed.settings.shizukuWebsiteUrl

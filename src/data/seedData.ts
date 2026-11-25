@@ -170,6 +170,7 @@ export function createDemoSeedData(): CashflowStoreData {
       locale: "en",
       privacyMode: false,
       rainEnabled: true,
+      cycleStartDay: 1,
       shizukuWebsiteUrl: "",
     },
   };
@@ -184,6 +185,7 @@ export function createFreshEmptyData(): CashflowStoreData {
       locale: "en",
       privacyMode: false,
       rainEnabled: true,
+      cycleStartDay: 1,
       shizukuWebsiteUrl: "",
     },
   };

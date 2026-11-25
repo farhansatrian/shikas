@@ -4,6 +4,8 @@ import {
   Download,
   FileSpreadsheet,
   LogOut,
+  Minus,
+  Plus,
   RotateCcw,
   Trash2,
   Upload,
@@ -17,6 +19,11 @@ import {
   exportTransactionsToCsv,
   parseBackupJson,
 } from "../../services/exportService";
+import {
+  clampCycleStartDay,
+  formatCycleLabel,
+  getCurrentCycleKey,
+} from "../../utils/format";
 
 const RpgToggle: React.FC<{
   checked: boolean;
@@ -298,6 +305,103 @@ export const AccountPanel: React.FC = () => {
                   onChange={(v) => updateSettings({ rainEnabled: v })}
                   ariaLabel={t.settings.rainLabel}
                 />
+              </div>
+
+              <div className="space-y-2.5 py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold text-[#14100e]">
+                      {t.settings.cycleStartLabel}
+                    </p>
+                    <p className="mt-0.5 text-[11px] leading-snug text-[#5d5370]">
+                      {t.settings.cycleStartDesc}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  {/* Quick 1-click presets: Day 1 (Default) & Day 25 (Payday) */}
+                  <div className="inline-flex border border-[#745bc7] font-mono text-[10px] font-bold tracking-[0.1em] uppercase">
+                    {[1, 25].map((presetDay, idx) => {
+                      const active = store.settings.cycleStartDay === presetDay;
+                      return (
+                        <button
+                          key={presetDay}
+                          type="button"
+                          onClick={() =>
+                            updateSettings({ cycleStartDay: presetDay })
+                          }
+                          className={`px-2.5 py-1 transition ${
+                            idx > 0 ? "border-l border-[#745bc7]" : ""
+                          } ${
+                            active
+                              ? "bg-[#745bc7] text-white"
+                              : "bg-white text-[#5d5370] hover:bg-[#f5effe] hover:text-[#14100e]"
+                          }`}
+                        >
+                          {locale === "id"
+                            ? `TGL ${presetDay}`
+                            : `DAY ${presetDay}`}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Fine stepper 1..28 for any custom payday */}
+                  <div className="inline-flex items-center border border-[#745bc7]/65 bg-white font-mono text-[11px]">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateSettings({
+                          cycleStartDay: clampCycleStartDay(
+                            store.settings.cycleStartDay - 1
+                          ),
+                        })
+                      }
+                      disabled={store.settings.cycleStartDay <= 1}
+                      aria-label="Decrease cycle start day"
+                      className="flex h-7 w-7 items-center justify-center text-[#745bc7] transition hover:bg-[#f5effe] disabled:opacity-35"
+                    >
+                      <Minus className="h-3 w-3" />
+                    </button>
+                    <span className="min-w-[34px] border-x border-[#745bc7]/30 px-2 text-center font-bold text-[#14100e]">
+                      {store.settings.cycleStartDay}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateSettings({
+                          cycleStartDay: clampCycleStartDay(
+                            store.settings.cycleStartDay + 1
+                          ),
+                        })
+                      }
+                      disabled={store.settings.cycleStartDay >= 28}
+                      aria-label="Increase cycle start day"
+                      className="flex h-7 w-7 items-center justify-center text-[#745bc7] transition hover:bg-[#f5effe] disabled:opacity-35"
+                    >
+                      <Plus className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
+
+                <p className="border border-[#745bc7]/25 bg-[#f8f4fe] px-2.5 py-1.5 font-mono text-[10px] text-[#4e4361]">
+                  {store.settings.cycleStartDay === 1 ? (
+                    t.settings.cycleStartCalendar
+                  ) : (
+                    <>
+                      <span className="text-[#745bc7]">▶</span>{" "}
+                      {t.settings.cycleStartActive}:{" "}
+                      <strong className="text-[#14100e]">
+                        {formatCycleLabel(
+                          getCurrentCycleKey(store.settings.cycleStartDay),
+                          locale,
+                          store.settings.cycleStartDay
+                        )}
+                      </strong>
+                    </>
+                  )}
+                </p>
               </div>
             </div>
           </section>

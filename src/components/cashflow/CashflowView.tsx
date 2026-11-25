@@ -20,9 +20,10 @@ import {
   computePercentDelta,
 } from "../../utils/calculations";
 import {
+  formatCycleLabel,
   formatIdr,
-  formatMonthLabel,
   formatShortDate,
+  isDateInCycle,
   shiftMonthKey,
 } from "../../utils/format";
 import { MoneyDisplay } from "../common/MoneyDisplay";
@@ -122,14 +123,25 @@ export const CashflowView: React.FC = () => {
     };
   }, [isCatMenuOpen]);
 
+  const cycleStartDay = store.settings.cycleStartDay;
+
   const monthTransactions = useMemo(
-    () => store.transactions.filter((tx) => tx.date.startsWith(selectedMonth)),
-    [store.transactions, selectedMonth]
+    () =>
+      store.transactions.filter((tx) =>
+        isDateInCycle(tx.date, selectedMonth, cycleStartDay)
+      ),
+    [store.transactions, selectedMonth, cycleStartDay]
   );
 
   const monthSummary = useMemo(
-    () => computeMonthlySummary(store.transactions, selectedMonth, store.accounts),
-    [store.transactions, selectedMonth, store.accounts]
+    () =>
+      computeMonthlySummary(
+        store.transactions,
+        selectedMonth,
+        store.accounts,
+        cycleStartDay
+      ),
+    [store.transactions, selectedMonth, store.accounts, cycleStartDay]
   );
 
   const prevSummary = useMemo(
@@ -137,14 +149,21 @@ export const CashflowView: React.FC = () => {
       computeMonthlySummary(
         store.transactions,
         shiftMonthKey(selectedMonth, -1),
-        store.accounts
+        store.accounts,
+        cycleStartDay
       ),
-    [store.transactions, selectedMonth, store.accounts]
+    [store.transactions, selectedMonth, store.accounts, cycleStartDay]
   );
 
   const topExpenseCat = useMemo(
-    () => computeCategoryBreakdown(store.transactions, selectedMonth, "expense")[0],
-    [store.transactions, selectedMonth]
+    () =>
+      computeCategoryBreakdown(
+        store.transactions,
+        selectedMonth,
+        "expense",
+        cycleStartDay
+      )[0],
+    [store.transactions, selectedMonth, cycleStartDay]
   );
 
   const totalLiveBalance = useMemo(
@@ -274,7 +293,7 @@ export const CashflowView: React.FC = () => {
 
   // Dynamic Visual Novel chronicle lines (reacts to transactions, transfers & savings flow)
   const dialogueLines = useMemo(() => {
-    const monthLabel = formatMonthLabel(selectedMonth, locale);
+    const monthLabel = formatCycleLabel(selectedMonth, locale, cycleStartDay);
     const lines: string[] = [];
 
     if (lastTxEvent) {
@@ -347,7 +366,7 @@ export const CashflowView: React.FC = () => {
     } else {
       lines.push(
         locale === "id"
-          ? `Bulan ${monthLabel}: ${savedRatio.toFixed(0)}% dari pemasukan masih tersisa (${mask(monthSummary.netCashflowIdr)}).`
+          ? `${cycleStartDay === 1 ? "Bulan" : "Periode"} ${monthLabel}: ${savedRatio.toFixed(0)}% dari pemasukan masih tersisa (${mask(monthSummary.netCashflowIdr)}).`
           : `${monthLabel}: you've kept ${savedRatio.toFixed(0)}% of your income (${mask(monthSummary.netCashflowIdr)} left).`
       );
     }
@@ -392,7 +411,11 @@ export const CashflowView: React.FC = () => {
       prevSummary.expenseIdr
     );
     if (expDelta !== null) {
-      const prevLabel = formatMonthLabel(shiftMonthKey(selectedMonth, -1), locale);
+      const prevLabel = formatCycleLabel(
+        shiftMonthKey(selectedMonth, -1),
+        locale,
+        cycleStartDay
+      );
       lines.push(
         locale === "id"
           ? `Dibanding ${prevLabel}, total pengeluaran ${expDelta <= 0 ? "turun" : "naik"} ${Math.abs(expDelta).toFixed(1)}%.`
@@ -403,6 +426,7 @@ export const CashflowView: React.FC = () => {
     return lines;
   }, [
     selectedMonth,
+    cycleStartDay,
     locale,
     lastTxEvent,
     hasFlowData,
@@ -480,8 +504,8 @@ export const CashflowView: React.FC = () => {
               >
                 <ChevronLeft className="h-3.5 w-3.5" />
               </button>
-              <span className="min-w-[116px] text-center font-mono text-[11px] font-semibold tracking-[0.12em] uppercase drop-shadow-2xs">
-                {formatMonthLabel(selectedMonth, locale)}
+              <span className="min-w-[116px] text-center font-mono text-[10.5px] font-semibold tracking-[0.1em] uppercase drop-shadow-2xs sm:text-[11px] sm:tracking-[0.12em]">
+                {formatCycleLabel(selectedMonth, locale, cycleStartDay)}
               </span>
               <button
                 type="button"

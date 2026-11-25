@@ -28,8 +28,8 @@ import {
 } from "../../utils/calculations";
 import {
   formatCompactIdr,
+  formatCycleLabel,
   formatIdr,
-  formatMonthLabel,
   shiftMonthKey,
 } from "../../utils/format";
 import { MoneyDisplay } from "../common/MoneyDisplay";
@@ -46,18 +46,29 @@ export const AnalyticsView: React.FC = () => {
   const { store, selectedMonth, setSelectedMonth, t, locale } = useCashflow();
   const [range, setRange] = useState<AnalyticsRange>("6m");
 
+  const cycleStartDay = store.settings.cycleStartDay;
+
   const seriesData = useMemo(
     () =>
       computeTimeRangeSeries(
         store.transactions,
         selectedMonth,
         range,
-        store.accounts
+        store.accounts,
+        cycleStartDay
       ).map((item) => ({
         ...item,
-        label: formatMonthLabel(item.month, locale, true),
+        label: formatCycleLabel(item.month, locale, cycleStartDay, true),
+        fullLabel: formatCycleLabel(item.month, locale, cycleStartDay, false),
       })),
-    [store.transactions, store.accounts, selectedMonth, range, locale]
+    [
+      store.transactions,
+      store.accounts,
+      selectedMonth,
+      range,
+      locale,
+      cycleStartDay,
+    ]
   );
 
   const rangeMonths = useMemo(
@@ -78,13 +89,25 @@ export const AnalyticsView: React.FC = () => {
   }, [seriesData]);
 
   const expenseBreakdown = useMemo(
-    () => computeCategoryBreakdownForMonths(store.transactions, rangeMonths, "expense"),
-    [store.transactions, rangeMonths]
+    () =>
+      computeCategoryBreakdownForMonths(
+        store.transactions,
+        rangeMonths,
+        "expense",
+        cycleStartDay
+      ),
+    [store.transactions, rangeMonths, cycleStartDay]
   );
 
   const currentSummary = useMemo(
-    () => computeMonthlySummary(store.transactions, selectedMonth, store.accounts),
-    [store.transactions, store.accounts, selectedMonth]
+    () =>
+      computeMonthlySummary(
+        store.transactions,
+        selectedMonth,
+        store.accounts,
+        cycleStartDay
+      ),
+    [store.transactions, store.accounts, selectedMonth, cycleStartDay]
   );
 
   const prevSummary = useMemo(
@@ -92,9 +115,10 @@ export const AnalyticsView: React.FC = () => {
       computeMonthlySummary(
         store.transactions,
         shiftMonthKey(selectedMonth, -1),
-        store.accounts
+        store.accounts,
+        cycleStartDay
       ),
-    [store.transactions, store.accounts, selectedMonth]
+    [store.transactions, store.accounts, selectedMonth, cycleStartDay]
   );
 
   const rangeTag = useMemo(() => {
@@ -126,8 +150,8 @@ export const AnalyticsView: React.FC = () => {
         const verbEn = expDelta <= 0 ? "decreased" : "increased";
         list.push(
           locale === "id"
-            ? `Pengeluaran ${formatMonthLabel(selectedMonth, locale)} ${verbId} ${Math.abs(expDelta).toFixed(1)}% dibanding ${formatMonthLabel(shiftMonthKey(selectedMonth, -1), locale)}.`
-            : `${formatMonthLabel(selectedMonth, locale)} spending ${verbEn} by ${Math.abs(expDelta).toFixed(1)}% compared to ${formatMonthLabel(shiftMonthKey(selectedMonth, -1), locale)}.`
+            ? `Pengeluaran ${formatCycleLabel(selectedMonth, locale, cycleStartDay)} ${verbId} ${Math.abs(expDelta).toFixed(1)}% dibanding ${formatCycleLabel(shiftMonthKey(selectedMonth, -1), locale, cycleStartDay)}.`
+            : `${formatCycleLabel(selectedMonth, locale, cycleStartDay)} spending ${verbEn} by ${Math.abs(expDelta).toFixed(1)}% compared to ${formatCycleLabel(shiftMonthKey(selectedMonth, -1), locale, cycleStartDay)}.`
         );
       }
     } else if (seriesData.length > 0) {
@@ -152,6 +176,7 @@ export const AnalyticsView: React.FC = () => {
     currentSummary,
     prevSummary,
     selectedMonth,
+    cycleStartDay,
     locale,
     range,
     rangeTag,
@@ -193,8 +218,8 @@ export const AnalyticsView: React.FC = () => {
               >
                 <ChevronLeft className="h-3.5 w-3.5" />
               </button>
-              <span className="min-w-[116px] text-center font-mono text-[11px] font-semibold tracking-[0.12em] uppercase drop-shadow-2xs">
-                {formatMonthLabel(selectedMonth, locale)}
+              <span className="min-w-[116px] text-center font-mono text-[10.5px] font-semibold tracking-[0.1em] uppercase drop-shadow-2xs sm:text-[11px] sm:tracking-[0.12em]">
+                {formatCycleLabel(selectedMonth, locale, cycleStartDay)}
               </span>
               <button
                 type="button"
@@ -296,6 +321,15 @@ export const AnalyticsView: React.FC = () => {
                     fontFamily: "JetBrains Mono, monospace",
                     fontSize: "11px",
                   }}
+                  labelFormatter={(label, payload) =>
+                    String(
+                      (
+                        payload?.[0]?.payload as
+                          | { fullLabel?: string }
+                          | undefined
+                      )?.fullLabel ?? label
+                    )
+                  }
                   formatter={(val: number, name: string) => [
                     formatTooltip(val),
                     name === "incomeIdr"
@@ -484,6 +518,15 @@ export const AnalyticsView: React.FC = () => {
                       fontFamily: "JetBrains Mono, monospace",
                       fontSize: "11px",
                     }}
+                    labelFormatter={(label, payload) =>
+                      String(
+                        (
+                          payload?.[0]?.payload as
+                            | { fullLabel?: string }
+                            | undefined
+                        )?.fullLabel ?? label
+                      )
+                    }
                     formatter={(val: number) => [formatTooltip(val), t.analytics.balanceLegend]}
                   />
                   <Area
