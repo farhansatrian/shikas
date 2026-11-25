@@ -323,8 +323,8 @@ export const CashflowView: React.FC = () => {
         if (toAcc?.role === "savings" && fromAcc?.role !== "savings") {
           lines.push(
             locale === "id"
-              ? `Transfer ${mask(lastTxEvent.amountIdr)} dari ${fromAcc?.name ?? "asal"} ke tabungan ${toAcc.name}${feeNote}. Arus kas bersih tetap utuh.`
-              : `Moved ${mask(lastTxEvent.amountIdr)} from ${fromAcc?.name ?? "source"} into ${toAcc.name} savings${feeNote}. Net cashflow stays intact.`
+              ? `Transfer ${mask(lastTxEvent.amountIdr)} dari ${fromAcc?.name ?? "asal"} ke tabungan ${toAcc.name}${feeNote}. Arus kas harian diperbarui; pengeluaran murni tetap utuh.`
+              : `Moved ${mask(lastTxEvent.amountIdr)} from ${fromAcc?.name ?? "source"} into ${toAcc.name} savings${feeNote}. Daily net cashflow updated; pure expense stays intact.`
           );
         } else if (fromAcc?.role === "savings" && toAcc?.role !== "savings") {
           lines.push(
@@ -354,7 +354,7 @@ export const CashflowView: React.FC = () => {
     if (!hasFlowData) {
       lines.push(
         locale === "id"
-          ? `Belum ada pemasukan/pengeluaran di ${monthLabel}. Klik "+ Catat Pemasukan", "- Catat Pengeluaran", atau "⇄ Transfer" untuk mulai.`
+          ? `Belum ada pemasukan/pengeluaran di ${monthLabel}. Klik "+ Pemasukan", "- Pengeluaran", atau "⇄ Transfer" untuk mulai.`
           : `No income or expense in ${monthLabel} yet. Click "+ Add Income", "- Add Expense", or "⇄ Transfer" to start.`
       );
     } else if (isDeficit) {
@@ -362,6 +362,12 @@ export const CashflowView: React.FC = () => {
         locale === "id"
           ? `Pengeluaran ${monthLabel} melebihi pemasukan sebesar ${mask(Math.abs(monthSummary.netCashflowIdr))}.`
           : `${monthLabel} expenses exceeded income by ${mask(Math.abs(monthSummary.netCashflowIdr))}.`
+      );
+    } else if (monthSummary.hasSavingsPockets && monthSummary.savingsNetFlowIdr !== 0) {
+      lines.push(
+        locale === "id"
+          ? `${cycleStartDay === 1 ? "Bulan" : "Periode"} ${monthLabel}: ${savedRatio.toFixed(0)}% pemasukan tidak dibelanjakan — ${mask(monthSummary.dailyNetCashflowIdr)} di harian & ${monthSummary.savingsNetFlowIdr > 0 ? "+" : ""}${mask(monthSummary.savingsNetFlowIdr)} arus tabungan.`
+          : `${monthLabel}: ${savedRatio.toFixed(0)}% of income unspent — ${mask(monthSummary.dailyNetCashflowIdr)} daily net & ${monthSummary.savingsNetFlowIdr > 0 ? "+" : ""}${mask(monthSummary.savingsNetFlowIdr)} savings flow.`
       );
     } else {
       lines.push(
@@ -522,18 +528,25 @@ export const CashflowView: React.FC = () => {
           </div>
 
           <div className="flex flex-1 flex-col justify-between gap-4 p-4 sm:p-5">
-            {/* Net Cashflow (Monthly) + Live Total Balance (All Pockets) */}
+            {/* Net Cashflow (Daily non-savings flow when savings pockets exist) + Live Total Balance */}
             <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[#745bc7]/20 pb-3.5">
               <div>
                 <p className="font-mono text-[10px] tracking-[0.18em] text-[#5d5370] uppercase">
                   {t.cashflow.netCashflow}
+                  {monthSummary.hasSavingsPockets
+                    ? locale === "id"
+                      ? " · HARIAN"
+                      : " · DAILY"
+                    : ""}
                 </p>
                 <div className="mt-1">
                   <MoneyDisplay
-                    amountIdr={monthSummary.netCashflowIdr}
+                    amountIdr={monthSummary.dailyNetCashflowIdr}
                     showSign
                     className={`text-2xl font-bold tracking-tight sm:text-[30px] ${
-                      isDeficit ? "text-[#c837a5]" : "text-[#14100e]"
+                      monthSummary.dailyNetCashflowIdr < 0
+                        ? "text-[#c837a5]"
+                        : "text-[#14100e]"
                     }`}
                   />
                 </div>

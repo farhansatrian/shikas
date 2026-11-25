@@ -11,10 +11,11 @@ export type AnalyticsRange = "3m" | "6m" | "12m" | "all";
 export interface MonthlySummary {
   month: string;
   incomeIdr: number;
-  expenseIdr: number; // Regular expenses + transfer admin fees
+  expenseIdr: number; // Regular expenses (all pockets incl. savings) + transfer admin fees
   transferFeeIdr: number;
   transferVolumeIdr: number;
-  netCashflowIdr: number;
+  netCashflowIdr: number; // Total wealth flow: incomeIdr - expenseIdr
+  dailyNetCashflowIdr: number; // Non-savings spendable cashflow: netCashflowIdr - savingsNetFlowIdr
   savingsRate: number;
   savingsInflowIdr: number;
   savingsOutflowIdr: number;
@@ -48,6 +49,7 @@ export interface MonthlySeriesPoint {
   incomeIdr: number;
   expenseIdr: number;
   netIdr: number;
+  savingsFlowIdr: number;
   cumulativeBalanceIdr: number;
 }
 
@@ -200,6 +202,9 @@ export function computeMonthlySummary(
   const netCashflowIdr = incomeIdr - expenseIdr;
   const savingsRate = incomeIdr > 0 ? (netCashflowIdr / incomeIdr) * 100 : 0;
   const savingsNetFlowIdr = savingsInflowIdr - savingsOutflowIdr;
+  const dailyNetCashflowIdr = hasSavingsPockets
+    ? netCashflowIdr - savingsNetFlowIdr
+    : netCashflowIdr;
 
   return {
     month: monthKey,
@@ -208,6 +213,7 @@ export function computeMonthlySummary(
     transferFeeIdr,
     transferVolumeIdr,
     netCashflowIdr,
+    dailyNetCashflowIdr,
     savingsRate,
     savingsInflowIdr,
     savingsOutflowIdr,
@@ -299,6 +305,7 @@ function buildSeriesPoint(
     incomeIdr: summary.incomeIdr,
     expenseIdr: summary.expenseIdr,
     netIdr: summary.netCashflowIdr,
+    savingsFlowIdr: summary.savingsNetFlowIdr,
     cumulativeBalanceIdr,
   };
 }

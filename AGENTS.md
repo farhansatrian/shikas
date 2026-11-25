@@ -12,6 +12,7 @@
   - Each pocket (`Wondr`, `GoPay`, `BCA`, or custom) holds an `openingBalanceIdr` that contributes to live `Total Balance` and `Cumulative Net Balance` without inflating monthly `Income` or `Savings Level`.
   - Pocket-to-pocket `transfer` moves funds between pockets without inflating monthly `Expense` or `Income`; optional transfer `feeIdr` deducts from the source pocket and rolls into monthly `Expense` under `Bank & Admin` (`fees`).
   - `SAVINGS FLOW` tracks exact monthly net change across `savings`-role pockets (transfers/income in minus withdrawals/expenses/fees out).
+  - When `savings`-role pockets exist, `NET CASHFLOW · DAILY` shows spendable non-savings cashflow (`Income − Expense − Savings Flow`), so transfers to `savings` reduce daily net cashflow while direct expenses from `savings` reduce `SAVINGS FLOW` and remain fully tracked in `Expense` & `Analytics` without double-reducing daily cashflow; `SAVINGS LEVEL` stays based on pure `Income − Expense`.
   - **Custom Monthly Cycle Start (`settings.cycleStartDay`, `1..28`, default `1`)**: Stored per account (`ShikasSettings.cycleStartDay`); `1` uses standard calendar months while `2..28` (e.g. `25`) groups Cashflow, Savings Level, Log, and Analytics from payday `D` to `D-1` of the next month without mutating transactions.
 - **Local Dev Env (`.env`, gitignored)**:
   - `VITE_SHIZUKU_URL=http://localhost:3000`

@@ -76,16 +76,23 @@ export const AnalyticsView: React.FC = () => {
     [range, seriesData]
   );
 
+  const hasSavingsPockets = useMemo(
+    () => store.accounts.some((a) => a.role === "savings"),
+    [store.accounts]
+  );
+
   const periodTotals = useMemo(() => {
     let incomeIdr = 0;
     let expenseIdr = 0;
+    let savingsFlowIdr = 0;
     for (const pt of seriesData) {
       incomeIdr += pt.incomeIdr;
       expenseIdr += pt.expenseIdr;
+      savingsFlowIdr += pt.savingsFlowIdr;
     }
     const netIdr = incomeIdr - expenseIdr;
     const savingsRate = incomeIdr > 0 ? (netIdr / incomeIdr) * 100 : 0;
-    return { incomeIdr, expenseIdr, netIdr, savingsRate };
+    return { incomeIdr, expenseIdr, netIdr, savingsFlowIdr, savingsRate };
   }, [seriesData]);
 
   const expenseBreakdown = useMemo(
@@ -274,6 +281,20 @@ export const AnalyticsView: React.FC = () => {
                 className="font-bold text-[#c837a5]"
               />
             </span>
+            {hasSavingsPockets && (
+              <span className="text-[#5d5370]">
+                {locale === "id" ? "TABUNGAN" : "SAVINGS"}{" "}
+                <MoneyDisplay
+                  amountIdr={periodTotals.savingsFlowIdr}
+                  showSign
+                  className={`font-bold ${
+                    periodTotals.savingsFlowIdr < 0
+                      ? "text-[#c837a5]"
+                      : "text-[#745bc7]"
+                  }`}
+                />
+              </span>
+            )}
             <span className="text-[#5d5370]">
               NET{" "}
               <MoneyDisplay
