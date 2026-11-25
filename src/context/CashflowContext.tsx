@@ -4,6 +4,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import type {
@@ -198,6 +199,14 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
   const [toasts, setToasts] = useState<ToastNotice[]>([]);
   const [lastTxEvent, setLastTxEvent] = useState<TxBurstEvent | null>(null);
 
+  // Prevents redundant PUT on initial DB hydration / auth transitions & enables clean debounced flush
+  const skipNextPersistRef = useRef(true);
+  const cloudSyncTimerRef = useRef<number | null>(null);
+  const pendingCloudSyncRef = useRef<{
+    user: ShizukuUser;
+    store: CashflowStoreData;
+  } | null>(null);
+
   const notify = useCallback((message: string, tone: ToastNotice["tone"] = "iris") => {
     const id = generateId("toast");
     setToasts((prev) => {
@@ -235,6 +244,7 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
         const ledger = await loadUserLedger(existing);
         if (!active) return;
         const resolvedLocale = ledger?.settings.locale ?? store.settings.locale;
+        skipNextPersistRef.current = true;
         setUser(existing);
         setStore(
           ledger ?? {
@@ -285,19 +295,64 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
     };
   }, []);
 
-  // Persist to either authenticated database ledger or local browser storage
+  // Flush any pending debounced cloud save immediately when closing/navigating away
+  useEffect(() => {
+    const flushOnHide = () => {
+      const pending = pendingCloudSyncRef.current;
+      if (!pending) return;
+      if (cloudSyncTimerRef.current !== null) {
+        window.clearTimeout(cloudSyncTimerRef.current);
+        cloudSyncTimerRef.current = null;
+      }
+      pendingCloudSyncRef.current = null;
+      void saveUserLedger(pending.user, pending.store, { keepalive: true });
+    };
+
+    window.addEventListener("pagehide", flushOnHide);
+    return () => {
+      window.removeEventListener("pagehide", flushOnHide);
+    };
+  }, []);
+
+  // Persist to either authenticated database ledger (debounced + serialized) or local browser storage
   useEffect(() => {
     if (!authReady) return;
-    if (user) {
-      void saveUserLedger(user, store);
-    } else {
-      try {
-        localStorage.setItem(LOCAL_MODE_STORE_KEY, JSON.stringify(store));
-      } catch {
-        // Ignore quota issues
-      }
+
+    if (skipNextPersistRef.current) {
+      skipNextPersistRef.current = false;
+      return;
     }
-  }, [store, user, authReady]);
+
+    if (user) {
+      pendingCloudSyncRef.current = { user, store };
+      if (cloudSyncTimerRef.current !== null) {
+        window.clearTimeout(cloudSyncTimerRef.current);
+      }
+      cloudSyncTimerRef.current = window.setTimeout(() => {
+        cloudSyncTimerRef.current = null;
+        const pending = pendingCloudSyncRef.current;
+        if (!pending) return;
+        pendingCloudSyncRef.current = null;
+        void saveUserLedger(pending.user, pending.store).then((ok) => {
+          if (!ok) {
+            notify(
+              pending.store.settings.locale === "id"
+                ? "Gagal sinkron ke server SHIZUKU. Perubahan tetap aktif di layar ini."
+                : "Could not sync to SHIZUKU server. Changes remain active here.",
+              "danger"
+            );
+          }
+        });
+      }, 320);
+      return;
+    }
+
+    try {
+      localStorage.setItem(LOCAL_MODE_STORE_KEY, JSON.stringify(store));
+    } catch {
+      // Ignore quota issues
+    }
+  }, [store, user, authReady, notify]);
 
   useEffect(() => {
     document.documentElement.lang = store.settings.locale;
@@ -334,6 +389,7 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
             store.settings.shizukuWebsiteUrl || SHIZUKU_ECOSYSTEM.hubUrl,
         },
       };
+      skipNextPersistRef.current = true;
       setUser(signedUser);
       setStore(nextStore);
       setLastTxEvent(null);
@@ -368,6 +424,7 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
         },
       };
       await saveUserLedger(createdUser, nextStore);
+      skipNextPersistRef.current = true;
       setUser(createdUser);
       setStore(nextStore);
       setLastTxEvent(null);
@@ -384,7 +441,18 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const signOut = useCallback(async () => {
     const currentLocale = store.settings.locale;
+    // Flush any pending debounced cloud write before clearing auth session
+    if (cloudSyncTimerRef.current !== null) {
+      window.clearTimeout(cloudSyncTimerRef.current);
+      cloudSyncTimerRef.current = null;
+    }
+    const pending = pendingCloudSyncRef.current;
+    if (pending) {
+      pendingCloudSyncRef.current = null;
+      await saveUserLedger(pending.user, pending.store);
+    }
     await signOutShizukuId();
+    skipNextPersistRef.current = true;
     setUser(null);
     const localData = loadLocalModeStore();
     localData.settings.locale = currentLocale;
@@ -527,17 +595,45 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const saveTransaction = useCallback(
     (payload: Omit<Transaction, "id" | "createdAt">, existingId?: string) => {
+      const cleanPayload: Omit<Transaction, "id" | "createdAt"> =
+        payload.type === "transfer"
+          ? {
+              type: "transfer",
+              date: payload.date,
+              amountIdr: Math.max(0, Math.round(payload.amountIdr)),
+              categoryId: "transfer",
+              note: payload.note,
+              merchant: undefined,
+              accountId: payload.accountId || undefined,
+              toAccountId: payload.toAccountId || undefined,
+              feeIdr:
+                payload.feeIdr && payload.feeIdr > 0
+                  ? Math.round(payload.feeIdr)
+                  : undefined,
+            }
+          : {
+              type: payload.type,
+              date: payload.date,
+              amountIdr: Math.max(0, Math.round(payload.amountIdr)),
+              categoryId: normalizeCategoryId(payload.categoryId, payload.type),
+              note: payload.note,
+              merchant: payload.merchant || undefined,
+              accountId: payload.accountId || undefined,
+              toAccountId: undefined,
+              feeIdr: undefined,
+            };
+
       setStore((prev) => {
         if (existingId) {
           return {
             ...prev,
             transactions: prev.transactions.map((tx) =>
-              tx.id === existingId ? { ...tx, ...payload } : tx
+              tx.id === existingId ? { ...tx, ...cleanPayload } : tx
             ),
           };
         }
         const created: Transaction = {
-          ...payload,
+          ...cleanPayload,
           id: generateId("tx"),
           createdAt: new Date().toISOString(),
         };
@@ -548,12 +644,12 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
       });
       setLastTxEvent({
         id: Date.now(),
-        type: payload.type,
-        amountIdr: payload.amountIdr,
-        note: payload.note,
-        accountId: payload.accountId,
-        toAccountId: payload.toAccountId,
-        feeIdr: payload.feeIdr,
+        type: cleanPayload.type,
+        amountIdr: cleanPayload.amountIdr,
+        note: cleanPayload.note,
+        accountId: cleanPayload.accountId,
+        toAccountId: cleanPayload.toAccountId,
+        feeIdr: cleanPayload.feeIdr,
         action: existingId ? "updated" : "created",
       });
       notify(

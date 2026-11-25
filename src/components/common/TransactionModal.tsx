@@ -65,16 +65,25 @@ export const TransactionModal: React.FC = () => {
     if (!isTxModalOpen) return;
     setError(null);
     if (editingTx) {
+      const validFromId =
+        editingTx.accountId && accounts.some((a) => a.id === editingTx.accountId)
+          ? editingTx.accountId
+          : editingTx.type === "transfer"
+            ? defaultAccountId
+            : "";
+      const validToId =
+        editingTx.toAccountId &&
+        accounts.some((a) => a.id === editingTx.toAccountId)
+          ? editingTx.toAccountId
+          : pickDefaultToAccount(validFromId || defaultAccountId);
+
       setType(editingTx.type);
       setRawDigits(String(editingTx.amountIdr));
       setFeeDigits(editingTx.feeIdr ? String(editingTx.feeIdr) : "");
       setDate(editingTx.date);
       setCategoryId(editingTx.categoryId);
-      setAccountId(editingTx.accountId ?? defaultAccountId);
-      setToAccountId(
-        editingTx.toAccountId ??
-          pickDefaultToAccount(editingTx.accountId ?? defaultAccountId)
-      );
+      setAccountId(validFromId);
+      setToAccountId(validToId);
       setMerchant(editingTx.merchant ?? "");
       setNote(editingTx.note);
     } else {

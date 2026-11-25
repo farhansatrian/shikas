@@ -1,4 +1,4 @@
-import React from "react";
+import React, { Suspense, lazy } from "react";
 import { CashflowProvider, useCashflow } from "./context/CashflowContext";
 import { ShizukuRainLayer } from "./components/layout/ShizukuRainLayer";
 import { MinimalNav } from "./components/layout/MinimalNav";
@@ -9,7 +9,12 @@ import { AuthModal } from "./components/auth/AuthModal";
 import { AccountPanel } from "./components/auth/AccountPanel";
 import { DashboardView } from "./components/dashboard/DashboardView";
 import { CashflowView } from "./components/cashflow/CashflowView";
-import { AnalyticsView } from "./components/analytics/AnalyticsView";
+
+const AnalyticsView = lazy(() =>
+  import("./components/analytics/AnalyticsView").then((m) => ({
+    default: m.AnalyticsView,
+  }))
+);
 
 const ToastStack: React.FC = () => {
   const { toasts } = useCashflow();
@@ -60,7 +65,17 @@ const ShiKasShell: React.FC = () => {
       >
         {activeTab === "home" && <DashboardView />}
         {activeTab === "cashflow" && <CashflowView />}
-        {activeTab === "analytics" && <AnalyticsView />}
+        {activeTab === "analytics" && (
+          <Suspense
+            fallback={
+              <div className="vn-frame bg-white/90 px-6 py-16 text-center font-mono text-xs tracking-[0.16em] text-[#745bc7] uppercase">
+                LOADING ANALYTICS // 雫 ...
+              </div>
+            }
+          >
+            <AnalyticsView />
+          </Suspense>
+        )}
       </main>
 
       <Footer />

@@ -204,8 +204,8 @@ export const TRANSLATIONS = {
       body: "Dirancang tetap tenang, ringkas, dan bebas dari tampilan keuangan yang rumit. Catat pemasukan serta pengeluaran harian, pantau sisa tabungan bulanan secara langsung, dan tinjau arus kas dari beberapa bulan hingga keseluruhan waktu. Langsung pakai di mode lokal, atau masuk dengan SHIZUKU\u00A0ID untuk sinkronisasi buku kas pribadimu lintas perangkat & aplikasi SHIZUKU.",
     },
     actions: {
-      addIncome: "Catat Pemasukan",
-      addExpense: "Catat Pengeluaran",
+      addIncome: "Pemasukan",
+      addExpense: "Pengeluaran",
       transfer: "Transfer",
       managePockets: "Atur",
       addPocket: "Tambah Kantong",

@@ -416,22 +416,64 @@ export async function loadUserLedger(
   }
 }
 
+let cloudSaveInFlight: Promise<boolean> | null = null;
+let queuedCloudSave: {
+  data: CashflowStoreData;
+  keepalive?: boolean;
+} | null = null;
+
+async function performCloudPut(
+  data: CashflowStoreData,
+  keepalive = false
+): Promise<boolean> {
+  try {
+    const res = await fetch(`${SHIZUKU_ECOSYSTEM.apiUrl}/api/shikas/store`, {
+      method: "PUT",
+      credentials: "include",
+      keepalive,
+      headers: buildCloudHeaders(true),
+      body: JSON.stringify(data),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 export async function saveUserLedger(
   user: ShizukuUser,
-  data: CashflowStoreData
+  data: CashflowStoreData,
+  options?: { keepalive?: boolean }
 ): Promise<boolean> {
   if (user.mode === "cloud" && isCloudSyncConfigured()) {
-    try {
-      const res = await fetch(`${SHIZUKU_ECOSYSTEM.apiUrl}/api/shikas/store`, {
-        method: "PUT",
-        credentials: "include",
-        headers: buildCloudHeaders(true),
-        body: JSON.stringify(data),
-      });
-      return res.ok;
-    } catch {
-      return false;
+    const keepalive = Boolean(options?.keepalive);
+
+    // On pagehide/unload, fire immediately with keepalive without waiting in queue
+    if (keepalive) {
+      queuedCloudSave = null;
+      return performCloudPut(data, true);
     }
+
+    // Serialize rapid consecutive writes so SQLite transactions never overlap/race
+    if (cloudSaveInFlight) {
+      queuedCloudSave = { data, keepalive: false };
+      return cloudSaveInFlight;
+    }
+
+    const run = async (): Promise<boolean> => {
+      let ok = await performCloudPut(data, false);
+      while (queuedCloudSave) {
+        const next = queuedCloudSave;
+        queuedCloudSave = null;
+        ok = await performCloudPut(next.data, Boolean(next.keepalive));
+      }
+      return ok;
+    };
+
+    cloudSaveInFlight = run().finally(() => {
+      cloudSaveInFlight = null;
+    });
+    return cloudSaveInFlight;
   }
 
   try {
