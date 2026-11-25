@@ -21,8 +21,11 @@ import { createDemoSeedData, createFreshEmptyData } from "../data/seedData";
 import { getMonthKey } from "../utils/format";
 import { TRANSLATIONS, type TranslationDict } from "../i18n/translations";
 import {
+  acknowledgeOAuthCallback,
+  consumeOAuthCallbackFromUrl,
   getCurrentSession,
   loadUserLedger,
+  peekPostAuthTab,
   registerShizukuId,
   saveUserLedger,
   signInWithShizukuId,
@@ -172,30 +175,79 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
     }, 3200);
   }, []);
 
-  // Restore active SHIZUKU ID session on boot
+  // Capture Google OAuth #shizuku_token hash (if redirected back from SHIZUKU) & restore active session on boot + hashchange
   useEffect(() => {
     let active = true;
-    (async () => {
+
+    const syncSession = async () => {
+      const { tokenCaptured, oauthError } = consumeOAuthCallbackFromUrl();
+      const postAuthTab = tokenCaptured ? peekPostAuthTab() : null;
+
+      if (oauthError && active) {
+        const dict = TRANSLATIONS[store.settings.locale].auth.errors as Record<
+          string,
+          string
+        >;
+        notify(
+          dict[oauthError] || dict.GOOGLE_AUTH_FAILED || oauthError,
+          "danger"
+        );
+      }
+
       const existing = await getCurrentSession();
       if (!active) return;
+
       if (existing) {
         const ledger = await loadUserLedger(existing);
         if (!active) return;
+        const resolvedLocale = ledger?.settings.locale ?? store.settings.locale;
         setUser(existing);
         setStore(
           ledger ?? {
             ...createFreshEmptyData(),
             settings: {
               ...createFreshEmptyData().settings,
+              locale: resolvedLocale,
               shizukuWebsiteUrl: SHIZUKU_ECOSYSTEM.hubUrl,
             },
           }
         );
+
+        if (tokenCaptured) {
+          setAuthModalOpen(false);
+          setActiveTab(postAuthTab === "analytics" ? "analytics" : "cashflow");
+          notify(
+            resolvedLocale === "id"
+              ? `Masuk sebagai ${existing.displayName} via SHIZUKU ID.`
+              : `Signed in as ${existing.displayName} via SHIZUKU ID.`,
+            "success"
+          );
+          acknowledgeOAuthCallback();
+        }
+      } else if (tokenCaptured && active) {
+        notify(
+          TRANSLATIONS[store.settings.locale].auth.errors.GOOGLE_AUTH_FAILED,
+          "danger"
+        );
+        acknowledgeOAuthCallback();
+      } else if (oauthError && active) {
+        acknowledgeOAuthCallback();
       }
       setAuthReady(true);
-    })();
+    };
+
+    void syncSession();
+
+    const onHashChange = () => {
+      if (window.location.hash.includes("shizuku_token=")) {
+        void syncSession();
+      }
+    };
+    window.addEventListener("hashchange", onHashChange);
+
     return () => {
       active = false;
+      window.removeEventListener("hashchange", onHashChange);
     };
   }, []);
 

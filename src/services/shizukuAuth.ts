@@ -5,6 +5,7 @@ import type { CashflowStoreData, ShizukuUser } from "../types/cashflow";
 const LOCAL_ACCOUNTS_KEY = "shizuku_local_accounts_v1";
 const LOCAL_SESSION_KEY = "shizuku_local_session_v1";
 const CLOUD_TOKEN_KEY = "shizuku_cloud_token_v1";
+const POST_AUTH_TAB_KEY = "shikas_post_auth_tab_v1";
 const USER_LEDGER_PREFIX = "shikas_user_ledger_v1_";
 
 interface LocalAccountRecord {
@@ -30,6 +31,99 @@ function setStoredCloudToken(token: string | null): void {
   } catch {
     // Ignore storage issues
   }
+}
+
+export function getGoogleOAuthUrl(): string | null {
+  if (!isCloudSyncConfigured() || typeof window === "undefined") return null;
+  const redirectTarget = `${window.location.origin}/`;
+  return `${SHIZUKU_ECOSYSTEM.apiUrl}/api/ecosystem/google?redirect=${encodeURIComponent(
+    redirectTarget
+  )}`;
+}
+
+export interface OAuthCallbackResult {
+  tokenCaptured: boolean;
+  oauthError: string | null;
+}
+
+// Retains the most recent unacknowledged OAuth callback across React StrictMode
+// double-mount cycles so URL hash cleanup on mount #1 does not drop post-auth UX.
+let pendingOAuthCallback: OAuthCallbackResult | null = null;
+
+export function rememberPostAuthTab(tab: string): void {
+  try {
+    sessionStorage.setItem(POST_AUTH_TAB_KEY, tab);
+  } catch {
+    // Ignore sessionStorage errors
+  }
+}
+
+export function peekPostAuthTab(): string | null {
+  try {
+    return sessionStorage.getItem(POST_AUTH_TAB_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function acknowledgeOAuthCallback(): void {
+  pendingOAuthCallback = null;
+  try {
+    sessionStorage.removeItem(POST_AUTH_TAB_KEY);
+  } catch {
+    // Ignore sessionStorage errors
+  }
+}
+
+/**
+ * Inspects `window.location.hash` for `#shizuku_token=<jwt>` returned by
+ * SHIZUKU Google OAuth callback, stores the Bearer token, and cleans the URL
+ * immediately via `history.replaceState`. Safe across React StrictMode remounts.
+ */
+export function consumeOAuthCallbackFromUrl(): OAuthCallbackResult {
+  if (typeof window === "undefined") {
+    return { tokenCaptured: false, oauthError: null };
+  }
+
+  let tokenCaptured = false;
+  let oauthError: string | null = null;
+  let shouldCleanUrl = false;
+
+  const rawHash = window.location.hash;
+  if (rawHash && rawHash.length > 1) {
+    const hashParams = new URLSearchParams(rawHash.slice(1));
+    const token = hashParams.get("shizuku_token")?.trim();
+    if (token) {
+      setStoredCloudToken(token);
+      hashParams.delete("shizuku_token");
+      tokenCaptured = true;
+      shouldCleanUrl = true;
+    }
+  }
+
+  const searchParams = new URLSearchParams(window.location.search);
+  const errParam = searchParams.get("oauthError")?.trim();
+  if (errParam) {
+    oauthError = errParam;
+    searchParams.delete("oauthError");
+    shouldCleanUrl = true;
+  }
+
+  if (shouldCleanUrl) {
+    const cleanSearch = searchParams.toString();
+    const cleanUrl = `${window.location.pathname}${
+      cleanSearch ? `?${cleanSearch}` : ""
+    }`;
+    window.history.replaceState(null, "", cleanUrl);
+    pendingOAuthCallback = { tokenCaptured, oauthError };
+    return pendingOAuthCallback;
+  }
+
+  if (pendingOAuthCallback) {
+    return pendingOAuthCallback;
+  }
+
+  return { tokenCaptured: false, oauthError: null };
 }
 
 function buildCloudHeaders(json = false): HeadersInit {

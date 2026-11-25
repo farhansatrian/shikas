@@ -80,6 +80,7 @@ export const AccountPanel: React.FC = () => {
 
   const shizukuHubUrl =
     SHIZUKU_ECOSYSTEM.hubUrl || store.settings.shizukuWebsiteUrl.trim();
+  const shizukuAccountUrl = shizukuHubUrl ? `${shizukuHubUrl}/account` : "";
 
   const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -144,14 +145,20 @@ export const AccountPanel: React.FC = () => {
                     {user ? user.displayName : t.account.guestName}
                   </p>
                   <span
-                    className={`border px-1.5 py-0.5 font-mono text-[8.5px] font-bold tracking-[0.14em] uppercase ${
+                    className={`inline-flex items-center gap-1 border px-1.5 py-0.5 font-mono text-[8.5px] font-bold tracking-[0.14em] uppercase ${
                       user
                         ? user.mode === "cloud"
-                          ? "border-[#2276a8] bg-[#2276a8]/10 text-[#2276a8]"
+                          ? "border-emerald-600/50 bg-emerald-500/12 text-emerald-700"
                           : "border-[#745bc7] bg-[#745bc7]/10 text-[#745bc7]"
                         : "border-[#5d5370]/45 text-[#5d5370]"
                     }`}
                   >
+                    {user?.mode === "cloud" && (
+                      <span
+                        className="h-1.5 w-1.5 rounded-full bg-emerald-500"
+                        aria-hidden="true"
+                      />
+                    )}
                     {user
                       ? user.mode === "cloud"
                         ? t.account.cloudBadge
@@ -215,9 +222,9 @@ export const AccountPanel: React.FC = () => {
                 </span>
               </div>
 
-              {shizukuHubUrl ? (
+              {shizukuAccountUrl ? (
                 <a
-                  href={shizukuHubUrl}
+                  href={shizukuAccountUrl}
                   target="_blank"
                   rel="noreferrer"
                   className="flex items-center justify-between gap-2 px-3.5 py-2.5 transition hover:bg-[#f7f3fe]"

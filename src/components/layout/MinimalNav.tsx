@@ -41,25 +41,38 @@ export const MinimalNav: React.FC = () => {
     openAccountPanel,
   } = useCashflow();
 
+  const shortUserName = user
+    ? user.displayName.trim().split(/\s+/)[0] ||
+      user.email.split("@")[0] ||
+      "ID"
+    : "";
+
   const renderAccountTrigger = (compact = false) => {
     if (user) {
       return (
         <button
           type="button"
           onClick={openAccountPanel}
-          aria-label={t.nav.account}
-          className={`inline-flex items-center gap-1.5 border border-[#745bc7] bg-[#fdf9ff]/92 font-mono font-semibold tracking-[0.08em] text-[#14100e] shadow-[2px_2px_0_0_rgba(116,91,199,0.22)] transition hover:-translate-x-0.5 hover:-translate-y-0.5 hover:bg-white ${
-            compact ? "px-2 py-1 text-[10px]" : "px-2.5 py-1 text-[11px]"
+          title={`${locale === "id" ? "Masuk sebagai" : "Signed in as"} ${user.displayName} (${user.email})`}
+          aria-label={`${t.nav.account}: ${user.displayName}`}
+          className={`inline-flex shrink-0 items-center gap-1.5 border-[1.5px] border-[#745bc7] bg-[#745bc7] font-mono font-semibold text-white uppercase shadow-[2px_2px_0_0_rgba(116,91,199,0.22)] transition hover:bg-[#5f47a8] ${
+            compact
+              ? "px-2 py-1 text-[9.5px] tracking-[0.08em]"
+              : "px-3 py-1.5 text-[10.5px] tracking-[0.12em]"
           }`}
         >
           <span
-            className="h-1.5 w-1.5 shrink-0"
-            style={{
-              backgroundColor: user.mode === "cloud" ? "#2276a8" : "#745bc7",
-            }}
+            className="h-2 w-2 shrink-0 rounded-full bg-emerald-400 ring-2 ring-emerald-400/35"
+            aria-hidden="true"
           />
-          <span className="max-w-[96px] truncate">{user.displayName}</span>
-          <ChevronDown className="h-3 w-3 shrink-0 text-[#745bc7]" />
+          <span
+            className={
+              compact ? "max-w-[74px] truncate" : "max-w-[96px] truncate"
+            }
+          >
+            {shortUserName}
+          </span>
+          <ChevronDown className="h-3 w-3 shrink-0 opacity-85" />
         </button>
       );
     }
@@ -68,11 +81,15 @@ export const MinimalNav: React.FC = () => {
       <button
         type="button"
         onClick={() => openAuthModal("signin")}
-        className={`inline-flex items-center gap-1.5 border border-[#745bc7] bg-[#fdf9ff]/90 font-mono font-semibold tracking-[0.12em] text-[#745bc7] uppercase shadow-[2px_2px_0_0_rgba(116,91,199,0.22)] transition hover:-translate-x-0.5 hover:-translate-y-0.5 hover:bg-[#745bc7] hover:text-white ${
-          compact ? "px-2 py-1 text-[10px]" : "px-2.5 py-1 text-[10.5px]"
+        title={locale === "id" ? "Masuk dengan SHIZUKU ID" : "Sign in with SHIZUKU ID"}
+        aria-label="SHIZUKU ID"
+        className={`inline-flex shrink-0 items-center gap-1.5 border-[1.5px] border-[#745bc7] bg-white/85 font-mono font-semibold text-[#745bc7] uppercase shadow-[2px_2px_0_0_rgba(116,91,199,0.16)] transition hover:bg-[#745bc7] hover:text-white ${
+          compact
+            ? "px-2 py-1 text-[9.5px] tracking-[0.09em]"
+            : "px-3 py-1.5 text-[10.5px] tracking-[0.12em]"
         }`}
       >
-        <User className="h-3 w-3 shrink-0" />
+        <User className="h-3 w-3 shrink-0 sm:h-3.5 sm:w-3.5" />
         <span>{t.nav.signIn}</span>
       </button>
     );
@@ -80,38 +97,38 @@ export const MinimalNav: React.FC = () => {
 
   return (
     <header className="relative z-20 w-full">
-      <div className="mx-auto w-full max-w-[1440px] px-5 pt-6 pb-4 sm:px-10 sm:pt-8">
-        <div className="flex flex-col gap-4 md:grid md:grid-cols-[1fr_auto_1fr] md:items-center md:gap-4">
-          {/* Left: SHIKAS + Shizuku Umbrella logo */}
-          <div className="flex items-center justify-between md:justify-start">
+      <div className="mx-auto w-full max-w-[1440px] px-4 pt-5 pb-3 sm:px-10 sm:pt-8 sm:pb-4">
+        <div className="flex flex-col gap-3.5 md:grid md:grid-cols-[1fr_auto_1fr] md:items-center md:gap-4">
+          {/* Left: SHIKAS + Shizuku Umbrella logo (calibrated for 360px+ breathing room) */}
+          <div className="flex items-center justify-between gap-2 md:justify-start">
             <button
               type="button"
               onClick={() => setActiveTab("home")}
               aria-label="shikas Home"
-              className="group inline-flex items-center gap-2 text-[#745bc7] transition-opacity hover:opacity-75 focus:outline-none"
+              className="group inline-flex shrink-0 items-center gap-1.5 text-[#745bc7] transition-opacity hover:opacity-75 focus:outline-none sm:gap-2"
             >
-              <span className="font-editorial text-[20px] font-medium tracking-[0.28em] uppercase sm:text-[23px]">
+              <span className="font-editorial text-[17px] font-medium tracking-[0.22em] uppercase sm:text-[23px] sm:tracking-[0.28em]">
                 SHIKAS
               </span>
-              <ShizukuUmbrellaMark className="h-5 w-5 sm:h-6 sm:w-6" />
+              <ShizukuUmbrellaMark className="h-5 w-5 shrink-0 sm:h-6 sm:w-6" />
             </button>
 
-            {/* Mobile Right Controls: Account / Sign In + EN | ID */}
-            <div className="flex items-center gap-2.5 md:hidden">
+            {/* Mobile Right Controls: SHIZUKU ID Status + EN | ID */}
+            <div className="flex shrink-0 items-center gap-2 md:hidden">
               {renderAccountTrigger(true)}
               <div
                 role="group"
                 aria-label="Language switcher"
-                className="flex items-center gap-1 font-editorial text-xs font-bold tracking-[0.16em]"
+                className="flex shrink-0 items-center gap-1 font-editorial text-xs font-bold tracking-[0.12em]"
               >
                 <button
                   type="button"
                   onClick={() => setLocale("en")}
-                  className={
+                  className={`px-0.5 py-0.5 ${
                     locale === "en"
                       ? "text-[#745bc7]"
                       : "text-[#745bc7]/40 transition hover:text-[#745bc7]/80"
-                  }
+                  }`}
                 >
                   EN
                 </button>
@@ -119,11 +136,11 @@ export const MinimalNav: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setLocale("id")}
-                  className={
+                  className={`px-0.5 py-0.5 ${
                     locale === "id"
                       ? "text-[#745bc7]"
                       : "text-[#745bc7]/40 transition hover:text-[#745bc7]/80"
-                  }
+                  }`}
                 >
                   ID
                 </button>
@@ -133,7 +150,7 @@ export const MinimalNav: React.FC = () => {
 
           {/* Dead-Center 3-Tab Nav (HOME · CASHFLOW · ANALYTICS) */}
           <nav aria-label="Primary navigation" className="flex justify-center">
-            <ul className="flex flex-wrap items-center justify-center gap-x-7 gap-y-1.5 sm:gap-x-11">
+            <ul className="flex flex-wrap items-center justify-center gap-x-6 gap-y-1 sm:gap-x-11">
               {NAV_TABS.map((tab) => {
                 const active = activeTab === tab;
                 return (
@@ -155,14 +172,14 @@ export const MinimalNav: React.FC = () => {
             </ul>
           </nav>
 
-          {/* Desktop Right: Noticeable SHIZUKU ID Trigger + EN | ID */}
+          {/* Desktop Right: Aligned SHIZUKU ID Status + EN | ID */}
           <div className="hidden items-center justify-end gap-4 md:flex">
             {renderAccountTrigger(false)}
 
             <div
               role="group"
               aria-label="Language switcher"
-              className="flex items-center gap-2 font-editorial text-[13px] font-bold tracking-[0.18em]"
+              className="flex shrink-0 items-center gap-2 font-editorial text-[13px] font-bold tracking-[0.18em]"
             >
               <button
                 type="button"

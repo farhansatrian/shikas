@@ -260,6 +260,8 @@ export const AnalyticsView: React.FC = () => {
                 <CartesianGrid strokeDasharray="2 4" stroke="rgba(116,91,199,0.2)" vertical={false} />
                 <XAxis
                   dataKey="label"
+                  interval="preserveStartEnd"
+                  minTickGap={22}
                   tick={{ fill: "#5d5370", fontSize: 10, fontFamily: "JetBrains Mono, monospace" }}
                   axisLine={{ stroke: "rgba(116,91,199,0.35)" }}
                   tickLine={false}
