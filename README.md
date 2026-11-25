@@ -31,9 +31,9 @@
 3. **Pencatatan Pemasukan, Pengeluaran & Transfer Antar-Kantong (`CASHFLOW`)**
    - Pencatatan cepat dalam format Rupiah (**IDR / `Rp`**) dengan **kategori ringkas & terstruktur**:
      - **Pemasukan (2 kategori)**: 💼 Gaji (*Salary*) · ➕ Lainnya (*Other*)
-     - **Pengeluaran (7 kategori)**: 🍽️ Makan & Minum · 🏠 Tagihan & Kost · 🚆 Transportasi · 🛍️ Belanja · 🎵 Hiburan · 🏦 Admin Bank · 🧾 Lainnya
+     - **Pengeluaran (8 kategori)**: 🍽️ Makan & Minum · 🏠 Tagihan & Kost · 🚆 Transportasi · 🛍️ Belanja · 🎵 Hiburan · 🎁 Berbagi · 🏦 Admin Bank · 🧾 Lainnya
      - **Transfer (1 kategori khusus)**: ⇄ Pindah saldo antar-kantong secara internal.
-   - **Biaya Admin Transfer Akurat (`feeIdr`)**: Saat melakukan transfer (misal Rp 1.000.000 dari *Daily* ke *Savings* dengan biaya admin Rp 2.500), saldo sumber berkurang `Rp 1.002.500`, saldo tujuan bertambah `Rp 1.000.000`, dan **hanya biaya admin Rp 2.500** yang dihitung sebagai pengeluaran—mencegah *double-counting* nominal transfer.
+   - **Akuntansi Harian vs Tabungan & Biaya Admin Akurat (`feeIdr`)**: Saat melakukan transfer dari *Daily* ke *Savings* (misal Rp 3.000.000 dengan biaya admin Rp 2.500), saldo sumber berkurang `Rp 3.002.500`, saldo tujuan bertambah `Rp 3.000.000`, `NET CASHFLOW · DAILY` mencerminkan sisa arus kas harian non-tabungan, **`SAVINGS FLOW`** melacak arus bersih tabungan, dan **hanya biaya admin Rp 2.500** yang dihitung sebagai pengeluaran murni—sementara pengeluaran langsung dari kantong *Savings* tetap tercatat penuh di `Expense` & `Analytics`.
    - **Raindrop Vessel & Filter Cepat**: Indikator visual rasio *Saved vs Spent*, filter jenis transaksi (`ALL · INCOME · EXPENSE · TRANSFER`), filter per kantong, pencarian catatan/merchant, serta pengelompokan harian.
 
 4. **Siklus Gajian Kustom per Akun (`Custom Payday Cycle: Day 1–28`)**
@@ -43,7 +43,7 @@
 5. **Analitik Arus Kas Interaktif (`ANALYTICS` — *Lazy-Loaded*)**
    - Modul grafik `recharts` dimuat secara *lazy* (tidak membebani waktu muat awal aplikasi).
    - Mendukung **4 rentang waktu dinamis**: `3M`, `6M`, `12M`, dan `ALL TIME` mengikuti tanggal siklus gajian pengguna.
-   - Visualisasi lengkap: **Composed Bar + Line Chart** (perbandingan Pemasukan vs Pengeluaran & Net), **Donut Chart** proporsi pengeluaran per kategori, **Area Chart** tren saldo kumulatif, serta ringkasan *Savings Rate* dan delta persentase antar-periode.
+   - Visualisasi lengkap: **Composed 3-Bar + Line Chart** (perbandingan Pemasukan, Pengeluaran Murni, **Arus Tabungan**, & Total Net lengkap dengan tooltip *Daily Net*), **Donut Chart** proporsi pengeluaran per kategori, **Dual Area Chart** tren **Total Saldo** vs **Saldo Tabungan**, serta ringkasan *SHIZUKU Chronicle*.
 
 6. **Mode Lokal Instan & Sinkronisasi Cloud Privat (`SHIZUKU ID` + Google Sign-In)**
    - **Offline-First (`LOCAL MODE`)**: Langsung dapat dicoba tanpa wajib membuat akun; seluruh data tersimpan aman di `localStorage` browser.
