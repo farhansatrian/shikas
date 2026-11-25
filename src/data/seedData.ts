@@ -98,7 +98,7 @@ export function createDemoSeedData(): CashflowStoreData {
     mkTx("tx-m5-2", "expense", dateInMonth(m5, 3), 2_400_000, "housing", "Rent & electricity", "Kost Sudirman", "acc-wondr"),
     mkTx("tx-m5-3", "expense", dateInMonth(m5, 9), 1_750_000, "food", "Daily meals & coffee", "Kopi Kenangan", "acc-wondr"),
     mkTx("tx-m5-4", "expense", dateInMonth(m5, 13), 590_000, "transport", "MRT & daily commute", "Gojek / MRT", "acc-gopay"),
-    mkTx("tx-m5-5", "expense", dateInMonth(m5, 19), 1_200_000, "other_expense", "Monthly family support", undefined, "acc-wondr"),
+    mkTx("tx-m5-5", "expense", dateInMonth(m5, 19), 1_200_000, "giving", "Monthly family support", undefined, "acc-wondr"),
     mkTx("tx-m5-6", "expense", dateInMonth(m5, 28), 15_000, "fees", "Monthly BCA admin fee", "BCA", "acc-bca"),
 
     // m4
@@ -108,7 +108,7 @@ export function createDemoSeedData(): CashflowStoreData {
     mkTx("tx-m4-2", "expense", dateInMonth(m4, 3), 2_725_000, "housing", "Rent, power & internet", "Kost Sudirman", "acc-wondr"),
     mkTx("tx-m4-3", "expense", dateInMonth(m4, 10), 1_890_000, "food", "Lunch, groceries & coffee", "Superindo", "acc-wondr"),
     mkTx("tx-m4-4", "expense", dateInMonth(m4, 14), 640_000, "transport", "Commuter & ride-hailing", "MRT / Gojek", "acc-gopay"),
-    mkTx("tx-m4-5", "expense", dateInMonth(m4, 20), 1_200_000, "other_expense", "Monthly family support", undefined, "acc-wondr"),
+    mkTx("tx-m4-5", "expense", dateInMonth(m4, 20), 1_200_000, "giving", "Monthly family support", undefined, "acc-wondr"),
     mkTx("tx-m4-6", "expense", dateInMonth(m4, 28), 15_000, "fees", "Monthly BCA admin fee", "BCA", "acc-bca"),
 
     // m3
@@ -119,7 +119,7 @@ export function createDemoSeedData(): CashflowStoreData {
     mkTx("tx-m3-3", "expense", dateInMonth(m3, 6), 1_650_000, "food", "Daily meals, coffee & groceries", undefined, "acc-wondr"),
     mkTx("tx-m3-4", "expense", dateInMonth(m3, 9), 620_000, "transport", "MRT & GoRide", "Gojek / MRT", "acc-gopay"),
     mkTx("tx-m3-5", "expense", dateInMonth(m3, 16), 950_000, "shopping", "Mechanical keycaps & desk setup", "Tokopedia", "acc-wondr"),
-    mkTx("tx-m3-6", "expense", dateInMonth(m3, 20), 1_200_000, "other_expense", "Monthly family support", undefined, "acc-wondr"),
+    mkTx("tx-m3-6", "expense", dateInMonth(m3, 20), 1_200_000, "giving", "Monthly family support", undefined, "acc-wondr"),
     mkTx("tx-m3-7", "expense", dateInMonth(m3, 28), 15_000, "fees", "Monthly BCA admin fee", "BCA", "acc-bca"),
 
     // m2
@@ -156,7 +156,7 @@ export function createDemoSeedData(): CashflowStoreData {
     mkTx("tx-m0-5", "expense", dateInMonth(m0, clampCurrent(9)), 245_000, "transport", "MRT pass & GoRide", "Gojek / MRT", "acc-gopay"),
     mkTx("tx-m0-6", "expense", dateInMonth(m0, clampCurrent(13)), 390_000, "food", "Team ramen dinner & matcha", "Marutama Ramen", "acc-wondr"),
     mkTx("tx-m0-7", "income", dateInMonth(m0, clampCurrent(15)), 2_100_000, "other_income", "Side sprint & freelance", "Remote Sprint", "acc-wondr"),
-    mkTx("tx-m0-8", "expense", dateInMonth(m0, clampCurrent(17)), 1_250_000, "other_expense", "Monthly family support", undefined, "acc-wondr"),
+    mkTx("tx-m0-8", "expense", dateInMonth(m0, clampCurrent(17)), 1_250_000, "giving", "Monthly family support", undefined, "acc-wondr"),
     mkTx("tx-m0-9", "expense", dateInMonth(m0, clampCurrent(19)), 480_000, "shopping", "Essentials & desk accessories", "Tokopedia", "acc-wondr"),
     mkTx("tx-m0-10", "expense", dateInMonth(m0, clampCurrent(21)), 315_000, "entertainment", "Afternoon coffee, manga & parking", "Gramedia", "acc-wondr"),
     mkTx("tx-m0-11", "expense", dateInMonth(m0, clampCurrent(22)), 620_000, "food", "Weekday lunches (week 3)", "Canteen & Cafe", "acc-wondr"),

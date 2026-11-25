@@ -5,12 +5,13 @@ export const CATEGORIES: CategoryDefinition[] = [
   { id: "salary", type: "income", nameId: "Gaji", nameEn: "Salary", color: "#2276a8", icon: "Briefcase" },
   { id: "other_income", type: "income", nameId: "Lainnya", nameEn: "Other", color: "#745bc7", icon: "PlusCircle" },
 
-  // Expense (7 everyday categories including Bank & Admin fees)
+  // Expense (8 everyday categories including Giving & Bank Admin)
   { id: "food", type: "expense", nameId: "Makan & Minum", nameEn: "Food & Drinks", color: "#c837a5", icon: "Utensils" },
   { id: "housing", type: "expense", nameId: "Tagihan & Kost", nameEn: "Bills & Housing", color: "#745bc7", icon: "Home" },
   { id: "transport", type: "expense", nameId: "Transportasi", nameEn: "Transport", color: "#4e6bc4", icon: "Train" },
   { id: "shopping", type: "expense", nameId: "Belanja", nameEn: "Shopping", color: "#d749d5", icon: "ShoppingBag" },
   { id: "entertainment", type: "expense", nameId: "Hiburan", nameEn: "Leisure", color: "#8b5cf6", icon: "Music" },
+  { id: "giving", type: "expense", nameId: "Berbagi", nameEn: "Giving", color: "#1f8f6b", icon: "Gift" },
   { id: "fees", type: "expense", nameId: "Admin Bank", nameEn: "Bank & Admin", color: "#4e5d78", icon: "Landmark" },
   { id: "other_expense", type: "expense", nameId: "Lainnya", nameEn: "Other", color: "#5d5370", icon: "Receipt" },
 
@@ -29,7 +30,7 @@ const LEGACY_CATEGORY_MAP: Record<string, string> = {
   subscriptions: "housing",
   health: "other_expense",
   education: "other_expense",
-  family: "other_expense",
+  family: "giving",
 };
 
 export function normalizeCategoryId(

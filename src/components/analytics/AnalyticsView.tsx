@@ -11,6 +11,7 @@ import {
   Line,
   Pie,
   PieChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -25,6 +26,7 @@ import {
   computePercentDelta,
   computeTimeRangeSeries,
   type AnalyticsRange,
+  type MonthlySeriesPoint,
 } from "../../utils/calculations";
 import {
   formatCompactIdr,
@@ -42,13 +44,18 @@ const RANGE_OPTIONS: Array<{ id: AnalyticsRange; en: string; idLabel: string }> 
   { id: "all", en: "ALL TIME", idLabel: "SEMUA" },
 ];
 
+interface ChartPoint extends MonthlySeriesPoint {
+  label: string;
+  fullLabel: string;
+}
+
 export const AnalyticsView: React.FC = () => {
   const { store, selectedMonth, setSelectedMonth, t, locale } = useCashflow();
   const [range, setRange] = useState<AnalyticsRange>("6m");
 
   const cycleStartDay = store.settings.cycleStartDay;
 
-  const seriesData = useMemo(
+  const seriesData = useMemo<ChartPoint[]>(
     () =>
       computeTimeRangeSeries(
         store.transactions,
@@ -79,6 +86,14 @@ export const AnalyticsView: React.FC = () => {
   const hasSavingsPockets = useMemo(
     () => store.accounts.some((a) => a.role === "savings"),
     [store.accounts]
+  );
+
+  const hasNegativeFlow = useMemo(
+    () =>
+      seriesData.some(
+        (pt) => pt.netIdr < 0 || (hasSavingsPockets && pt.savingsFlowIdr < 0)
+      ),
+    [seriesData, hasSavingsPockets]
   );
 
   const periodTotals = useMemo(() => {
@@ -137,8 +152,8 @@ export const AnalyticsView: React.FC = () => {
 
   const chronicles = useMemo(() => {
     const list: string[] = [];
-    const mask = (v: number) =>
-      store.settings.privacyMode ? "Rp •••••••" : formatIdr(v);
+    const mask = (v: number, showSign = false) =>
+      store.settings.privacyMode ? "Rp •••••••" : formatIdr(v, showSign);
 
     const top = expenseBreakdown[0];
     if (top) {
@@ -151,7 +166,10 @@ export const AnalyticsView: React.FC = () => {
     }
 
     if (range !== "all") {
-      const expDelta = computePercentDelta(currentSummary.expenseIdr, prevSummary.expenseIdr);
+      const expDelta = computePercentDelta(
+        currentSummary.expenseIdr,
+        prevSummary.expenseIdr
+      );
       if (expDelta !== null) {
         const verbId = expDelta <= 0 ? "turun" : "naik";
         const verbEn = expDelta <= 0 ? "decreased" : "increased";
@@ -164,16 +182,36 @@ export const AnalyticsView: React.FC = () => {
     } else if (seriesData.length > 0) {
       list.push(
         locale === "id"
-          ? `Total ${seriesData.length} bulan tercatat dari ${seriesData[0].label} hingga ${seriesData[seriesData.length - 1].label}.`
-          : `Covering ${seriesData.length} recorded months from ${seriesData[0].label} through ${seriesData[seriesData.length - 1].label}.`
+          ? `Total ${seriesData.length} periode tercatat dari ${seriesData[0].label} hingga ${seriesData[seriesData.length - 1].label}.`
+          : `Covering ${seriesData.length} recorded periods from ${seriesData[0].label} through ${seriesData[seriesData.length - 1].label}.`
       );
+    }
+
+    if (hasSavingsPockets && periodTotals.savingsFlowIdr !== 0) {
+      const pctOfIncome =
+        periodTotals.incomeIdr > 0
+          ? ` (${((Math.abs(periodTotals.savingsFlowIdr) / periodTotals.incomeIdr) * 100).toFixed(1)}% ${locale === "id" ? "dari pemasukan" : "of income"})`
+          : "";
+      if (periodTotals.savingsFlowIdr > 0) {
+        list.push(
+          locale === "id"
+            ? `Total ${mask(periodTotals.savingsFlowIdr, true)} masuk bersih ke kantong Tabungan selama ${rangeTag.toLowerCase()}${pctOfIncome}.`
+            : `Net ${mask(periodTotals.savingsFlowIdr, true)} secured into Savings pockets over ${rangeTag.toLowerCase()}${pctOfIncome}.`
+        );
+      } else {
+        list.push(
+          locale === "id"
+            ? `Total penarikan bersih ${mask(Math.abs(periodTotals.savingsFlowIdr))} dari kantong Tabungan selama ${rangeTag.toLowerCase()}.`
+            : `Net ${mask(Math.abs(periodTotals.savingsFlowIdr))} drawn from Savings pockets over ${rangeTag.toLowerCase()}.`
+        );
+      }
     }
 
     if (periodTotals.incomeIdr > 0) {
       list.push(
         locale === "id"
-          ? `Rasio tabungan rata-rata periode ini ${periodTotals.savingsRate.toFixed(1)}% dengan selisih bersih ${mask(periodTotals.netIdr)}.`
-          : `Average savings rate across this period is ${periodTotals.savingsRate.toFixed(1)}% with ${mask(periodTotals.netIdr)} net cashflow.`
+          ? `Rasio tabungan rata-rata periode ini ${periodTotals.savingsRate.toFixed(1)}% dengan selisih bersih ${mask(periodTotals.netIdr, true)}.`
+          : `Average savings rate across this period is ${periodTotals.savingsRate.toFixed(1)}% with ${mask(periodTotals.netIdr, true)} total net cashflow.`
       );
     }
 
@@ -189,11 +227,83 @@ export const AnalyticsView: React.FC = () => {
     rangeTag,
     seriesData,
     periodTotals,
+    hasSavingsPockets,
     store.settings.privacyMode,
   ]);
 
-  const formatTooltip = (value: number) =>
-    store.settings.privacyMode ? "Rp •••••••" : formatIdr(value);
+  const formatTooltip = (value: number, showSign = false) =>
+    store.settings.privacyMode ? "Rp •••••••" : formatIdr(value, showSign);
+
+  const renderMainTooltip = ({
+    active,
+    payload,
+  }: {
+    active?: boolean;
+    payload?: Array<{ payload?: ChartPoint }>;
+  }) => {
+    const pt = payload?.[0]?.payload;
+    if (!active || !pt) return null;
+
+    return (
+      <div className="border-[1.5px] border-[#745bc7] bg-[#fdf9ff]/98 px-3 py-2.5 font-mono text-[11px] shadow-[4px_4px_0_0_rgba(116,91,199,0.2)]">
+        <p className="border-b border-[#745bc7]/20 pb-1 font-bold text-[#14100e]">
+          {pt.fullLabel}
+        </p>
+        <div className="mt-1.5 space-y-1">
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-[#2276a8]">{t.analytics.incomeLegend}</span>
+            <span className="font-mono-num font-bold text-[#2276a8]">
+              {formatTooltip(pt.incomeIdr)}
+            </span>
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-[#c837a5]">{t.analytics.expenseLegend}</span>
+            <span className="font-mono-num font-bold text-[#c837a5]">
+              {formatTooltip(pt.expenseIdr)}
+            </span>
+          </div>
+          {hasSavingsPockets && (
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-[#745bc7]">{t.analytics.savingsLegend}</span>
+              <span
+                className={`font-mono-num font-bold ${
+                  pt.savingsFlowIdr < 0 ? "text-[#c837a5]" : "text-[#745bc7]"
+                }`}
+              >
+                {formatTooltip(pt.savingsFlowIdr, true)}
+              </span>
+            </div>
+          )}
+          <div className="mt-1.5 space-y-1 border-t border-[#745bc7]/20 pt-1.5">
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-[#14100e]">{t.analytics.netLegend}</span>
+              <span
+                className={`font-mono-num font-bold ${
+                  pt.netIdr < 0 ? "text-[#c837a5]" : "text-[#14100e]"
+                }`}
+              >
+                {formatTooltip(pt.netIdr, true)}
+              </span>
+            </div>
+            {hasSavingsPockets && (
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-[#5d5370]">
+                  {t.analytics.dailyNetLegend}
+                </span>
+                <span
+                  className={`font-mono-num font-semibold ${
+                    pt.dailyNetIdr < 0 ? "text-[#c837a5]" : "text-[#5d5370]"
+                  }`}
+                >
+                  {formatTooltip(pt.dailyNetIdr, true)}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -201,7 +311,7 @@ export const AnalyticsView: React.FC = () => {
 
       {/* Primary Analytics Frame (Starts directly below nav — 100% consistent with CASHFLOW) */}
       <section className="vn-frame overflow-hidden">
-        {/* Vivid SHIZUKU Watercolor Band Header Strip + Integrated Month Switcher */}
+        {/* Vivid SHIZUKU Watercolor Band Header Strip + Integrated Period Switcher */}
         <div className="shikas-band-strip flex flex-wrap items-center justify-between gap-2 px-4 py-2 text-white">
           <span className="font-mono text-[10px] font-semibold tracking-[0.2em] uppercase drop-shadow-2xs">
             {locale === "id"
@@ -265,7 +375,7 @@ export const AnalyticsView: React.FC = () => {
             })}
           </div>
 
-          {/* Inline Period Summary Numbers */}
+          {/* Inline Period Summary Numbers (1:1 color-coded with chart series) */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[11px]">
             <span className="text-[#5d5370]">
               {locale === "id" ? "MASUK" : "IN"}{" "}
@@ -310,55 +420,48 @@ export const AnalyticsView: React.FC = () => {
 
         {/* Main Composed Chart */}
         <div className="bg-white/95 p-4 sm:p-5">
-          <div className="h-[265px] w-full">
+          <div className="h-[270px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={seriesData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="2 4" stroke="rgba(116,91,199,0.2)" vertical={false} />
+              <ComposedChart
+                data={seriesData}
+                margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+              >
+                <CartesianGrid
+                  strokeDasharray="2 4"
+                  stroke="rgba(116,91,199,0.2)"
+                  vertical={false}
+                />
                 <XAxis
                   dataKey="label"
                   interval="preserveStartEnd"
                   minTickGap={22}
-                  tick={{ fill: "#5d5370", fontSize: 10, fontFamily: "JetBrains Mono, monospace" }}
+                  tick={{
+                    fill: "#5d5370",
+                    fontSize: 10,
+                    fontFamily: "JetBrains Mono, monospace",
+                  }}
                   axisLine={{ stroke: "rgba(116,91,199,0.35)" }}
                   tickLine={false}
                 />
                 <YAxis
-                  width={68}
-                  tick={{ fill: "#5d5370", fontSize: 10, fontFamily: "JetBrains Mono, monospace" }}
+                  width={76}
+                  tick={{
+                    fill: "#5d5370",
+                    fontSize: 10,
+                    fontFamily: "JetBrains Mono, monospace",
+                  }}
                   axisLine={false}
                   tickLine={false}
                   tickFormatter={(v: number) =>
                     store.settings.privacyMode ? "••" : formatCompactIdr(v, locale)
                   }
                 />
+                {hasNegativeFlow && (
+                  <ReferenceLine y={0} stroke="rgba(116,91,199,0.45)" />
+                )}
                 <Tooltip
                   cursor={{ fill: "rgba(116,91,199,0.08)" }}
-                  contentStyle={{
-                    backgroundColor: "rgba(253,249,255,0.98)",
-                    borderColor: "#745bc7",
-                    borderWidth: "1.5px",
-                    borderRadius: "0px",
-                    boxShadow: "4px 4px 0 rgba(116,91,199,0.2)",
-                    fontFamily: "JetBrains Mono, monospace",
-                    fontSize: "11px",
-                  }}
-                  labelFormatter={(label, payload) =>
-                    String(
-                      (
-                        payload?.[0]?.payload as
-                          | { fullLabel?: string }
-                          | undefined
-                      )?.fullLabel ?? label
-                    )
-                  }
-                  formatter={(val: number, name: string) => [
-                    formatTooltip(val),
-                    name === "incomeIdr"
-                      ? t.analytics.incomeLegend
-                      : name === "expenseIdr"
-                        ? t.analytics.expenseLegend
-                        : t.analytics.netLegend,
-                  ]}
+                  content={renderMainTooltip}
                 />
                 <Legend
                   formatter={(val: string) =>
@@ -366,31 +469,50 @@ export const AnalyticsView: React.FC = () => {
                       ? t.analytics.incomeLegend
                       : val === "expenseIdr"
                         ? t.analytics.expenseLegend
-                        : t.analytics.netLegend
+                        : val === "savingsFlowIdr"
+                          ? t.analytics.savingsLegend
+                          : t.analytics.netLegend
                   }
-                  wrapperStyle={{ fontSize: "11px", fontFamily: "JetBrains Mono, monospace" }}
+                  wrapperStyle={{
+                    fontSize: "11px",
+                    fontFamily: "JetBrains Mono, monospace",
+                  }}
                 />
                 <Bar
                   dataKey="incomeIdr"
                   fill="#2276a8"
                   radius={[0, 0, 0, 0]}
-                  maxBarSize={seriesData.length > 8 ? 16 : 24}
+                  maxBarSize={seriesData.length > 8 ? 14 : hasSavingsPockets ? 18 : 24}
                   animationDuration={360}
                 />
                 <Bar
                   dataKey="expenseIdr"
                   fill="#d749d5"
                   radius={[0, 0, 0, 0]}
-                  maxBarSize={seriesData.length > 8 ? 16 : 24}
+                  maxBarSize={seriesData.length > 8 ? 14 : hasSavingsPockets ? 18 : 24}
                   animationDuration={360}
                 />
+                {hasSavingsPockets && (
+                  <Bar
+                    dataKey="savingsFlowIdr"
+                    fill="#745bc7"
+                    radius={[0, 0, 0, 0]}
+                    maxBarSize={seriesData.length > 8 ? 14 : 18}
+                    animationDuration={360}
+                  />
+                )}
                 <Line
                   type="monotone"
                   dataKey="netIdr"
-                  stroke="#745bc7"
+                  stroke={hasSavingsPockets ? "#14100e" : "#745bc7"}
                   strokeWidth={2.2}
                   animationDuration={360}
-                  dot={{ r: 3.5, fill: "#745bc7", strokeWidth: 1.5, stroke: "#ffffff" }}
+                  dot={{
+                    r: 3.5,
+                    fill: hasSavingsPockets ? "#14100e" : "#745bc7",
+                    strokeWidth: 1.5,
+                    stroke: "#ffffff",
+                  }}
                 />
               </ComposedChart>
             </ResponsiveContainer>
@@ -458,6 +580,10 @@ export const AnalyticsView: React.FC = () => {
                   {expenseBreakdown.map((item) => {
                     const cat = CATEGORY_MAP[item.categoryId];
                     const barColor = cat?.color ?? "#745bc7";
+                    const pctLabel =
+                      item.percentage > 0 && item.percentage < 0.5
+                        ? "<1%"
+                        : `${item.percentage.toFixed(0)}%`;
                     return (
                       <div key={item.categoryId}>
                         <div className="flex items-center justify-between gap-2 font-mono text-[11px]">
@@ -470,7 +596,7 @@ export const AnalyticsView: React.FC = () => {
                               className="text-[11px] font-bold text-[#14100e]"
                             />
                             <span className="ml-1.5 text-[10px] text-[#745bc7]">
-                              {item.percentage.toFixed(0)}%
+                              {pctLabel}
                             </span>
                           </div>
                         </div>
@@ -478,7 +604,7 @@ export const AnalyticsView: React.FC = () => {
                           <div
                             className="h-full transition-all duration-300"
                             style={{
-                              width: `${Math.min(100, item.percentage)}%`,
+                              width: `${Math.min(100, Math.max(item.percentage > 0 ? 1.5 : 0, item.percentage))}%`,
                               backgroundColor: barColor,
                             }}
                           />
@@ -503,28 +629,49 @@ export const AnalyticsView: React.FC = () => {
           </div>
 
           <div className="bg-white/95 p-4 sm:p-5">
-            <div className="h-[205px] w-full">
+            <div className="h-[220px] w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={seriesData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                <AreaChart
+                  data={seriesData}
+                  margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+                >
                   <defs>
-                    <linearGradient id="shikasVesselArea" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#745bc7" stopOpacity={0.4} />
-                      <stop offset="65%" stopColor="#d749d5" stopOpacity={0.16} />
+                    <linearGradient
+                      id="shikasVesselArea"
+                      x1="0"
+                      y1="0"
+                      x2="0"
+                      y2="1"
+                    >
+                      <stop offset="5%" stopColor="#745bc7" stopOpacity={0.38} />
+                      <stop offset="65%" stopColor="#d749d5" stopOpacity={0.14} />
                       <stop offset="100%" stopColor="#ef85e8" stopOpacity={0.02} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="2 4" stroke="rgba(116,91,199,0.2)" vertical={false} />
+                  <CartesianGrid
+                    strokeDasharray="2 4"
+                    stroke="rgba(116,91,199,0.2)"
+                    vertical={false}
+                  />
                   <XAxis
                     dataKey="label"
                     interval="preserveStartEnd"
                     minTickGap={22}
-                    tick={{ fill: "#5d5370", fontSize: 10, fontFamily: "JetBrains Mono, monospace" }}
+                    tick={{
+                      fill: "#5d5370",
+                      fontSize: 10,
+                      fontFamily: "JetBrains Mono, monospace",
+                    }}
                     axisLine={{ stroke: "rgba(116,91,199,0.35)" }}
                     tickLine={false}
                   />
                   <YAxis
                     width={76}
-                    tick={{ fill: "#5d5370", fontSize: 10, fontFamily: "JetBrains Mono, monospace" }}
+                    tick={{
+                      fill: "#5d5370",
+                      fontSize: 10,
+                      fontFamily: "JetBrains Mono, monospace",
+                    }}
                     axisLine={false}
                     tickLine={false}
                     tickFormatter={(v: number) =>
@@ -548,8 +695,26 @@ export const AnalyticsView: React.FC = () => {
                         )?.fullLabel ?? label
                       )
                     }
-                    formatter={(val: number) => [formatTooltip(val), t.analytics.balanceLegend]}
+                    formatter={(val: number, name: string) => [
+                      formatTooltip(val),
+                      name === "savingsBalanceIdr"
+                        ? t.analytics.savingsBalanceLegend
+                        : t.analytics.balanceLegend,
+                    ]}
                   />
+                  {hasSavingsPockets && (
+                    <Legend
+                      formatter={(val: string) =>
+                        val === "savingsBalanceIdr"
+                          ? t.analytics.savingsBalanceLegend
+                          : t.analytics.balanceLegend
+                      }
+                      wrapperStyle={{
+                        fontSize: "10.5px",
+                        fontFamily: "JetBrains Mono, monospace",
+                      }}
+                    />
+                  )}
                   <Area
                     type="monotone"
                     dataKey="cumulativeBalanceIdr"
@@ -558,6 +723,17 @@ export const AnalyticsView: React.FC = () => {
                     animationDuration={360}
                     fill="url(#shikasVesselArea)"
                   />
+                  {hasSavingsPockets && (
+                    <Area
+                      type="monotone"
+                      dataKey="savingsBalanceIdr"
+                      stroke="#2276a8"
+                      strokeWidth={2}
+                      strokeDasharray="4 3"
+                      animationDuration={360}
+                      fill="none"
+                    />
+                  )}
                 </AreaChart>
               </ResponsiveContainer>
             </div>

@@ -49,8 +49,10 @@ export interface MonthlySeriesPoint {
   incomeIdr: number;
   expenseIdr: number;
   netIdr: number;
+  dailyNetIdr: number;
   savingsFlowIdr: number;
   cumulativeBalanceIdr: number;
+  savingsBalanceIdr: number;
 }
 
 export function computeAccountBalances(
@@ -294,19 +296,17 @@ function buildSeriesPoint(
     cycleStartDay
   );
   const { endDate } = getCycleDateRange(mKey, cycleStartDay);
-  const cumulativeBalanceIdr = computeCumulativeNetBalance(
-    transactions,
-    accounts,
-    endDate
-  );
+  const balSnapshot = computeAccountBalances(accounts, transactions, endDate);
 
   return {
     month: mKey,
     incomeIdr: summary.incomeIdr,
     expenseIdr: summary.expenseIdr,
     netIdr: summary.netCashflowIdr,
+    dailyNetIdr: summary.dailyNetCashflowIdr,
     savingsFlowIdr: summary.savingsNetFlowIdr,
-    cumulativeBalanceIdr,
+    cumulativeBalanceIdr: balSnapshot.totalBalanceIdr,
+    savingsBalanceIdr: balSnapshot.savingsTotalIdr,
   };
 }
 
