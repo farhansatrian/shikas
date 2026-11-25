@@ -13,6 +13,8 @@ import type {
   Locale,
   NavTab,
   PocketAccount,
+  ReimbursementEntry,
+  ReimburseStatus,
   ShizukuUser,
   Transaction,
   TransactionType,
@@ -25,6 +27,7 @@ import {
   clampCycleStartDay,
   getCurrentCycleKey,
 } from "../utils/format";
+import { getReimbursedTotalIdr, sanitizeReimbursement } from "../utils/reimburse";
 import { TRANSLATIONS, type TranslationDict } from "../i18n/translations";
 import {
   acknowledgeOAuthCallback,
@@ -82,6 +85,10 @@ function loadLocalModeStore(): CashflowStoreData {
             tx.type === "transfer" && tx.feeIdr && tx.feeIdr > 0
               ? Math.round(tx.feeIdr)
               : undefined,
+          reimburse:
+            tx.type === "expense"
+              ? sanitizeReimbursement(tx.reimburse, tx.amountIdr)
+              : undefined,
         })),
       settings: {
         ...defaults,
@@ -112,7 +119,9 @@ export interface TxBurstEvent {
   accountId?: string;
   toAccountId?: string;
   feeIdr?: number;
-  action: "created" | "updated" | "duplicated";
+  reimburseSettled?: boolean;
+  reimburseFrom?: string;
+  action: "created" | "updated" | "duplicated" | "reimbursed";
 }
 
 export type AuthModalMode = "signin" | "register";
@@ -160,6 +169,22 @@ interface CashflowContextValue {
   openNewTxModal: (type?: TransactionType) => void;
   openEditTxModal: (tx: Transaction) => void;
   closeTxModal: () => void;
+  // Reimburse Settlement Modal & Operations
+  reimburseTxId: string | null;
+  openReimburseModal: (txId: string) => void;
+  closeReimburseModal: () => void;
+  recordReimbursement: (
+    txId: string,
+    payload: {
+      amountIdr: number;
+      accountId?: string;
+      date: string;
+      note?: string;
+    },
+    markSettled: boolean
+  ) => void;
+  deleteReimbursementEntry: (txId: string, entryId: string) => void;
+  setReimburseStatus: (txId: string, status: ReimburseStatus) => void;
   // CRUD
   saveTransaction: (
     payload: Omit<Transaction, "id" | "createdAt">,
@@ -202,6 +227,7 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
   const [isTxModalOpen, setTxModalOpen] = useState(false);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
   const [defaultTxType, setDefaultTxType] = useState<TransactionType>("expense");
+  const [reimburseTxId, setReimburseTxId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<ToastNotice[]>([]);
   const [lastTxEvent, setLastTxEvent] = useState<TxBurstEvent | null>(null);
 
@@ -606,14 +632,164 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
     setEditingTx(null);
   }, []);
 
+  const openReimburseModal = useCallback((txId: string) => {
+    setReimburseTxId(txId);
+  }, []);
+
+  const closeReimburseModal = useCallback(() => {
+    setReimburseTxId(null);
+  }, []);
+
+  const recordReimbursement = useCallback(
+    (
+      txId: string,
+      payload: {
+        amountIdr: number;
+        accountId?: string;
+        date: string;
+        note?: string;
+      },
+      markSettled: boolean
+    ) => {
+      const targetTx = store.transactions.find((item) => item.id === txId);
+      if (!targetTx || targetTx.type !== "expense") return;
+
+      const alreadyReimbursed = getReimbursedTotalIdr(targetTx);
+      const maxRemaining = Math.max(0, targetTx.amountIdr - alreadyReimbursed);
+      const cleanAmt = Math.min(
+        maxRemaining,
+        Math.max(0, Math.round(payload.amountIdr || 0))
+      );
+      if (cleanAmt <= 0) return;
+
+      const nowIso = new Date().toISOString();
+      const newEntry: ReimbursementEntry = {
+        id: generateId("rmb"),
+        date: payload.date,
+        amountIdr: cleanAmt,
+        ...(payload.accountId ? { accountId: payload.accountId } : {}),
+        ...(payload.note?.trim() ? { note: payload.note.trim().slice(0, 120) } : {}),
+        createdAt: nowIso,
+      };
+
+      const isNowSettled =
+        markSettled || alreadyReimbursed + cleanAmt >= targetTx.amountIdr;
+
+      setStore((prev) => ({
+        ...prev,
+        transactions: prev.transactions.map((tx) => {
+          if (tx.id !== txId || tx.type !== "expense") return tx;
+          const base = tx.reimburse ?? { status: "pending" as const, entries: [] };
+          const nextReimburse = sanitizeReimbursement(
+            {
+              ...base,
+              status: isNowSettled ? "settled" : "pending",
+              settledAt: isNowSettled ? nowIso : undefined,
+              entries: [...base.entries, newEntry],
+            },
+            tx.amountIdr
+          );
+          return { ...tx, reimburse: nextReimburse };
+        }),
+      }));
+
+      setLastTxEvent({
+        id: Date.now(),
+        type: "expense",
+        amountIdr: cleanAmt,
+        note: targetTx.note,
+        accountId: payload.accountId,
+        reimburseSettled: isNowSettled,
+        reimburseFrom: targetTx.reimburse?.from,
+        action: "reimbursed",
+      });
+
+      notify(
+        store.settings.locale === "id"
+          ? isNowSettled
+            ? "Reimburse dicatat & ditandai LUNAS."
+            : "Reimburse sebagian berhasil dicatat."
+          : isNowSettled
+            ? "Reimbursement recorded & marked settled."
+            : "Partial reimbursement recorded.",
+        "success"
+      );
+    },
+    [notify, store.settings.locale, store.transactions]
+  );
+
+  const deleteReimbursementEntry = useCallback(
+    (txId: string, entryId: string) => {
+      setStore((prev) => ({
+        ...prev,
+        transactions: prev.transactions.map((tx) => {
+          if (tx.id !== txId || tx.type !== "expense" || !tx.reimburse) return tx;
+          const remainingEntries = tx.reimburse.entries.filter(
+            (e) => e.id !== entryId
+          );
+          const nextReimburse = sanitizeReimbursement(
+            {
+              ...tx.reimburse,
+              status: "pending",
+              settledAt: undefined,
+              entries: remainingEntries,
+            },
+            tx.amountIdr
+          );
+          return { ...tx, reimburse: nextReimburse };
+        }),
+      }));
+      notify(
+        store.settings.locale === "id"
+          ? "Pembayaran reimburse dihapus."
+          : "Reimbursement entry removed.",
+        "iris"
+      );
+    },
+    [notify, store.settings.locale]
+  );
+
+  const setReimburseStatus = useCallback(
+    (txId: string, status: ReimburseStatus) => {
+      const nowIso = new Date().toISOString();
+      setStore((prev) => ({
+        ...prev,
+        transactions: prev.transactions.map((tx) => {
+          if (tx.id !== txId || tx.type !== "expense" || !tx.reimburse) return tx;
+          const nextReimburse = sanitizeReimbursement(
+            {
+              ...tx.reimburse,
+              status,
+              settledAt: status === "settled" ? nowIso : undefined,
+            },
+            tx.amountIdr
+          );
+          return { ...tx, reimburse: nextReimburse };
+        }),
+      }));
+      notify(
+        store.settings.locale === "id"
+          ? status === "settled"
+            ? "Reimburse ditandai LUNAS."
+            : "Reimburse dibuka kembali sebagai PENDING."
+          : status === "settled"
+            ? "Reimbursement marked as settled."
+            : "Reimbursement reopened as pending.",
+        status === "settled" ? "success" : "iris"
+      );
+    },
+    [notify, store.settings.locale]
+  );
+
   const saveTransaction = useCallback(
     (payload: Omit<Transaction, "id" | "createdAt">, existingId?: string) => {
+      const cleanAmt = Math.max(0, Math.round(payload.amountIdr));
       const cleanPayload: Omit<Transaction, "id" | "createdAt"> =
         payload.type === "transfer"
           ? {
               type: "transfer",
               date: payload.date,
-              amountIdr: Math.max(0, Math.round(payload.amountIdr)),
+              amountIdr: cleanAmt,
               categoryId: "transfer",
               note: payload.note,
               merchant: undefined,
@@ -623,17 +799,22 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
                 payload.feeIdr && payload.feeIdr > 0
                   ? Math.round(payload.feeIdr)
                   : undefined,
+              reimburse: undefined,
             }
           : {
               type: payload.type,
               date: payload.date,
-              amountIdr: Math.max(0, Math.round(payload.amountIdr)),
+              amountIdr: cleanAmt,
               categoryId: normalizeCategoryId(payload.categoryId, payload.type),
               note: payload.note,
               merchant: payload.merchant || undefined,
               accountId: payload.accountId || undefined,
               toAccountId: undefined,
               feeIdr: undefined,
+              reimburse:
+                payload.type === "expense"
+                  ? sanitizeReimbursement(payload.reimburse, cleanAmt)
+                  : undefined,
             };
 
       setStore((prev) => {
@@ -685,6 +866,7 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
         ...prev,
         transactions: prev.transactions.filter((tx) => tx.id !== id),
       }));
+      setReimburseTxId((curr) => (curr === id ? null : curr));
       notify(
         store.settings.locale === "id" ? "Catatan dihapus." : "Entry deleted.",
         "iris"
@@ -698,6 +880,17 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
       const copy: Transaction = {
         ...tx,
         id: generateId("tx"),
+        reimburse:
+          tx.type === "expense" && tx.reimburse
+            ? {
+                status: "pending",
+                ...(tx.reimburse.expectedIdr !== undefined
+                  ? { expectedIdr: tx.reimburse.expectedIdr }
+                  : {}),
+                ...(tx.reimburse.from ? { from: tx.reimburse.from } : {}),
+                entries: [],
+              }
+            : undefined,
         createdAt: new Date().toISOString(),
       };
       setStore((prev) => ({
@@ -801,6 +994,10 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
         transactions: data.transactions.map((tx) => ({
           ...tx,
           categoryId: normalizeCategoryId(tx.categoryId, tx.type),
+          reimburse:
+            tx.type === "expense"
+              ? sanitizeReimbursement(tx.reimburse, tx.amountIdr)
+              : undefined,
         })),
         settings: {
           ...data.settings,
@@ -847,6 +1044,12 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
       openNewTxModal,
       openEditTxModal,
       closeTxModal,
+      reimburseTxId,
+      openReimburseModal,
+      closeReimburseModal,
+      recordReimbursement,
+      deleteReimbursementEntry,
+      setReimburseStatus,
       saveTransaction,
       deleteTransaction,
       duplicateTransaction,
@@ -888,6 +1091,12 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
       openNewTxModal,
       openEditTxModal,
       closeTxModal,
+      reimburseTxId,
+      openReimburseModal,
+      closeReimburseModal,
+      recordReimbursement,
+      deleteReimbursementEntry,
+      setReimburseStatus,
       saveTransaction,
       deleteTransaction,
       duplicateTransaction,

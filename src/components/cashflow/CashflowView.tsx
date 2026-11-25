@@ -5,6 +5,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Copy,
+  HandCoins,
   Pencil,
   Search,
   Trash2,
@@ -26,13 +27,18 @@ import {
   isDateInCycle,
   shiftMonthKey,
 } from "../../utils/format";
+import {
+  computePendingReimburseOverview,
+  getReimburseProgress,
+} from "../../utils/reimburse";
 import { MoneyDisplay } from "../common/MoneyDisplay";
 import { SandboxBanner } from "../common/SandboxBanner";
 import { PocketsStrip } from "./PocketsStrip";
 import { RaindropVessel, type VesselMood } from "./RaindropVessel";
+import { ReimburseStrip } from "./ReimburseStrip";
 import { VnDialogueBox } from "./VnDialogueBox";
 
-type FilterType = "all" | TransactionType;
+type FilterType = "all" | TransactionType | "reimburse";
 
 const GAUGE_SEGMENTS = 20;
 
@@ -80,6 +86,7 @@ export const CashflowView: React.FC = () => {
     locale,
     openNewTxModal,
     openEditTxModal,
+    openReimburseModal,
     duplicateTransaction,
     deleteTransaction,
     lastTxEvent,
@@ -171,17 +178,34 @@ export const CashflowView: React.FC = () => {
     [store.transactions, store.accounts]
   );
 
+  const pendingReimburse = useMemo(
+    () => computePendingReimburseOverview(store.transactions),
+    [store.transactions]
+  );
+
+  const matchesTypeFilter = (tx: (typeof monthTransactions)[number]) => {
+    if (typeFilter === "all") return true;
+    if (typeFilter === "reimburse") {
+      return tx.type === "expense" && Boolean(tx.reimburse);
+    }
+    return tx.type === typeFilter;
+  };
+
+  const matchesAccountFilter = (tx: (typeof monthTransactions)[number]) => {
+    if (accountFilter === "all") return true;
+    if (tx.accountId === accountFilter || tx.toAccountId === accountFilter) {
+      return true;
+    }
+    return Boolean(
+      tx.reimburse?.entries.some((entry) => entry.accountId === accountFilter)
+    );
+  };
+
   const activeMonthCategories = useMemo(() => {
     const counts = new Map<string, number>();
     for (const tx of monthTransactions) {
-      if (typeFilter !== "all" && tx.type !== typeFilter) continue;
-      if (
-        accountFilter !== "all" &&
-        tx.accountId !== accountFilter &&
-        tx.toAccountId !== accountFilter
-      ) {
-        continue;
-      }
+      if (!matchesTypeFilter(tx)) continue;
+      if (!matchesAccountFilter(tx)) continue;
       counts.set(tx.categoryId, (counts.get(tx.categoryId) ?? 0) + 1);
     }
     return Array.from(counts.entries()).map(([id, count]) => ({ id, count }));
@@ -189,17 +213,9 @@ export const CashflowView: React.FC = () => {
 
   const totalTypeFilteredCount = useMemo(
     () =>
-      monthTransactions.filter((tx) => {
-        if (typeFilter !== "all" && tx.type !== typeFilter) return false;
-        if (
-          accountFilter !== "all" &&
-          tx.accountId !== accountFilter &&
-          tx.toAccountId !== accountFilter
-        ) {
-          return false;
-        }
-        return true;
-      }).length,
+      monthTransactions.filter(
+        (tx) => matchesTypeFilter(tx) && matchesAccountFilter(tx)
+      ).length,
     [monthTransactions, typeFilter, accountFilter]
   );
 
@@ -215,17 +231,11 @@ export const CashflowView: React.FC = () => {
     const q = query.trim().toLowerCase();
     return monthTransactions
       .filter((tx) => {
-        if (typeFilter !== "all" && tx.type !== typeFilter) return false;
+        if (!matchesTypeFilter(tx)) return false;
         if (categoryFilter !== "all" && tx.categoryId !== categoryFilter) {
           return false;
         }
-        if (
-          accountFilter !== "all" &&
-          tx.accountId !== accountFilter &&
-          tx.toAccountId !== accountFilter
-        ) {
-          return false;
-        }
+        if (!matchesAccountFilter(tx)) return false;
         if (!q) return true;
         const catLabel = getCategoryLabel(tx.categoryId, locale).toLowerCase();
         const fromName = tx.accountId
@@ -234,12 +244,19 @@ export const CashflowView: React.FC = () => {
         const toName = tx.toAccountId
           ? (accountMap.get(tx.toAccountId)?.name ?? "").toLowerCase()
           : "";
+        const reimbursePayer = (tx.reimburse?.from ?? "").toLowerCase();
+        const reimbursePockets = (tx.reimburse?.entries ?? [])
+          .map((e) => (e.accountId ? accountMap.get(e.accountId)?.name ?? "" : ""))
+          .join(" ")
+          .toLowerCase();
         return (
           tx.note.toLowerCase().includes(q) ||
           (tx.merchant ?? "").toLowerCase().includes(q) ||
           catLabel.includes(q) ||
           fromName.includes(q) ||
-          toName.includes(q)
+          toName.includes(q) ||
+          reimbursePayer.includes(q) ||
+          reimbursePockets.includes(q)
         );
       })
       .sort((a, b) =>
@@ -297,7 +314,23 @@ export const CashflowView: React.FC = () => {
     const lines: string[] = [];
 
     if (lastTxEvent) {
-      if (lastTxEvent.type === "income") {
+      if (lastTxEvent.action === "reimbursed") {
+        const dest = lastTxEvent.accountId
+          ? accountMap.get(lastTxEvent.accountId)?.name
+          : undefined;
+        const statusTag = lastTxEvent.reimburseSettled
+          ? locale === "id"
+            ? "LUNAS"
+            : "SETTLED"
+          : locale === "id"
+            ? "SEBAGIAN"
+            : "PARTIAL";
+        lines.push(
+          locale === "id"
+            ? `Reimburse diterima: +${mask(lastTxEvent.amountIdr)}${dest ? ` ke ${dest}` : ""} untuk "${lastTxEvent.note}" (${statusTag}). Pengeluaran berkurang otomatis; pemasukan tetap murni.`
+            : `Reimbursement received: +${mask(lastTxEvent.amountIdr)}${dest ? ` into ${dest}` : ""} for "${lastTxEvent.note}" (${statusTag}). Expense reduced automatically; income stays pure.`
+        );
+      } else if (lastTxEvent.type === "income") {
         const target = lastTxEvent.accountId
           ? accountMap.get(lastTxEvent.accountId)?.name
           : undefined;
@@ -403,6 +436,22 @@ export const CashflowView: React.FC = () => {
       }
     }
 
+    if (pendingReimburse.pendingCount > 0) {
+      const payers = Array.from(
+        new Set(
+          pendingReimburse.pendingItems
+            .map((item) => item.reimburse?.from)
+            .filter(Boolean)
+        )
+      ).slice(0, 3);
+      const payerSuffix = payers.length > 0 ? ` (${payers.join(", ")})` : "";
+      lines.push(
+        locale === "id"
+          ? `Pengingat: masih ada ${pendingReimburse.pendingCount} catatan reimburse belum lunas${payerSuffix}.`
+          : `Reminder: ${pendingReimburse.pendingCount} pending reimbursement${pendingReimburse.pendingCount > 1 ? "s" : ""} waiting to be settled${payerSuffix}.`
+      );
+    }
+
     if (topExpenseCat) {
       const catName = getCategoryLabel(topExpenseCat.categoryId, locale);
       lines.push(
@@ -442,6 +491,7 @@ export const CashflowView: React.FC = () => {
     savedRatio,
     topExpenseCat,
     savingsPocketNames,
+    pendingReimburse,
     accountMap,
     store.settings.privacyMode,
   ]);
@@ -590,12 +640,12 @@ export const CashflowView: React.FC = () => {
               </div>
             </div>
 
-            {/* Inline Interactive Stat Strip: INCOME | EXPENSE (+ SAVINGS FLOW when savings pocket exists) */}
+            {/* Inline Interactive Stat Strip: INCOME | EXPENSE (+ SAVINGS FLOW & REIMBURSE) */}
             <div
               className={`grid border border-[#745bc7]/30 bg-white/60 ${
                 monthSummary.hasSavingsPockets
-                  ? "grid-cols-2 sm:grid-cols-3"
-                  : "grid-cols-2"
+                  ? "grid-cols-2"
+                  : "grid-cols-2 sm:grid-cols-3"
               }`}
             >
               <button
@@ -629,7 +679,7 @@ export const CashflowView: React.FC = () => {
                   )
                 }
                 className={`px-3 py-2 text-left transition ${
-                  monthSummary.hasSavingsPockets
+                  !monthSummary.hasSavingsPockets
                     ? "sm:border-r sm:border-[#745bc7]/30"
                     : ""
                 } ${
@@ -663,7 +713,7 @@ export const CashflowView: React.FC = () => {
                       ? `Arus bersih ke/dari kantong tabungan (${savingsPocketNames})`
                       : `Net monthly flow into/out of savings pockets (${savingsPocketNames})`
                   }
-                  className={`col-span-2 border-t border-[#745bc7]/30 px-3 py-2 text-left transition sm:col-span-1 sm:border-t-0 ${
+                  className={`border-t border-r border-[#745bc7]/30 px-3 py-2 text-left transition ${
                     typeFilter === "transfer"
                       ? "bg-[#745bc7]/12"
                       : "hover:bg-[#e5dcfb]/45"
@@ -686,6 +736,82 @@ export const CashflowView: React.FC = () => {
                   />
                 </button>
               )}
+
+              <button
+                type="button"
+                onClick={() =>
+                  handleSetTypeFilter(
+                    typeFilter === "reimburse" ? "all" : "reimburse"
+                  )
+                }
+                title={
+                  locale === "id"
+                    ? "Klik untuk filter catatan reimburse"
+                    : "Click to filter reimburse entries"
+                }
+                className={`border-t border-[#745bc7]/30 px-3 py-2 text-left transition ${
+                  monthSummary.hasSavingsPockets
+                    ? ""
+                    : "col-span-2 sm:col-span-1 sm:border-t-0"
+                } ${
+                  typeFilter === "reimburse"
+                    ? "bg-[#1f8f6b]/12"
+                    : "hover:bg-[#e5dcfb]/45"
+                }`}
+              >
+                <span className="flex items-center justify-between gap-1 font-mono text-[9px] tracking-[0.14em] text-[#5d5370] uppercase">
+                  <span className="inline-flex min-w-0 items-center gap-1.5">
+                    <span className="truncate">{t.cashflow.reimburse}</span>
+                    {pendingReimburse.pendingCount > 0 && (
+                      <span className="shrink-0 border border-[#d97706]/55 bg-[#d97706]/12 px-1 py-0 text-[8px] font-bold text-[#b45309]">
+                        {pendingReimburse.pendingCount}
+                      </span>
+                    )}
+                  </span>
+                  {typeFilter === "reimburse" && (
+                    <span className="text-[#1f8f6b]">▶</span>
+                  )}
+                </span>
+
+                {pendingReimburse.pendingCount > 0 ? (
+                  <div className="mt-0.5 flex flex-wrap items-baseline gap-1.5">
+                    {pendingReimburse.knownRemainingIdr > 0 ? (
+                      <span className="inline-flex items-baseline text-sm font-bold text-[#b45309] sm:text-[15px]">
+                        <MoneyDisplay
+                          amountIdr={pendingReimburse.knownRemainingIdr}
+                        />
+                        {pendingReimburse.flexibleCount > 0 && <span>+</span>}
+                      </span>
+                    ) : (
+                      <span className="font-mono text-sm font-bold text-[#b45309] sm:text-[15px]">
+                        {pendingReimburse.pendingCount} pending
+                      </span>
+                    )}
+                    <span className="font-mono text-[9px] font-semibold text-[#5d5370] uppercase">
+                      {pendingReimburse.knownRemainingIdr > 0
+                        ? locale === "id"
+                          ? "belum lunas"
+                          : "pending"
+                        : t.reimburse.flexibleTag}
+                    </span>
+                  </div>
+                ) : monthSummary.reimbursedIdr > 0 ? (
+                  <div className="mt-0.5 flex flex-wrap items-baseline gap-1.5">
+                    <MoneyDisplay
+                      amountIdr={monthSummary.reimbursedIdr}
+                      className="text-sm font-bold text-[#1f8f6b] sm:text-[15px]"
+                    />
+                    <span className="font-mono text-[9px] font-semibold text-[#1f8f6b] uppercase">
+                      {t.reimburse.statusSettled}
+                    </span>
+                  </div>
+                ) : (
+                  <MoneyDisplay
+                    amountIdr={0}
+                    className="mt-0.5 text-sm font-bold text-[#5d5370] sm:text-[15px]"
+                  />
+                )}
+              </button>
             </div>
 
             {/* 3 Clear Primary Action Buttons (INCOME · EXPENSE · TRANSFER) */}
@@ -728,6 +854,11 @@ export const CashflowView: React.FC = () => {
       />
 
       {/* =====================================================================
+          2B. ACTIVE PENDING REIMBURSE REMINDER STRIP (Auto-hides when all settled)
+         ===================================================================== */}
+      <ReimburseStrip />
+
+      {/* =====================================================================
           3. VISUAL NOVEL DIALOGUE BOX (Silent Typewriter Chronicle)
          ===================================================================== */}
       <VnDialogueBox
@@ -755,9 +886,9 @@ export const CashflowView: React.FC = () => {
         {/* Unified Toolbar (4 Type Tabs + Active Pocket Chip + Category Menu + Search) */}
         <div className="flex flex-col gap-2.5 border-b border-[#745bc7]/20 bg-[#fdf9ff] px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-5">
           <div className="flex flex-wrap items-center gap-2">
-            {/* Compact Sharp Type Tabs */}
+            {/* Compact Sharp Type Tabs (5 Tabs: ALL | INCOME | EXPENSE | TRANSFER | REIMBURSE) */}
             <div className="inline-flex w-fit max-w-full overflow-x-auto border border-[#745bc7]/55 bg-white">
-              {(["all", "income", "expense", "transfer"] as const).map(
+              {(["all", "income", "expense", "transfer", "reimburse"] as const).map(
                 (tab, idx) => {
                   const active = typeFilter === tab;
                   const label =
@@ -767,7 +898,9 @@ export const CashflowView: React.FC = () => {
                         ? t.cashflow.income
                         : tab === "expense"
                           ? t.cashflow.expense
-                          : t.cashflow.transfer;
+                          : tab === "transfer"
+                            ? t.cashflow.transfer
+                            : t.cashflow.reimburse;
                   return (
                     <button
                       key={tab}
@@ -776,7 +909,7 @@ export const CashflowView: React.FC = () => {
                         handleSetTypeFilter(tab);
                         setCatMenuOpen(false);
                       }}
-                      className={`shrink-0 px-2.5 py-1 font-mono text-[9.5px] font-semibold tracking-[0.1em] uppercase transition sm:px-3 sm:text-[10px] sm:tracking-[0.12em] ${
+                      className={`inline-flex shrink-0 items-center gap-1 px-2.5 py-1 font-mono text-[9.5px] font-semibold tracking-[0.1em] uppercase transition sm:px-3 sm:text-[10px] sm:tracking-[0.12em] ${
                         idx > 0 ? "border-l border-[#745bc7]/40" : ""
                       } ${
                         active
@@ -784,7 +917,18 @@ export const CashflowView: React.FC = () => {
                           : "text-[#5d5370] hover:bg-[#f4effd] hover:text-[#14100e]"
                       }`}
                     >
-                      {label}
+                      <span>{label}</span>
+                      {tab === "reimburse" && pendingReimburse.pendingCount > 0 && (
+                        <span
+                          className={`px-1 font-mono text-[8.5px] font-bold ${
+                            active
+                              ? "bg-white/25 text-white"
+                              : "bg-[#d97706]/15 text-[#b45309]"
+                          }`}
+                        >
+                          {pendingReimburse.pendingCount}
+                        </span>
+                      )}
                     </button>
                   );
                 }
@@ -1041,6 +1185,20 @@ export const CashflowView: React.FC = () => {
                 const toAcc = tx.toAccountId
                   ? accountMap.get(tx.toAccountId)
                   : undefined;
+                const reimburseProg = getReimburseProgress(tx);
+                const reimburseDestNames = reimburseProg.isReimburse
+                  ? Array.from(
+                      new Set(
+                        (tx.reimburse?.entries ?? [])
+                          .map((e) =>
+                            e.accountId
+                              ? accountMap.get(e.accountId)?.name ?? ""
+                              : ""
+                          )
+                          .filter(Boolean)
+                      )
+                    )
+                  : [];
 
                 return (
                   <li
@@ -1050,7 +1208,13 @@ export const CashflowView: React.FC = () => {
                     {/* Crisp Left Hover Accent */}
                     <span
                       className="absolute top-0 bottom-0 left-0 w-[3px] opacity-0 transition group-hover:opacity-100"
-                      style={{ backgroundColor: hoverBar }}
+                      style={{
+                        backgroundColor: reimburseProg.isReimburse
+                          ? reimburseProg.isSettled
+                            ? "#1f8f6b"
+                            : "#d97706"
+                          : hoverBar,
+                      }}
                       aria-hidden="true"
                     />
 
@@ -1061,9 +1225,30 @@ export const CashflowView: React.FC = () => {
 
                     {/* Flush-Left Aligned Entry Info */}
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[13.5px] font-semibold text-[#14100e]">
-                        {tx.note}
-                      </p>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <p className="truncate text-[13.5px] font-semibold text-[#14100e]">
+                          {tx.note}
+                        </p>
+                        {reimburseProg.isReimburse && (
+                          <button
+                            type="button"
+                            onClick={() => openReimburseModal(tx.id)}
+                            className={`shrink-0 border px-1.5 py-0.2 font-mono text-[8.5px] font-bold tracking-[0.12em] uppercase transition ${
+                              reimburseProg.isSettled
+                                ? "border-[#1f8f6b]/50 bg-[#1f8f6b]/10 text-[#1f8f6b] hover:bg-[#1f8f6b] hover:text-white"
+                                : reimburseProg.isPartial
+                                  ? "border-[#2276a8]/50 bg-[#2276a8]/10 text-[#2276a8] hover:bg-[#2276a8] hover:text-white"
+                                  : "border-[#d97706]/55 bg-[#d97706]/10 text-[#b45309] hover:bg-[#d97706] hover:text-white"
+                            }`}
+                          >
+                            {reimburseProg.isSettled
+                              ? t.reimburse.statusSettled
+                              : reimburseProg.isPartial
+                                ? t.reimburse.statusPartial
+                                : t.reimburse.statusPending}
+                          </button>
+                        )}
+                      </div>
                       <div className="mt-0.5 flex items-center gap-1.5 font-mono text-[11px] text-[#5d5370]">
                         <span
                           className="h-1.5 w-1.5 shrink-0"
@@ -1085,6 +1270,12 @@ export const CashflowView: React.FC = () => {
                               {getCategoryLabel(tx.categoryId, locale)}
                               {fromAcc ? ` · ${fromAcc.name}` : ""}
                               {tx.merchant ? ` · ${tx.merchant}` : ""}
+                              {reimburseProg.isReimburse && tx.reimburse?.from
+                                ? ` · ${locale === "id" ? "Dari" : "From"} ${tx.reimburse.from}`
+                                : ""}
+                              {reimburseProg.reimbursedIdr > 0
+                                ? ` · ${locale === "id" ? "Diganti" : "Reimb."} ${mask(reimburseProg.reimbursedIdr)}${reimburseDestNames.length > 0 ? ` → ${reimburseDestNames.join(", ")}` : ""}`
+                                : ""}
                             </>
                           )}
                         </span>
@@ -1100,17 +1291,60 @@ export const CashflowView: React.FC = () => {
                           </span>
                           <MoneyDisplay amountIdr={tx.amountIdr} />
                         </span>
-                      ) : (
+                      ) : isIncome ? (
                         <MoneyDisplay
-                          amountIdr={isIncome ? tx.amountIdr : -tx.amountIdr}
+                          amountIdr={tx.amountIdr}
                           showSign
-                          className={`text-[13.5px] font-bold sm:text-sm ${
-                            isIncome ? "text-[#2276a8]" : "text-[#14100e]"
-                          }`}
+                          className="text-[13.5px] font-bold text-[#2276a8] sm:text-sm"
                         />
+                      ) : (
+                        <div className="text-right">
+                          <MoneyDisplay
+                            amountIdr={
+                              reimburseProg.netExpenseIdr > 0
+                                ? -reimburseProg.netExpenseIdr
+                                : 0
+                            }
+                            showSign={reimburseProg.netExpenseIdr > 0}
+                            className={`block text-[13.5px] font-bold sm:text-sm ${
+                              reimburseProg.isReimburse &&
+                              reimburseProg.netExpenseIdr === 0
+                                ? "text-[#1f8f6b]"
+                                : "text-[#14100e]"
+                            }`}
+                          />
+                          {reimburseProg.reimbursedIdr > 0 && (
+                            <span className="block font-mono text-[9.5px] text-[#5d5370] line-through">
+                              {mask(reimburseProg.grossIdr)}
+                            </span>
+                          )}
+                        </div>
                       )}
 
-                      <div className="flex items-center gap-0.5 sm:w-[82px] sm:justify-end sm:opacity-45 sm:transition sm:group-hover:opacity-100">
+                      <div className="flex items-center gap-0.5 sm:min-w-[82px] sm:justify-end sm:opacity-45 sm:transition sm:group-hover:opacity-100">
+                        {reimburseProg.isReimburse && (
+                          <button
+                            type="button"
+                            onClick={() => openReimburseModal(tx.id)}
+                            aria-label={
+                              reimburseProg.isPending
+                                ? t.reimburse.receiveBtn
+                                : t.reimburse.manageBtn
+                            }
+                            title={
+                              reimburseProg.isPending
+                                ? t.reimburse.receiveBtn
+                                : t.reimburse.manageBtn
+                            }
+                            className={`p-1.5 transition hover:bg-white ${
+                              reimburseProg.isPending
+                                ? "text-[#b45309] hover:text-[#1f8f6b]"
+                                : "text-[#1f8f6b] hover:text-[#745bc7]"
+                            }`}
+                          >
+                            <HandCoins className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => openEditTxModal(tx)}

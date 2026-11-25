@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { ArrowRight, Calendar, Star, X } from "lucide-react";
+import { ArrowRight, Calendar, HandCoins, Star, X } from "lucide-react";
 import { useCashflow } from "../../context/CashflowContext";
 import { CATEGORIES } from "../../data/categories";
-import type { TransactionType } from "../../types/cashflow";
+import type { ReimbursementInfo, TransactionType } from "../../types/cashflow";
 import { formatIdr, todayIsoDate } from "../../utils/format";
+import { getReimbursedTotalIdr } from "../../utils/reimburse";
 import { CategoryIcon } from "./CategoryIcon";
 
 function formatDigitsWithDots(digits: string): string {
@@ -31,6 +32,7 @@ export const TransactionModal: React.FC = () => {
     defaultTxType,
     closeTxModal,
     openPocketsModal,
+    openReimburseModal,
     saveTransaction,
     t,
     locale,
@@ -59,7 +61,18 @@ export const TransactionModal: React.FC = () => {
   const [toAccountId, setToAccountId] = useState("");
   const [merchant, setMerchant] = useState("");
   const [note, setNote] = useState("");
+  const [isReimburse, setIsReimburse] = useState(false);
+  const [reimburseFrom, setReimburseFrom] = useState("");
+  const [reimburseTargetDigits, setReimburseTargetDigits] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  const alreadyReimbursedIdr = useMemo(
+    () => (editingTx ? getReimbursedTotalIdr(editingTx) : 0),
+    [editingTx]
+  );
+  const hasRecordedRepayments =
+    editingTx?.type === "expense" &&
+    Boolean(editingTx.reimburse && editingTx.reimburse.entries.length > 0);
 
   useEffect(() => {
     if (!isTxModalOpen) return;
@@ -86,6 +99,13 @@ export const TransactionModal: React.FC = () => {
       setToAccountId(validToId);
       setMerchant(editingTx.merchant ?? "");
       setNote(editingTx.note);
+      setIsReimburse(editingTx.type === "expense" && Boolean(editingTx.reimburse));
+      setReimburseFrom(editingTx.reimburse?.from ?? "");
+      setReimburseTargetDigits(
+        editingTx.reimburse?.expectedIdr
+          ? String(editingTx.reimburse.expectedIdr)
+          : ""
+      );
     } else {
       setType(defaultTxType);
       setRawDigits("");
@@ -102,6 +122,9 @@ export const TransactionModal: React.FC = () => {
       setToAccountId(pickDefaultToAccount(defaultAccountId));
       setMerchant("");
       setNote("");
+      setIsReimburse(false);
+      setReimburseFrom("");
+      setReimburseTargetDigits("");
     }
   }, [isTxModalOpen, editingTx, defaultTxType, defaultAccountId]);
 
@@ -238,6 +261,33 @@ export const TransactionModal: React.FC = () => {
       return;
     }
 
+    if (type === "expense" && hasRecordedRepayments && parsedAmount < alreadyReimbursedIdr) {
+      setError(
+        `${t.reimburse.amountBelowReimbursed} (${formatIdr(alreadyReimbursedIdr)})`
+      );
+      return;
+    }
+
+    let nextReimburse: ReimbursementInfo | undefined;
+    if (type === "expense" && isReimburse) {
+      const parsedTarget = Number(reimburseTargetDigits) || 0;
+      const existingReimburse =
+        editingTx?.type === "expense" ? editingTx.reimburse : undefined;
+      nextReimburse = {
+        status: existingReimburse?.status ?? "pending",
+        ...(parsedTarget > 0
+          ? { expectedIdr: Math.min(parsedAmount, parsedTarget) }
+          : {}),
+        ...(reimburseFrom.trim()
+          ? { from: reimburseFrom.trim().slice(0, 80) }
+          : {}),
+        ...(existingReimburse?.settledAt
+          ? { settledAt: existingReimburse.settledAt }
+          : {}),
+        entries: existingReimburse?.entries ?? [],
+      };
+    }
+
     saveTransaction(
       {
         type,
@@ -246,6 +296,7 @@ export const TransactionModal: React.FC = () => {
         categoryId,
         accountId: accounts.length > 0 && accountId ? accountId : undefined,
         merchant: merchant.trim() || undefined,
+        reimburse: nextReimburse,
         note:
           note.trim() ||
           filteredCategories.find((c) => c.id === categoryId)?.[
@@ -307,11 +358,12 @@ export const TransactionModal: React.FC = () => {
             </button>
             <button
               type="button"
+              disabled={hasRecordedRepayments}
               onClick={() => {
                 setType("income");
                 setError(null);
               }}
-              className={`border-r border-[#745bc7] py-2.5 font-mono text-[10px] font-bold tracking-[0.1em] uppercase transition sm:text-[11px] sm:tracking-[0.12em] ${
+              className={`border-r border-[#745bc7] py-2.5 font-mono text-[10px] font-bold tracking-[0.1em] uppercase transition disabled:cursor-not-allowed disabled:opacity-45 sm:text-[11px] sm:tracking-[0.12em] ${
                 isIncome
                   ? "bg-[#2276a8]/15 text-[#2276a8]"
                   : "bg-white/60 text-[#5d5370] hover:bg-[#e5dcfb]/40 hover:text-[#14100e]"
@@ -321,11 +373,12 @@ export const TransactionModal: React.FC = () => {
             </button>
             <button
               type="button"
+              disabled={hasRecordedRepayments}
               onClick={() => {
                 setType("transfer");
                 setError(null);
               }}
-              className={`py-2.5 font-mono text-[10px] font-bold tracking-[0.1em] uppercase transition sm:text-[11px] sm:tracking-[0.12em] ${
+              className={`py-2.5 font-mono text-[10px] font-bold tracking-[0.1em] uppercase transition disabled:cursor-not-allowed disabled:opacity-45 sm:text-[11px] sm:tracking-[0.12em] ${
                 isTransfer
                   ? "bg-[#745bc7]/16 text-[#745bc7]"
                   : "bg-white/60 text-[#5d5370] hover:bg-[#e5dcfb]/40 hover:text-[#14100e]"
@@ -669,6 +722,177 @@ export const TransactionModal: React.FC = () => {
                       })}
                     </div>
                   </div>
+
+                  {/* Expense-Only Flexible Reimburse / Split-Bill Toggle */}
+                  {type === "expense" && (
+                    <div
+                      className={`border p-3 transition ${
+                        isReimburse
+                          ? "border-[#745bc7] bg-[#f7f3fe]"
+                          : "border-[#745bc7]/30 bg-white/75"
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (hasRecordedRepayments) {
+                            setError(t.reimburse.lockedHint);
+                            return;
+                          }
+                          setIsReimburse((v) => !v);
+                          if (error) setError(null);
+                        }}
+                        className="flex w-full items-center justify-between gap-2 text-left"
+                      >
+                        <span className="flex items-center gap-2 font-mono text-[10.5px] font-bold tracking-[0.1em] text-[#14100e] uppercase">
+                          <span
+                            className={`flex h-4 w-4 shrink-0 items-center justify-center border font-mono text-[10px] ${
+                              isReimburse
+                                ? "border-[#745bc7] bg-[#745bc7] text-white"
+                                : "border-[#745bc7]/55 bg-white text-transparent"
+                            }`}
+                          >
+                            ✓
+                          </span>
+                          <HandCoins className="h-3.5 w-3.5 shrink-0 text-[#745bc7]" />
+                          <span>{t.reimburse.toggleLabel}</span>
+                        </span>
+
+                        <span
+                          className={`shrink-0 border px-1.5 py-0.5 font-mono text-[8.5px] font-bold tracking-[0.12em] uppercase ${
+                            isReimburse
+                              ? "border-[#745bc7] bg-[#745bc7] text-white"
+                              : "border-[#745bc7]/35 text-[#5d5370]"
+                          }`}
+                        >
+                          {isReimburse ? "ON" : "OFF"}
+                        </span>
+                      </button>
+
+                      {isReimburse && (
+                        <div className="mt-3 space-y-3 border-t border-[#745bc7]/20 pt-3">
+                          <p className="font-mono text-[10px] leading-relaxed text-[#4e4361]">
+                            {t.reimburse.toggleHint}
+                          </p>
+
+                          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                            <div>
+                              <label className="block font-mono text-[9.5px] font-semibold tracking-[0.14em] text-[#5d5370] uppercase">
+                                {t.reimburse.fromLabel}
+                              </label>
+                              <input
+                                type="text"
+                                placeholder={t.reimburse.fromPlaceholder}
+                                value={reimburseFrom}
+                                onChange={(e) => setReimburseFrom(e.target.value)}
+                                className="mt-1 w-full border border-[#745bc7]/35 bg-white px-2.5 py-1.5 text-xs text-[#14100e] outline-none placeholder:text-[#5d5370]/65 focus:border-[#745bc7]"
+                              />
+                            </div>
+
+                            <div>
+                              <div className="flex items-center justify-between gap-1">
+                                <label className="truncate font-mono text-[9.5px] font-semibold tracking-[0.12em] text-[#5d5370] uppercase">
+                                  {locale === "id"
+                                    ? "Target (Opsional)"
+                                    : "Target (Optional)"}
+                                </label>
+                                <div className="flex shrink-0 gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => setReimburseTargetDigits("")}
+                                    className={`border px-1.5 py-0.5 font-mono text-[9px] font-semibold transition ${
+                                      !reimburseTargetDigits
+                                        ? "border-[#745bc7] bg-[#745bc7] text-white"
+                                        : "border-[#745bc7]/30 bg-white text-[#5d5370] hover:border-[#745bc7]"
+                                    }`}
+                                  >
+                                    {t.reimburse.flexibleChip}
+                                  </button>
+                                  {parsedAmount > 0 && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setReimburseTargetDigits(
+                                            String(Math.round(parsedAmount / 2))
+                                          )
+                                        }
+                                        className={`border px-1.5 py-0.5 font-mono text-[9px] font-semibold transition ${
+                                          Number(reimburseTargetDigits) ===
+                                          Math.round(parsedAmount / 2)
+                                            ? "border-[#745bc7] bg-[#745bc7] text-white"
+                                            : "border-[#745bc7]/30 bg-white text-[#5d5370] hover:border-[#745bc7]"
+                                        }`}
+                                      >
+                                        50%
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setReimburseTargetDigits(
+                                            String(parsedAmount)
+                                          )
+                                        }
+                                        className={`border px-1.5 py-0.5 font-mono text-[9px] font-semibold transition ${
+                                          Number(reimburseTargetDigits) ===
+                                          parsedAmount
+                                            ? "border-[#745bc7] bg-[#745bc7] text-white"
+                                            : "border-[#745bc7]/30 bg-white text-[#5d5370] hover:border-[#745bc7]"
+                                        }`}
+                                      >
+                                        100%
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="mt-1 flex items-center gap-1.5 border border-[#745bc7]/35 bg-white px-2.5 py-1.5 focus-within:border-[#745bc7]">
+                                <span className="font-mono-num text-xs font-bold text-[#5d5370]">
+                                  Rp
+                                </span>
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  placeholder={t.reimburse.flexibleChip}
+                                  value={formatDigitsWithDots(reimburseTargetDigits)}
+                                  onChange={(e) =>
+                                    setReimburseTargetDigits(
+                                      e.target.value.replace(/\D/g, "").slice(0, 12)
+                                    )
+                                  }
+                                  className="font-mono-num w-full bg-transparent text-xs font-bold text-[#14100e] outline-none placeholder:font-normal placeholder:text-[#745bc7]/70"
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          {hasRecordedRepayments && editingTx && (
+                            <div className="flex flex-wrap items-center justify-between gap-2 border border-[#1f8f6b]/40 bg-white px-2.5 py-2 font-mono text-[10px]">
+                              <span className="text-[#1f8f6b]">
+                                {locale === "id"
+                                  ? `Sudah diterima ${formatIdr(alreadyReimbursedIdr)}`
+                                  : `Already reimbursed ${formatIdr(alreadyReimbursedIdr)}`}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const id = editingTx.id;
+                                  closeTxModal();
+                                  openReimburseModal(id);
+                                }}
+                                className="font-bold text-[#745bc7] underline"
+                              >
+                                {locale === "id"
+                                  ? "Kelola pembayaran →"
+                                  : "Manage repayments →"}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </>
               )}
 

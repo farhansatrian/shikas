@@ -415,13 +415,20 @@ export const AccountPanel: React.FC = () => {
               <div className="grid grid-cols-3 gap-2">
                 <button
                   type="button"
-                  onClick={() =>
+                  onClick={() => {
                     exportTransactionsToCsv(
                       store.transactions,
                       locale,
-                      store.accounts
-                    )
-                  }
+                      store.accounts,
+                      store.settings.cycleStartDay
+                    );
+                    notify(
+                      locale === "id"
+                        ? `CSV diekspor (${store.transactions.length} catatan).`
+                        : `CSV exported (${store.transactions.length} entries).`,
+                      "success"
+                    );
+                  }}
                   className="vn-btn-band py-2 text-[10px]"
                 >
                   <FileSpreadsheet className="h-3.5 w-3.5" />
@@ -429,7 +436,15 @@ export const AccountPanel: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => exportBackupJson(store)}
+                  onClick={() => {
+                    exportBackupJson(store);
+                    notify(
+                      locale === "id"
+                        ? `Backup JSON diunduh (${store.accounts.length} kantong · ${store.transactions.length} catatan).`
+                        : `JSON backup saved (${store.accounts.length} pockets · ${store.transactions.length} entries).`,
+                      "success"
+                    );
+                  }}
                   className="vn-btn-action py-2 text-[10px]"
                 >
                   <Download className="h-3.5 w-3.5" />
@@ -446,7 +461,7 @@ export const AccountPanel: React.FC = () => {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="application/json"
+                  accept=".json,application/json"
                   onChange={handleImportFile}
                   className="hidden"
                 />

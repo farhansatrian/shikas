@@ -138,7 +138,30 @@ export const RaindropVessel: React.FC<RaindropVesselProps> = ({
     const height = canvas ? canvas.clientHeight : 280;
     const waterY = pctToCanvasY(currentPctRef.current, height);
 
-    if (burstEvent.type === "income") {
+    if (burstEvent.action === "reimbursed") {
+      for (let i = 0; i < 10; i++) {
+        dropsRef.current.push({
+          x: width * (0.16 + Math.random() * 0.68),
+          y: -10 - Math.random() * 65,
+          vy: 3.8 + Math.random() * 2.2,
+          vx: 0,
+          len: 12 + Math.random() * 8,
+          color: i % 2 === 0 ? "#1f8f6b" : "#2276a8",
+          alpha: 0.88,
+          isBurst: true,
+        });
+      }
+      for (let i = 0; i < 3; i++) {
+        ripplesRef.current.push({
+          x: width * (0.24 + i * 0.26),
+          rx: 5,
+          maxRx: 46 + Math.random() * 18,
+          color: "#1f8f6b",
+          alpha: 0.8,
+        });
+      }
+      waveEnergyRef.current = Math.min(2.2, waveEnergyRef.current + 0.95);
+    } else if (burstEvent.type === "income") {
       for (let i = 0; i < 14; i++) {
         dropsRef.current.push({
           x: width * (0.14 + Math.random() * 0.72),

@@ -34,6 +34,7 @@ import {
   formatIdr,
   shiftMonthKey,
 } from "../../utils/format";
+import { computePendingReimburseOverview } from "../../utils/reimburse";
 import { MoneyDisplay } from "../common/MoneyDisplay";
 import { SandboxBanner } from "../common/SandboxBanner";
 
@@ -96,18 +97,32 @@ export const AnalyticsView: React.FC = () => {
     [seriesData, hasSavingsPockets]
   );
 
+  const pendingReimburse = useMemo(
+    () => computePendingReimburseOverview(store.transactions),
+    [store.transactions]
+  );
+
   const periodTotals = useMemo(() => {
     let incomeIdr = 0;
     let expenseIdr = 0;
+    let reimbursedIdr = 0;
     let savingsFlowIdr = 0;
     for (const pt of seriesData) {
       incomeIdr += pt.incomeIdr;
       expenseIdr += pt.expenseIdr;
+      reimbursedIdr += pt.reimbursedIdr;
       savingsFlowIdr += pt.savingsFlowIdr;
     }
     const netIdr = incomeIdr - expenseIdr;
     const savingsRate = incomeIdr > 0 ? (netIdr / incomeIdr) * 100 : 0;
-    return { incomeIdr, expenseIdr, netIdr, savingsFlowIdr, savingsRate };
+    return {
+      incomeIdr,
+      expenseIdr,
+      reimbursedIdr,
+      netIdr,
+      savingsFlowIdr,
+      savingsRate,
+    };
   }, [seriesData]);
 
   const expenseBreakdown = useMemo(
@@ -207,6 +222,28 @@ export const AnalyticsView: React.FC = () => {
       }
     }
 
+    if (periodTotals.reimbursedIdr > 0 || pendingReimburse.pendingCount > 0) {
+      if (periodTotals.reimbursedIdr > 0 && pendingReimburse.pendingCount > 0) {
+        list.push(
+          locale === "id"
+            ? `Total ${mask(periodTotals.reimbursedIdr)} pengeluaran sudah direimburse dalam ${rangeTag.toLowerCase()} (masih ada ${pendingReimburse.pendingCount} tagihan belum lunas).`
+            : `${mask(periodTotals.reimbursedIdr)} in expenses reimbursed over ${rangeTag.toLowerCase()} (${pendingReimburse.pendingCount} pending item${pendingReimburse.pendingCount > 1 ? "s" : ""} remaining).`
+        );
+      } else if (periodTotals.reimbursedIdr > 0) {
+        list.push(
+          locale === "id"
+            ? `Total ${mask(periodTotals.reimbursedIdr)} pengeluaran sudah direimburse dalam ${rangeTag.toLowerCase()} — pengeluaran tercatat adalah porsi bersihmu.`
+            : `${mask(periodTotals.reimbursedIdr)} in expenses reimbursed over ${rangeTag.toLowerCase()} — chart spending reflects your net share.`
+        );
+      } else {
+        list.push(
+          locale === "id"
+            ? `Masih ada ${pendingReimburse.pendingCount} catatan reimburse yang belum lunas.`
+            : `${pendingReimburse.pendingCount} pending reimbursement${pendingReimburse.pendingCount > 1 ? "s" : ""} still awaiting settlement.`
+        );
+      }
+    }
+
     if (periodTotals.incomeIdr > 0) {
       list.push(
         locale === "id"
@@ -227,6 +264,7 @@ export const AnalyticsView: React.FC = () => {
     rangeTag,
     seriesData,
     periodTotals,
+    pendingReimburse,
     hasSavingsPockets,
     store.settings.privacyMode,
   ]);
@@ -262,6 +300,16 @@ export const AnalyticsView: React.FC = () => {
               {formatTooltip(pt.expenseIdr)}
             </span>
           </div>
+          {pt.reimbursedIdr > 0 && (
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-[#1f8f6b]">
+                {locale === "id" ? "Direimburse" : "Reimbursed"}
+              </span>
+              <span className="font-mono-num font-bold text-[#1f8f6b]">
+                {formatTooltip(pt.reimbursedIdr)}
+              </span>
+            </div>
+          )}
           {hasSavingsPockets && (
             <div className="flex items-center justify-between gap-4">
               <span className="text-[#745bc7]">{t.analytics.savingsLegend}</span>

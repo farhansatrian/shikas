@@ -34,7 +34,8 @@
      - **Pengeluaran (8 kategori)**: 🍽️ Makan & Minum · 🏠 Tagihan & Kost · 🚆 Transportasi · 🛍️ Belanja · 🎵 Hiburan · 🎁 Berbagi · 🏦 Admin Bank · 🧾 Lainnya
      - **Transfer (1 kategori khusus)**: ⇄ Pindah saldo antar-kantong secara internal.
    - **Akuntansi Harian vs Tabungan & Biaya Admin Akurat (`feeIdr`)**: Saat melakukan transfer dari *Daily* ke *Savings* (misal Rp 3.000.000 dengan biaya admin Rp 2.500), saldo sumber berkurang `Rp 3.002.500`, saldo tujuan bertambah `Rp 3.000.000`, `NET CASHFLOW · DAILY` mencerminkan sisa arus kas harian non-tabungan, **`SAVINGS FLOW`** melacak arus bersih tabungan, dan **hanya biaya admin Rp 2.500** yang dihitung sebagai pengeluaran murni—sementara pengeluaran langsung dari kantong *Savings* tetap tercatat penuh di `Expense` & `Analytics`.
-   - **Raindrop Vessel & Filter Cepat**: Indikator visual rasio *Saved vs Spent*, filter jenis transaksi (`ALL · INCOME · EXPENSE · TRANSFER`), filter per kantong, pencarian catatan/merchant, serta pengelompokan harian.
+   - **Sistem Reimburse Fleksibel & Anti-Kotor (`REIMBURSE // 雫`)**: Tandai pengeluaran talangan/patungan dengan toggle *Reimburse* (nama pengutang & target nominal bersifat opsional/fleksibel). Pembayaran balik (sebagian/`SEBAGIAN` maupun langsung `LUNAS` di nominal berapa pun) langsung menambah saldo kantong tujuan (bisa beda kantong, mis. bayar via *GoPay* lalu diganti ke *Wondr*) dan mengurangi pengeluaran bersih pada siklus transaksi aslinya **tanpa mengotori `Income`**. Dilengkapi panel pengingat `MENUNGGU REIMBURSE // 雫` lintas bulan dan tab filter **`REIMBURSE`** di `CASHFLOW LOG`.
+   - **Raindrop Vessel & Filter Cepat**: Indikator visual rasio *Saved vs Spent*, filter jenis transaksi (`ALL · INCOME · EXPENSE · TRANSFER · REIMBURSE`), filter per kantong, pencarian catatan/merchant/pengutang, serta pengelompokan harian.
 
 4. **Siklus Gajian Kustom per Akun (`Custom Payday Cycle: Day 1–28`)**
    - Bebas menentukan tanggal mulai siklus bulanan sesuai jadwal gajian masing-masing pengguna (default tanggal `1`, dapat diubah ke `1–28`, misalnya tanggal `25` → periode aktif `25 Nov – 24 Dec`).
@@ -43,7 +44,7 @@
 5. **Analitik Arus Kas Interaktif (`ANALYTICS` — *Lazy-Loaded*)**
    - Modul grafik `recharts` dimuat secara *lazy* (tidak membebani waktu muat awal aplikasi).
    - Mendukung **4 rentang waktu dinamis**: `3M`, `6M`, `12M`, dan `ALL TIME` mengikuti tanggal siklus gajian pengguna.
-   - Visualisasi lengkap: **Composed 3-Bar + Line Chart** (perbandingan Pemasukan, Pengeluaran Murni, **Arus Tabungan**, & Total Net lengkap dengan tooltip *Daily Net*), **Donut Chart** proporsi pengeluaran per kategori, **Dual Area Chart** tren **Total Saldo** vs **Saldo Tabungan**, serta ringkasan *SHIZUKU Chronicle*.
+   - Visualisasi lengkap: **Composed 3-Bar + Line Chart** (perbandingan Pemasukan, Pengeluaran Bersih, **Arus Tabungan**, & Total Net lengkap dengan tooltip *Daily Net* & *Reimbursed*), **Donut Chart** proporsi pengeluaran bersih per kategori, **Dual Area Chart** tren **Total Saldo** vs **Saldo Tabungan**, serta ringkasan *SHIZUKU Chronicle* (termasuk rangkuman reimburse).
 
 6. **Mode Lokal Instan & Sinkronisasi Cloud Privat (`SHIZUKU ID` + Google Sign-In)**
    - **Offline-First (`LOCAL MODE`)**: Langsung dapat dicoba tanpa wajib membuat akun; seluruh data tersimpan aman di `localStorage` browser.
@@ -55,8 +56,8 @@
    - **Ambient Rain Toggle**: Aktifkan atau nonaktifkan animasi rintik hujan sesuai selera.
 
 8. **Ekspor CSV & Cadangan JSON Tervalidasi (`Export & Backup/Restore v5`)**
-   - **Ekspor CSV (UTF-8 BOM)**: Mengunduh riwayat transaksi (`shikas-cashflow-YYYY-MM-DD.csv`) berisi 9 kolom lengkap (*Date, Type, Category, Pocket, To Pocket, Merchant, Note, Amount (IDR), Admin Fee (IDR)*) siap buka di Excel / Google Sheets.
-   - **Backup & Restore JSON v5**: Unduh cadangan utuh seluruh kantong, transaksi, dan pengaturan (`shikas-backup-YYYY-MM-DD.json`), lengkap dengan sanitasi tipe data dan migrasi otomatis untuk kategori *legacy* saat *restore*.
+   - **Ekspor CSV (UTF-8 BOM, 18 Kolom Siap Excel/Sheets)**: Mengunduh riwayat transaksi (`shikas-cashflow-YYYY-MM-DD.csv`) berisi *Date, Cycle, Type, Category, Pocket, To Pocket, Merchant, Note, Gross Amount, Admin Fee, Reimburse Status, Reimburse From, Reimburse Target, Reimbursed, Net Income, Net Expense, Reimburse To Pocket,* dan *Reimburse Payments Detail* (dengan proteksi *formula injection* & kecocokan `SUM` 100%).
+   - **Backup & Restore JSON v5**: Unduh cadangan utuh seluruh kantong, transaksi (termasuk histori cicilan reimburse), pengaturan siklus gajian, dan ringkasan saldo (`shikas-backup-YYYY-MM-DD.json`), lengkap dengan sanitasi tipe data dan migrasi otomatis untuk kategori *legacy* saat *restore*.
 
 ---
 

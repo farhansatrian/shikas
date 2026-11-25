@@ -1,6 +1,7 @@
 import { SHIZUKU_ECOSYSTEM, isCloudSyncConfigured } from "../config/ecosystem";
 import { normalizeCategoryId } from "../data/categories";
 import { clampCycleStartDay } from "../utils/format";
+import { sanitizeReimbursement } from "../utils/reimburse";
 import { sanitizeAccounts } from "./exportService";
 import type { CashflowStoreData, ShizukuUser } from "../types/cashflow";
 
@@ -377,6 +378,10 @@ function normalizeStorePayload(
         feeIdr:
           tx.type === "transfer" && tx.feeIdr && tx.feeIdr > 0
             ? Math.round(tx.feeIdr)
+            : undefined,
+        reimburse:
+          tx.type === "expense"
+            ? sanitizeReimbursement(tx.reimburse, tx.amountIdr)
             : undefined,
       })),
     settings: {

@@ -32,6 +32,25 @@ export interface CategoryDefinition {
   icon: string;
 }
 
+export type ReimburseStatus = "pending" | "settled";
+
+export interface ReimbursementEntry {
+  id: string;
+  date: string; // YYYY-MM-DD when friend/payer paid back
+  amountIdr: number; // Always positive integer IDR
+  accountId?: string; // Destination pocket receiving reimbursement (e.g. Wondr)
+  note?: string;
+  createdAt: string;
+}
+
+export interface ReimbursementInfo {
+  status: ReimburseStatus; // "pending" (waiting / partial) | "settled" (full / lunas)
+  expectedIdr?: number; // Optional target amount; omitted = flexible (amount unknown upfront)
+  from?: string; // Optional payer/person reminder (e.g. "Budi")
+  settledAt?: string; // ISO timestamp when marked settled
+  entries: ReimbursementEntry[]; // Partial or full repayments received
+}
+
 export interface Transaction {
   id: string;
   type: TransactionType;
@@ -43,6 +62,7 @@ export interface Transaction {
   accountId?: string; // Income: target pocket | Expense: source pocket | Transfer: FROM pocket
   toAccountId?: string; // Transfer only: TO pocket
   feeIdr?: number; // Transfer only: optional admin fee deducted from FROM pocket & counted as expense
+  reimburse?: ReimbursementInfo; // Expense only: optional contra-expense reimbursement ledger
   createdAt: string;
 }
 
