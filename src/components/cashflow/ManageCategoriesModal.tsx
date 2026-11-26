@@ -1,10 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Pencil, RotateCcw, Trash2, X } from "lucide-react";
+import { Check, Pencil, RotateCcw, Trash2, X } from "lucide-react";
 import { useCashflow } from "../../context/CashflowContext";
 import {
   CATEGORY_COLORS,
   CATEGORY_ICONS,
+  getColorGroupLabel,
+  getDefaultColorName,
+  INCOME_ACCENT_COLOR,
   isSystemCategoryId,
+  normalizeHexColor,
 } from "../../data/categories";
 import type { CategoryDefinition } from "../../types/cashflow";
 import { CategoryIcon } from "../common/CategoryIcon";
@@ -18,6 +22,7 @@ export const ManageCategoriesModal: React.FC = () => {
     saveCategory,
     deleteCategory,
     resetCategoriesToDefault,
+    setColorLabel,
     t,
     locale,
   } = useCashflow();
@@ -25,15 +30,42 @@ export const ManageCategoriesModal: React.FC = () => {
   const [activeType, setActiveType] = useState<"expense" | "income">("expense");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
-  const [color, setColor] = useState("#c837a5");
-  const [icon, setIcon] = useState<string>("Utensils");
+  const [color, setColor] = useState("#2276a8");
+  const [icon, setIcon] = useState<string>("Tag");
+  const [colorLabelDraft, setColorLabelDraft] = useState("");
+  const [colorLabelSaved, setColorLabelSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const colorLabels = store.settings.colorLabels ?? {};
+
+  const syncColorDraftForHex = (hex: string) => {
+    const norm = normalizeHexColor(hex);
+    setColorLabelDraft(colorLabels[norm] ?? "");
+    setColorLabelSaved(false);
+  };
+
+  const commitColorLabelDraft = (targetHex: string, draftValue: string) => {
+    const norm = normalizeHexColor(targetHex);
+    const currentStored = colorLabels[norm] ?? "";
+    const trimmed = draftValue.trim().slice(0, 32);
+    const defaultName = getDefaultColorName(norm);
+    const effective =
+      trimmed.toLowerCase() === defaultName.toLowerCase() ? "" : trimmed;
+    if (effective !== currentStored) {
+      setColorLabel(norm, effective);
+      setColorLabelSaved(true);
+    }
+    setColorLabelDraft(effective);
+  };
+
   const resetForm = (tab: "expense" | "income" = activeType) => {
+    const nextColor = tab === "income" ? INCOME_ACCENT_COLOR : "#2276a8";
     setEditingId(null);
     setName("");
-    setColor(tab === "income" ? "#2276a8" : "#c837a5");
+    setColor(nextColor);
     setIcon(tab === "income" ? "Briefcase" : "Tag");
+    setColorLabelDraft(colorLabels[normalizeHexColor(nextColor)] ?? "");
+    setColorLabelSaved(false);
     setError(null);
   };
 
@@ -67,21 +99,58 @@ export const ManageCategoriesModal: React.FC = () => {
 
   if (!isCategoriesModalOpen) return null;
 
+  const isExpenseTab = activeType === "expense";
+  const normSelectedColor = normalizeHexColor(color);
+  const defaultSelectedColorName = getDefaultColorName(normSelectedColor);
+  const storedSelectedColorLabel = colorLabels[normSelectedColor] ?? "";
+  const isColorDraftDirty = colorLabelDraft.trim() !== storedSelectedColorLabel;
+
+  const handleClose = () => {
+    if (isExpenseTab && isColorDraftDirty) {
+      commitColorLabelDraft(normSelectedColor, colorLabelDraft);
+    }
+    closeCategoriesModal();
+  };
+
+  const handleSelectColor = (nextHex: string) => {
+    if (isColorDraftDirty) {
+      commitColorLabelDraft(normSelectedColor, colorLabelDraft);
+    }
+    const normNext = normalizeHexColor(nextHex);
+    setColor(normNext);
+    syncColorDraftForHex(normNext);
+  };
+
   const startEdit = (cat: CategoryDefinition) => {
+    if (isExpenseTab && isColorDraftDirty) {
+      commitColorLabelDraft(normSelectedColor, colorLabelDraft);
+    }
     setEditingId(cat.id);
-    setName(locale === "id" ? cat.nameId : cat.nameEn);
-    setColor(cat.color);
+    setName(cat.nameEn || cat.nameId);
+    const nextColor =
+      cat.type === "income" ? INCOME_ACCENT_COLOR : normalizeHexColor(cat.color);
+    setColor(nextColor);
     setIcon(cat.icon);
+    if (cat.type === "expense") {
+      syncColorDraftForHex(nextColor);
+    }
     setError(null);
   };
 
   const switchTab = (next: "expense" | "income") => {
+    if (isExpenseTab && isColorDraftDirty) {
+      commitColorLabelDraft(normSelectedColor, colorLabelDraft);
+    }
     setActiveType(next);
     resetForm(next);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isExpenseTab && isColorDraftDirty) {
+      commitColorLabelDraft(normSelectedColor, colorLabelDraft);
+    }
+
     const trimmed = name.trim();
     if (!trimmed) {
       setError(t.categories.nameRequired);
@@ -103,7 +172,7 @@ export const ManageCategoriesModal: React.FC = () => {
       {
         type: activeType,
         name: trimmed,
-        color,
+        color: isExpenseTab ? normSelectedColor : INCOME_ACCENT_COLOR,
         icon,
       },
       editingId ?? undefined
@@ -114,7 +183,7 @@ export const ManageCategoriesModal: React.FC = () => {
   return (
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-[#14100e]/45 p-4 backdrop-blur-xs"
-      onClick={closeCategoriesModal}
+      onClick={handleClose}
     >
       <div
         role="dialog"
@@ -130,7 +199,7 @@ export const ManageCategoriesModal: React.FC = () => {
           </span>
           <button
             type="button"
-            onClick={closeCategoriesModal}
+            onClick={handleClose}
             aria-label={t.actions.close}
             className="inline-flex shrink-0 items-center gap-1 border border-white/45 bg-white/15 px-2 py-0.5 font-mono text-[10px] tracking-[0.14em] text-white uppercase transition hover:bg-white/30"
           >
@@ -193,7 +262,11 @@ export const ManageCategoriesModal: React.FC = () => {
               {visibleCategories.map((cat) => {
                 const count = txCountByCategory.get(cat.id) ?? 0;
                 const isSys = isSystemCategoryId(cat.id);
-                const label = locale === "id" ? cat.nameId : cat.nameEn;
+                const label = cat.nameEn || cat.nameId;
+                const colorGroupTag =
+                  cat.type === "expense"
+                    ? getColorGroupLabel(cat.color, colorLabels)
+                    : null;
                 return (
                   <li
                     key={cat.id}
@@ -202,20 +275,38 @@ export const ManageCategoriesModal: React.FC = () => {
                     }`}
                   >
                     <div className="flex min-w-0 items-center gap-2.5">
-                      <span
-                        className="flex h-6 w-6 shrink-0 items-center justify-center border text-white"
-                        style={{
-                          borderColor: cat.color,
-                          backgroundColor: cat.color,
-                        }}
-                      >
-                        <CategoryIcon name={cat.icon} className="h-3.5 w-3.5" />
-                      </span>
+                      {cat.type === "income" ? (
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center border border-[#2276a8]/55 bg-[#2276a8]/8 text-[#2276a8]">
+                          <CategoryIcon name={cat.icon} className="h-3.5 w-3.5" />
+                        </span>
+                      ) : (
+                        <span
+                          className="flex h-6 w-6 shrink-0 items-center justify-center border text-white"
+                          style={{
+                            borderColor: cat.color,
+                            backgroundColor: cat.color,
+                          }}
+                        >
+                          <CategoryIcon name={cat.icon} className="h-3.5 w-3.5" />
+                        </span>
+                      )}
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-1.5">
                           <span className="truncate font-mono text-xs font-bold text-[#14100e]">
                             {label}
                           </span>
+                          {colorGroupTag && (
+                            <span
+                              className="border px-1 py-0.2 font-mono text-[8px] font-semibold tracking-[0.06em]"
+                              style={{
+                                borderColor: `${cat.color}45`,
+                                backgroundColor: `${cat.color}10`,
+                                color: cat.color,
+                              }}
+                            >
+                              {colorGroupTag}
+                            </span>
+                          )}
                           {isSys && (
                             <span
                               title={t.categories.systemHint}
@@ -292,8 +383,12 @@ export const ManageCategoriesModal: React.FC = () => {
               )}
             </div>
 
-            {/* Name + Live Preview Badge */}
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_auto]">
+            {/* Name (+ Expense Color Group Swatches & Custom Color Label) */}
+            <div
+              className={`grid grid-cols-1 gap-3 ${
+                isExpenseTab ? "sm:grid-cols-[1fr_auto]" : ""
+              }`}
+            >
               <div>
                 <label className="block font-mono text-[10px] font-semibold tracking-[0.14em] text-[#5d5370] uppercase">
                   {t.categories.nameLabel}
@@ -311,28 +406,128 @@ export const ManageCategoriesModal: React.FC = () => {
                 />
               </div>
 
-              <div>
-                <span className="block font-mono text-[10px] font-semibold tracking-[0.14em] text-[#5d5370] uppercase">
-                  {t.categories.colorLabel}
-                </span>
-                <div className="mt-1.5 flex flex-wrap items-center gap-1.5 py-1">
-                  {CATEGORY_COLORS.map((swatch) => (
-                    <button
-                      key={swatch.hex}
-                      type="button"
-                      onClick={() => setColor(swatch.hex)}
-                      aria-label={swatch.label}
-                      className={`h-6 w-6 border transition ${
-                        color === swatch.hex
-                          ? "scale-110 border-[#14100e] ring-2 ring-[#745bc7]/35"
-                          : "border-white/60 opacity-75 hover:opacity-100"
-                      }`}
-                      style={{ backgroundColor: swatch.hex }}
+              {isExpenseTab && (
+                <div>
+                  <span className="block font-mono text-[10px] font-semibold tracking-[0.14em] text-[#5d5370] uppercase">
+                    {t.categories.colorLabel}
+                  </span>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5 py-1">
+                    {CATEGORY_COLORS.map((swatch) => {
+                      const swatchLabel = getColorGroupLabel(
+                        swatch.hex,
+                        colorLabels
+                      );
+                      const isActive = normSelectedColor === swatch.hex;
+                      return (
+                        <button
+                          key={swatch.hex}
+                          type="button"
+                          title={swatchLabel}
+                          onClick={() => handleSelectColor(swatch.hex)}
+                          aria-label={swatchLabel}
+                          className={`h-6 w-6 border transition ${
+                            isActive
+                              ? "scale-110 border-[#14100e] ring-2 ring-[#745bc7]/35"
+                              : "border-white/60 opacity-75 hover:opacity-100"
+                          }`}
+                          style={{ backgroundColor: swatch.hex }}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Editable Expense Color Group Label (shows on Cashflow Log Color Filter) */}
+            {isExpenseTab && (
+              <div className="border border-[#745bc7]/25 bg-[#faf7ff] px-3 py-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <label
+                    htmlFor="shikas-color-group-name"
+                    className="flex items-center gap-1.5 font-mono text-[9.5px] font-semibold tracking-[0.12em] text-[#5d5370] uppercase"
+                  >
+                    <span
+                      className="h-2.5 w-2.5 shrink-0 border border-black/15"
+                      style={{ backgroundColor: normSelectedColor }}
                     />
-                  ))}
+                    <span>
+                      {locale === "id"
+                        ? `NAMA GRUP WARNA (${defaultSelectedColorName})`
+                        : `COLOR GROUP NAME (${defaultSelectedColorName})`}
+                    </span>
+                  </label>
+                  {storedSelectedColorLabel && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setColorLabel(normSelectedColor, "");
+                        setColorLabelDraft("");
+                        setColorLabelSaved(false);
+                      }}
+                      className="font-mono text-[9px] font-semibold text-[#5d5370] underline hover:text-[#c837a5]"
+                    >
+                      {locale === "id"
+                        ? `Reset ke ${defaultSelectedColorName}`
+                        : `Reset to ${defaultSelectedColorName}`}
+                    </button>
+                  )}
+                </div>
+
+                <div className="mt-1.5 flex items-center gap-1.5">
+                  <input
+                    id="shikas-color-group-name"
+                    type="text"
+                    maxLength={32}
+                    placeholder={`${defaultSelectedColorName} (${
+                      locale === "id"
+                        ? "cth. Needs, Mobility, Lifestyle"
+                        : "e.g. Needs, Mobility, Lifestyle"
+                    })`}
+                    value={colorLabelDraft}
+                    onChange={(e) => {
+                      setColorLabelDraft(e.target.value);
+                      if (colorLabelSaved) setColorLabelSaved(false);
+                    }}
+                    onBlur={() =>
+                      commitColorLabelDraft(normSelectedColor, colorLabelDraft)
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        commitColorLabelDraft(normSelectedColor, colorLabelDraft);
+                      }
+                    }}
+                    className="w-full min-w-0 border border-[#745bc7]/35 bg-white px-2.5 py-1.5 font-mono text-[11px] text-[#14100e] outline-none transition placeholder:text-[#5d5370]/60 focus:border-[#745bc7]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      commitColorLabelDraft(normSelectedColor, colorLabelDraft)
+                    }
+                    disabled={!isColorDraftDirty}
+                    className={`inline-flex shrink-0 items-center gap-1 border px-2.5 py-1.5 font-mono text-[9.5px] font-bold tracking-[0.08em] uppercase transition ${
+                      isColorDraftDirty
+                        ? "border-[#745bc7] bg-[#745bc7] text-white hover:bg-[#5e46ad]"
+                        : colorLabelSaved
+                          ? "border-[#1f8f6b]/45 bg-[#1f8f6b]/10 text-[#1f8f6b]"
+                          : "border-[#745bc7]/25 bg-white text-[#5d5370]/55"
+                    }`}
+                  >
+                    {colorLabelSaved && !isColorDraftDirty && (
+                      <Check className="h-3 w-3" />
+                    )}
+                    <span>
+                      {colorLabelSaved && !isColorDraftDirty
+                        ? locale === "id"
+                          ? "TERSIMPAN"
+                          : "SAVED"
+                        : t.actions.save}
+                    </span>
+                  </button>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Icon Picker Grid */}
             <div>
@@ -350,12 +545,17 @@ export const ManageCategoriesModal: React.FC = () => {
                       aria-label={iconName}
                       className={`flex h-9 w-full items-center justify-center border transition sm:h-8 ${
                         selected
-                          ? "border-[#14100e] text-white shadow-[2px_2px_0_0_rgba(116,91,199,0.28)]"
+                          ? isExpenseTab
+                            ? "border-[#14100e] text-white shadow-[2px_2px_0_0_rgba(116,91,199,0.28)]"
+                            : "border-[#2276a8] bg-[#2276a8]/14 text-[#2276a8] shadow-[2px_2px_0_0_rgba(34,118,168,0.2)]"
                           : "border-[#745bc7]/25 bg-white text-[#5d5370] hover:border-[#745bc7] hover:text-[#14100e]"
                       }`}
                       style={
-                        selected
-                          ? { backgroundColor: color, borderColor: color }
+                        selected && isExpenseTab
+                          ? {
+                              backgroundColor: normSelectedColor,
+                              borderColor: normSelectedColor,
+                            }
                           : undefined
                       }
                     >
@@ -375,7 +575,7 @@ export const ManageCategoriesModal: React.FC = () => {
             <div className="flex items-center justify-end gap-2 pt-1">
               <button
                 type="button"
-                onClick={closeCategoriesModal}
+                onClick={handleClose}
                 className="vn-btn-action px-4 py-2"
               >
                 {t.actions.close}

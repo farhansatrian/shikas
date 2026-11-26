@@ -1,5 +1,9 @@
 import { SHIZUKU_ECOSYSTEM, isCloudSyncConfigured } from "../config/ecosystem";
-import { normalizeCategoryId, sanitizeCategories } from "../data/categories";
+import {
+  normalizeCategoryId,
+  sanitizeCategories,
+  sanitizeColorLabels,
+} from "../data/categories";
 import { clampCycleStartDay } from "../utils/format";
 import { sanitizeReimbursement } from "../utils/reimburse";
 import { sanitizeAccounts } from "./exportService";
@@ -393,6 +397,7 @@ function normalizeStorePayload(
       cycleStartDay: clampCycleStartDay(parsed.settings?.cycleStartDay),
       shizukuWebsiteUrl:
         parsed.settings?.shizukuWebsiteUrl || SHIZUKU_ECOSYSTEM.hubUrl,
+      colorLabels: sanitizeColorLabels(parsed.settings?.colorLabels),
     },
   };
 }

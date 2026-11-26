@@ -23,9 +23,12 @@ import type {
 import { SHIZUKU_ECOSYSTEM } from "../config/ecosystem";
 import {
   cloneDefaultCategories,
+  INCOME_ACCENT_COLOR,
   isSystemCategoryId,
   normalizeCategoryId,
+  normalizeHexColor,
   sanitizeCategories,
+  sanitizeColorLabels,
   sortCategoriesByColor,
 } from "../data/categories";
 import { createDemoSeedData, createFreshEmptyData } from "../data/seedData";
@@ -109,6 +112,7 @@ function loadLocalModeStore(): CashflowStoreData {
         cycleStartDay: clampCycleStartDay(parsed.settings?.cycleStartDay),
         shizukuWebsiteUrl:
           parsed.settings?.shizukuWebsiteUrl || SHIZUKU_ECOSYSTEM.hubUrl,
+        colorLabels: sanitizeColorLabels(parsed.settings?.colorLabels),
       },
     };
   } catch {
@@ -191,6 +195,7 @@ interface CashflowContextValue {
   ) => void;
   deleteCategory: (id: string) => void;
   resetCategoriesToDefault: () => void;
+  setColorLabel: (hex: string, label: string) => void;
   // Transaction Modal
   isTxModalOpen: boolean;
   editingTx: Transaction | null;
@@ -669,20 +674,22 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
       const currentLocale = store.settings.locale;
 
       setStore((prev) => {
+        const cleanColor =
+          payload.type === "income"
+            ? INCOME_ACCENT_COLOR
+            : normalizeHexColor(payload.color);
+
         if (existingId) {
           return {
             ...prev,
             categories: sortCategoriesByColor(
               prev.categories.map((cat) => {
                 if (cat.id !== existingId) return cat;
-                const prevActiveLabel =
-                  currentLocale === "id" ? cat.nameId : cat.nameEn;
-                const nameChanged = prevActiveLabel !== trimmed;
                 return {
                   ...cat,
-                  nameId: nameChanged ? trimmed : cat.nameId,
-                  nameEn: nameChanged ? trimmed : cat.nameEn,
-                  color: payload.color,
+                  nameId: trimmed,
+                  nameEn: trimmed,
+                  color: cleanColor,
                   icon: payload.icon,
                 };
               })
@@ -695,7 +702,7 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
           type: payload.type,
           nameId: trimmed,
           nameEn: trimmed,
-          color: payload.color,
+          color: cleanColor,
           icon: payload.icon,
         };
 
@@ -777,6 +784,23 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
       "success"
     );
   }, [notify, store.settings.locale]);
+
+  const setColorLabel = useCallback((hex: string, label: string) => {
+    const norm = normalizeHexColor(hex);
+    setStore((prev) => {
+      const nextLabels = sanitizeColorLabels({
+        ...(prev.settings.colorLabels ?? {}),
+        [norm]: label,
+      });
+      return {
+        ...prev,
+        settings: {
+          ...prev.settings,
+          colorLabels: nextLabels,
+        },
+      };
+    });
+  }, []);
 
   const openNewTxModal = useCallback(
     (type: TransactionType = "expense") => {
@@ -1226,6 +1250,7 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
       saveCategory,
       deleteCategory,
       resetCategoriesToDefault,
+      setColorLabel,
       isTxModalOpen,
       editingTx,
       defaultTxType,
@@ -1280,6 +1305,7 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
       saveCategory,
       deleteCategory,
       resetCategoriesToDefault,
+      setColorLabel,
       isTxModalOpen,
       editingTx,
       defaultTxType,

@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { Plus, SlidersHorizontal, Star } from "lucide-react";
+import { PiggyBank, Plus, SlidersHorizontal, Star, Wallet } from "lucide-react";
 import { useCashflow } from "../../context/CashflowContext";
 import { computeAccountBalances } from "../../utils/calculations";
 import { MoneyDisplay } from "../common/MoneyDisplay";
@@ -142,10 +142,12 @@ export const PocketsStrip: React.FC<PocketsStripProps> = ({
                     : "border-[#745bc7]/28 bg-white hover:border-[#745bc7] hover:bg-[#faf7ff]"
                 }`}
               >
-                {/* Sharp Left Color Accent */}
+                {/* Role-Based Left Accent (Daily = Cerulean, Savings = Violet — never competes with Expense color groups) */}
                 <span
                   className="absolute top-0 bottom-0 left-0 w-[3px]"
-                  style={{ backgroundColor: account.color }}
+                  style={{
+                    backgroundColor: isSavings ? "#745bc7" : "#2276a8",
+                  }}
                   aria-hidden="true"
                 />
 
@@ -153,6 +155,17 @@ export const PocketsStrip: React.FC<PocketsStripProps> = ({
                   <span className="flex min-w-0 items-center gap-1.5">
                     {active && (
                       <span className="text-[9px] text-[#745bc7]">▶</span>
+                    )}
+                    {isSavings ? (
+                      <PiggyBank
+                        className="h-3.5 w-3.5 shrink-0 text-[#745bc7]"
+                        aria-hidden="true"
+                      />
+                    ) : (
+                      <Wallet
+                        className="h-3.5 w-3.5 shrink-0 text-[#2276a8]"
+                        aria-hidden="true"
+                      />
                     )}
                     <span className="truncate font-mono text-[11px] font-bold tracking-[0.08em] text-[#14100e] uppercase">
                       {account.name}

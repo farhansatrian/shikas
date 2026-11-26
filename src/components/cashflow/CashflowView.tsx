@@ -7,8 +7,10 @@ import {
   Copy,
   HandCoins,
   Pencil,
+  PiggyBank,
   Search,
   Trash2,
+  Wallet,
   X,
 } from "lucide-react";
 import { useCashflow } from "../../context/CashflowContext";
@@ -222,7 +224,11 @@ export const CashflowView: React.FC = () => {
 
   const matchesAccountFilter = (tx: (typeof monthTransactions)[number]) => {
     if (accountFilter === "all") return true;
-    if (tx.accountId === accountFilter || tx.toAccountId === accountFilter) {
+    // Transfers appear strictly under their origin pocket (e.g. Wondr -> BCA only shows under Wondr)
+    if (tx.type === "transfer") {
+      return tx.accountId === accountFilter;
+    }
+    if (tx.accountId === accountFilter) {
       return true;
     }
     return Boolean(
@@ -232,20 +238,20 @@ export const CashflowView: React.FC = () => {
 
   const matchesColorFilter = (tx: (typeof monthTransactions)[number]) => {
     if (colorFilter === "all") return true;
-    // Exclude Transfer from color-group filter so Transfer never collides with Violet categories
-    if (tx.type === "transfer") return false;
+    // Color group filters apply exclusively to Expense categories (never Income or Transfer)
+    if (tx.type !== "expense") return false;
     const txColor = normalizeHexColor(categoryMap[tx.categoryId]?.color);
     return txColor === colorFilter;
   };
 
-  // Active color groups present in the selected month (excludes Transfer)
+  // Active Expense color groups present in the selected month (excludes Income & Transfer)
   const activeMonthColors = useMemo(() => {
     const groups = new Map<
       string,
       { color: string; count: number; catNames: Set<string> }
     >();
     for (const tx of monthTransactions) {
-      if (tx.type === "transfer") continue;
+      if (tx.type !== "expense") continue;
       if (!matchesTypeFilter(tx)) continue;
       if (!matchesAccountFilter(tx)) continue;
       const color = normalizeHexColor(categoryMap[tx.categoryId]?.color);
@@ -297,9 +303,11 @@ export const CashflowView: React.FC = () => {
       total += 1;
       const touched = new Set<string>();
       if (tx.accountId) touched.add(tx.accountId);
-      if (tx.toAccountId) touched.add(tx.toAccountId);
-      for (const e of tx.reimburse?.entries ?? []) {
-        if (e.accountId) touched.add(e.accountId);
+      // Transfers count strictly under origin pocket (matching matchesAccountFilter)
+      if (tx.type !== "transfer") {
+        for (const e of tx.reimburse?.entries ?? []) {
+          if (e.accountId) touched.add(e.accountId);
+        }
       }
       for (const accId of touched) {
         counts.set(accId, (counts.get(accId) ?? 0) + 1);
@@ -323,18 +331,22 @@ export const CashflowView: React.FC = () => {
       counts.set(tx.categoryId, (counts.get(tx.categoryId) ?? 0) + 1);
     }
     const orderIdx = new Map(store.categories.map((c, idx) => [c.id, idx]));
+    const getGroupRank = (catId: string) => {
+      if (catId === "transfer") return 2;
+      return categoryMap[catId]?.type === "income" ? 0 : 1;
+    };
     return Array.from(counts.entries())
       .map(([id, count]) => ({ id, count }))
       .sort((a, b) => {
-        // Keep Transfer distinctly separated at the very bottom
-        const aTransfer = a.id === "transfer" ? 1 : 0;
-        const bTransfer = b.id === "transfer" ? 1 : 0;
-        if (aTransfer !== bTransfer) return aTransfer - bTransfer;
+        const gDiff = getGroupRank(a.id) - getGroupRank(b.id);
+        if (gDiff !== 0) return gDiff;
 
-        const cDiff =
-          getColorOrderIndex(categoryMap[a.id]?.color) -
-          getColorOrderIndex(categoryMap[b.id]?.color);
-        if (cDiff !== 0) return cDiff;
+        if (getGroupRank(a.id) === 1) {
+          const cDiff =
+            getColorOrderIndex(categoryMap[a.id]?.color) -
+            getColorOrderIndex(categoryMap[b.id]?.color);
+          if (cDiff !== 0) return cDiff;
+        }
 
         return (orderIdx.get(a.id) ?? 999) - (orderIdx.get(b.id) ?? 999);
       });
@@ -346,6 +358,51 @@ export const CashflowView: React.FC = () => {
     categoryMap,
     store.categories,
   ]);
+
+  const groupedCategorySections = useMemo(() => {
+    const incomeItems: typeof activeMonthCategories = [];
+    const expenseItems: typeof activeMonthCategories = [];
+    const transferItems: typeof activeMonthCategories = [];
+
+    for (const item of activeMonthCategories) {
+      if (item.id === "transfer") {
+        transferItems.push(item);
+      } else if (categoryMap[item.id]?.type === "income") {
+        incomeItems.push(item);
+      } else {
+        expenseItems.push(item);
+      }
+    }
+
+    const sections: Array<{
+      key: "income" | "expense" | "transfer";
+      label: string;
+      items: typeof activeMonthCategories;
+    }> = [];
+
+    if (incomeItems.length > 0) {
+      sections.push({
+        key: "income",
+        label: t.cashflow.income,
+        items: incomeItems,
+      });
+    }
+    if (expenseItems.length > 0) {
+      sections.push({
+        key: "expense",
+        label: t.cashflow.expense,
+        items: expenseItems,
+      });
+    }
+    if (transferItems.length > 0) {
+      sections.push({
+        key: "transfer",
+        label: t.cashflow.transfer,
+        items: transferItems,
+      });
+    }
+    return sections;
+  }, [activeMonthCategories, categoryMap, t.cashflow]);
 
   const totalTypeFilteredCount = useMemo(
     () =>
@@ -666,7 +723,7 @@ export const CashflowView: React.FC = () => {
   const handleSetTypeFilter = (next: FilterType) => {
     setTypeFilter(next);
     setCategoryFilter("all");
-    if (next === "transfer") setColorFilter("all");
+    if (next === "transfer" || next === "income") setColorFilter("all");
   };
 
   const selectedAccountObj =
@@ -1124,12 +1181,13 @@ export const CashflowView: React.FC = () => {
                     }`}
                   >
                     <span className="flex min-w-0 items-center gap-2">
-                      <span
-                        className="h-2 w-2 shrink-0"
-                        style={{
-                          backgroundColor: selectedAccountObj?.color ?? "#745bc7",
-                        }}
-                      />
+                      {selectedAccountObj ? (
+                        selectedAccountObj.role === "savings" ? (
+                          <PiggyBank className="h-3.5 w-3.5 shrink-0 text-[#745bc7]" />
+                        ) : (
+                          <Wallet className="h-3.5 w-3.5 shrink-0 text-[#2276a8]" />
+                        )
+                      ) : null}
                       <span className="truncate font-medium">
                         {selectedAccountObj
                           ? selectedAccountObj.name
@@ -1183,7 +1241,6 @@ export const CashflowView: React.FC = () => {
                               >
                                 ▶
                               </span>
-                              <span className="h-1.5 w-1.5 shrink-0 bg-[#745bc7]" />
                               <span className="truncate">
                                 {locale === "id"
                                   ? "Semua Kantong"
@@ -1223,10 +1280,11 @@ export const CashflowView: React.FC = () => {
                                   >
                                     ▶
                                   </span>
-                                  <span
-                                    className="h-1.5 w-1.5 shrink-0"
-                                    style={{ backgroundColor: acc.color }}
-                                  />
+                                  {acc.role === "savings" ? (
+                                    <PiggyBank className="h-3.5 w-3.5 shrink-0 text-[#745bc7]" />
+                                  ) : (
+                                    <Wallet className="h-3.5 w-3.5 shrink-0 text-[#2276a8]" />
+                                  )}
                                   <span className="truncate">{acc.name}</span>
                                 </span>
                                 <span className="shrink-0 text-[10px] text-[#5d5370]">
@@ -1260,18 +1318,20 @@ export const CashflowView: React.FC = () => {
                     }`}
                   >
                     <span className="flex min-w-0 items-center gap-2">
-                      {categoryFilter === "transfer" ? (
-                        <span className="shrink-0 font-mono text-[10px] font-bold text-[#745bc7]">
+                      {categoryFilter === "all" ? null : categoryFilter === "transfer" ? (
+                        <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center border border-[#745bc7]/55 bg-[#f5effe] font-mono text-[8.5px] font-bold text-[#745bc7]">
                           ⇄
+                        </span>
+                      ) : categoryMap[categoryFilter]?.type === "income" ? (
+                        <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center border border-[#2276a8]/55 bg-[#2276a8]/8 font-mono text-[9.5px] font-bold text-[#2276a8]">
+                          +
                         </span>
                       ) : (
                         <span
                           className="h-2 w-2 shrink-0"
                           style={{
                             backgroundColor:
-                              categoryFilter === "all"
-                                ? "#745bc7"
-                                : categoryMap[categoryFilter]?.color ?? "#745bc7",
+                              categoryMap[categoryFilter]?.color ?? "#4e5d78",
                           }}
                         />
                       )}
@@ -1290,7 +1350,7 @@ export const CashflowView: React.FC = () => {
                     <div
                       role="listbox"
                       aria-label={t.txModal.category}
-                      className="animate-modal-in absolute right-0 left-0 z-30 mt-1.5 border-[1.5px] border-[#745bc7] bg-[#fdf9ff] shadow-[4px_4px_0_0_rgba(116,91,199,0.22)] sm:left-auto sm:w-[228px]"
+                      className="animate-modal-in absolute right-0 left-0 z-30 mt-1.5 border-[1.5px] border-[#745bc7] bg-[#fdf9ff] shadow-[4px_4px_0_0_rgba(116,91,199,0.22)] sm:left-auto sm:w-[236px]"
                     >
                       <div className="border-b border-[#745bc7]/20 bg-[#f3ecfd] px-3 py-1.5 font-mono text-[9px] font-semibold tracking-[0.18em] text-[#745bc7] uppercase">
                         {locale === "id"
@@ -1298,102 +1358,114 @@ export const CashflowView: React.FC = () => {
                           : "CATEGORY // 雫"}
                       </div>
 
-                      <ul className="max-h-[260px] divide-y divide-[#745bc7]/10 overflow-y-auto py-0.5">
-                        <li>
-                          <button
-                            type="button"
-                            role="option"
-                            aria-selected={categoryFilter === "all"}
-                            onClick={() => {
-                              setCategoryFilter("all");
-                              setCatMenuOpen(false);
-                            }}
-                            className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left font-mono text-[11px] transition ${
-                              categoryFilter === "all"
-                                ? "bg-[#e5dcfb]/75 font-bold text-[#14100e]"
-                                : "text-[#4e4361] hover:bg-[#f5effe] hover:text-[#14100e]"
-                            }`}
-                          >
-                            <span className="flex min-w-0 items-center gap-2">
-                              <span
-                                className={`w-2.5 shrink-0 text-[9px] text-[#745bc7] ${
-                                  categoryFilter === "all"
-                                    ? "opacity-100"
-                                    : "opacity-0"
-                                }`}
-                              >
-                                ▶
-                              </span>
-                              <span className="h-1.5 w-1.5 shrink-0 bg-[#745bc7]" />
-                              <span className="truncate">
-                                {t.cashflow.allCategories}
-                              </span>
-                            </span>
-                            <span className="shrink-0 text-[10px] text-[#5d5370]">
-                              {totalTypeFilteredCount}
-                            </span>
-                          </button>
-                        </li>
-
-                        {activeMonthCategories.map(({ id: catId, count }) => {
-                          const cat = categoryMap[catId];
-                          const selected = categoryFilter === catId;
-                          const isTransferItem = catId === "transfer";
-                          return (
-                            <li
-                              key={catId}
-                              className={
-                                isTransferItem
-                                  ? "border-t-[1.5px] border-[#745bc7]/25 bg-[#faf7ff]"
-                                  : ""
-                              }
+                      <div className="max-h-[280px] overflow-y-auto py-0.5">
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={categoryFilter === "all"}
+                          onClick={() => {
+                            setCategoryFilter("all");
+                            setCatMenuOpen(false);
+                          }}
+                          className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left font-mono text-[11px] transition ${
+                            categoryFilter === "all"
+                              ? "bg-[#e5dcfb]/75 font-bold text-[#14100e]"
+                              : "text-[#4e4361] hover:bg-[#f5effe] hover:text-[#14100e]"
+                          }`}
+                        >
+                          <span className="flex min-w-0 items-center gap-2">
+                            <span
+                              className={`w-2.5 shrink-0 text-[9px] text-[#745bc7] ${
+                                categoryFilter === "all"
+                                  ? "opacity-100"
+                                  : "opacity-0"
+                              }`}
                             >
-                              <button
-                                type="button"
-                                role="option"
-                                aria-selected={selected}
-                                onClick={() => {
-                                  setCategoryFilter(catId);
-                                  setCatMenuOpen(false);
-                                }}
-                                className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left font-mono text-[11px] transition ${
-                                  selected
-                                    ? "bg-[#e5dcfb]/75 font-bold text-[#14100e]"
-                                    : "text-[#4e4361] hover:bg-[#f5effe] hover:text-[#14100e]"
-                                }`}
-                              >
-                                <span className="flex min-w-0 items-center gap-2">
-                                  <span
-                                    className={`w-2.5 shrink-0 text-[9px] text-[#745bc7] ${
-                                      selected ? "opacity-100" : "opacity-0"
-                                    }`}
-                                  >
-                                    ▶
-                                  </span>
-                                  {isTransferItem ? (
-                                    <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center border border-[#745bc7]/55 bg-white font-mono text-[9px] font-bold text-[#745bc7]">
-                                      ⇄
-                                    </span>
-                                  ) : (
-                                    <span
-                                      className="h-2 w-2 shrink-0"
-                                      style={{
-                                        backgroundColor: cat?.color ?? "#745bc7",
+                              ▶
+                            </span>
+                            <span className="truncate">
+                              {t.cashflow.allCategories}
+                            </span>
+                          </span>
+                          <span className="shrink-0 text-[10px] text-[#5d5370]">
+                            {totalTypeFilteredCount}
+                          </span>
+                        </button>
+
+                        {groupedCategorySections.map((section) => (
+                          <div
+                            key={section.key}
+                            className="border-t border-[#745bc7]/22"
+                          >
+                            <div className="bg-[#f6f1fe] px-3 py-1 font-mono text-[8.5px] font-bold tracking-[0.16em] text-[#745bc7]/85 uppercase">
+                              {section.label}
+                            </div>
+                            <ul className="divide-y divide-[#745bc7]/10">
+                              {section.items.map(({ id: catId, count }) => {
+                                const cat = categoryMap[catId];
+                                const selected = categoryFilter === catId;
+                                const isTransferItem = section.key === "transfer";
+                                const isIncomeItem = section.key === "income";
+                                return (
+                                  <li key={catId}>
+                                    <button
+                                      type="button"
+                                      role="option"
+                                      aria-selected={selected}
+                                      onClick={() => {
+                                        setCategoryFilter(catId);
+                                        setCatMenuOpen(false);
                                       }}
-                                    />
-                                  )}
-                                  <span className="truncate">
-                                    {getFilterCategoryLabel(catId)}
-                                  </span>
-                                </span>
-                                <span className="shrink-0 text-[10px] text-[#5d5370]">
-                                  {count}
-                                </span>
-                              </button>
-                            </li>
-                          );
-                        })}
-                      </ul>
+                                      className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left font-mono text-[11px] transition ${
+                                        selected
+                                          ? "bg-[#e5dcfb]/75 font-bold text-[#14100e]"
+                                          : "text-[#4e4361] hover:bg-[#f5effe] hover:text-[#14100e]"
+                                      }`}
+                                    >
+                                      <span className="flex min-w-0 items-center gap-2">
+                                        <span
+                                          className={`w-2.5 shrink-0 text-[9px] text-[#745bc7] ${
+                                            selected ? "opacity-100" : "opacity-0"
+                                          }`}
+                                        >
+                                          ▶
+                                        </span>
+                                        {isTransferItem ? (
+                                          <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center border border-[#745bc7]/55 bg-white font-mono text-[9px] font-bold text-[#745bc7]">
+                                            ⇄
+                                          </span>
+                                        ) : isIncomeItem ? (
+                                          <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center border border-[#2276a8]/55 bg-[#2276a8]/8 font-mono text-[9.5px] font-bold text-[#2276a8]">
+                                            +
+                                          </span>
+                                        ) : (
+                                          <span
+                                            className="h-2 w-2 shrink-0"
+                                            style={{
+                                              backgroundColor:
+                                                cat?.color ?? "#4e5d78",
+                                            }}
+                                          />
+                                        )}
+                                        <span className="truncate">
+                                          {getCategoryLabel(
+                                            catId,
+                                            locale,
+                                            store.categories
+                                          )}
+                                        </span>
+                                      </span>
+                                      <span className="shrink-0 text-[10px] text-[#5d5370]">
+                                        {count}
+                                      </span>
+                                    </button>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1422,8 +1494,10 @@ export const CashflowView: React.FC = () => {
             </div>
           </div>
 
-          {/* 1-Tap Color Group Filter Strip (Excludes Transfer so Violet stays purely Violet categories) */}
-          {activeMonthColors.length > 0 && typeFilter !== "transfer" && (
+          {/* 1-Tap Expense Color Group Filter Strip (Excludes Income & Transfer) */}
+          {activeMonthColors.length > 0 &&
+            typeFilter !== "transfer" &&
+            typeFilter !== "income" && (
             <div className="flex flex-wrap items-center gap-1.5 border-t border-[#745bc7]/12 pt-2">
               <span className="mr-0.5 font-mono text-[9px] font-bold tracking-[0.14em] text-[#5d5370] uppercase">
                 {locale === "id" ? "WARNA:" : "COLOR:"}
@@ -1444,7 +1518,10 @@ export const CashflowView: React.FC = () => {
               </button>
               {activeMonthColors.map((group) => {
                 const active = colorFilter === group.color;
-                const label = getColorGroupLabel(group.color, locale);
+                const label = getColorGroupLabel(
+                  group.color,
+                  store.settings.colorLabels
+                );
                 return (
                   <button
                     key={group.color}
@@ -1666,10 +1743,17 @@ export const CashflowView: React.FC = () => {
                             >
                               ⇄
                             </span>
+                          ) : isIncome ? (
+                            <span
+                              className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center border border-[#2276a8]/55 bg-[#2276a8]/8 font-mono text-[9.5px] font-bold text-[#2276a8]"
+                              aria-hidden="true"
+                            >
+                              +
+                            </span>
                           ) : (
                             <span
-                              className="h-1.5 w-1.5 shrink-0"
-                              style={{ backgroundColor: cat?.color ?? "#745bc7" }}
+                              className="h-2 w-2 shrink-0"
+                              style={{ backgroundColor: cat?.color ?? "#4e5d78" }}
                             />
                           )}
                           <span className="truncate">

@@ -1,8 +1,9 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ArrowUpRight,
   Download,
   FileSpreadsheet,
+  ImageDown,
   LogOut,
   Minus,
   Plus,
@@ -20,6 +21,7 @@ import {
   exportTransactionsToCsv,
   parseBackupJson,
 } from "../../services/exportService";
+import { exportVisualReportPng } from "../../services/visualReportService";
 import {
   clampCycleStartDay,
   formatCycleLabel,
@@ -64,6 +66,7 @@ export const AccountPanel: React.FC = () => {
     openAuthModal,
     signOut,
     store,
+    selectedMonth,
     t,
     locale,
     updateSettings,
@@ -75,6 +78,7 @@ export const AccountPanel: React.FC = () => {
   } = useCashflow();
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [isExportingSlide, setIsExportingSlide] = useState(false);
 
   useEffect(() => {
     if (!isAccountPanelOpen) return;
@@ -433,7 +437,7 @@ export const AccountPanel: React.FC = () => {
               {t.account.dataTitle}
             </h3>
             <div className="mt-2 space-y-2.5 border border-[#745bc7]/35 bg-white p-3.5">
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() => {
@@ -442,19 +446,62 @@ export const AccountPanel: React.FC = () => {
                       locale,
                       store.accounts,
                       store.settings.cycleStartDay,
-                      store.categories
+                      store.categories,
+                      store.settings.colorLabels
                     );
                     notify(
                       locale === "id"
-                        ? `CSV diekspor (${store.transactions.length} catatan).`
-                        : `CSV exported (${store.transactions.length} entries).`,
+                        ? `CSV diekspor (${store.transactions.length} catatan · 30 kolom).`
+                        : `CSV exported (${store.transactions.length} entries · 30 cols).`,
                       "success"
                     );
                   }}
                   className="vn-btn-band py-2 text-[10px]"
                 >
                   <FileSpreadsheet className="h-3.5 w-3.5" />
-                  <span>CSV</span>
+                  <span>CSV (DATA)</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={isExportingSlide}
+                  title={
+                    locale === "id"
+                      ? "Default 6 bulan · pilih rentang 1B–Semua & Kategori/Grup di halaman Analytics"
+                      : "Default 6M · pick 1M–All Time & Category/Group on the Analytics page"
+                  }
+                  onClick={async () => {
+                    if (isExportingSlide) return;
+                    setIsExportingSlide(true);
+                    try {
+                      const fmt = await exportVisualReportPng({
+                        store,
+                        selectedMonth,
+                        range: "6m",
+                        breakdownMode: "group",
+                        locale,
+                        ownerLabel: user?.displayName,
+                      });
+                      notify(
+                        locale === "id"
+                          ? `Slide presentasi ${fmt.toUpperCase()} (16:9) diunduh.`
+                          : `Presentation slide ${fmt.toUpperCase()} (16:9) downloaded.`,
+                        "success"
+                      );
+                    } catch {
+                      notify(
+                        locale === "id"
+                          ? "Gagal mengekspor slide visual."
+                          : "Failed to export visual slide.",
+                        "danger"
+                      );
+                    } finally {
+                      setIsExportingSlide(false);
+                    }
+                  }}
+                  className="vn-btn-action py-2 text-[10px] disabled:opacity-55"
+                >
+                  <ImageDown className="h-3.5 w-3.5" />
+                  <span>{isExportingSlide ? "..." : "SLIDE PNG"}</span>
                 </button>
                 <button
                   type="button"
@@ -488,6 +535,12 @@ export const AccountPanel: React.FC = () => {
                   className="hidden"
                 />
               </div>
+
+              <p className="font-mono text-[9.5px] leading-relaxed text-[#5d5370]">
+                {locale === "id"
+                  ? "CSV: 30 kolom siap Excel/ML · Slide PNG: default 6 bln (pilih 1B–Semua & Kategori/Grup di Analytics) · JSON: Backup penuh."
+                  : "CSV: 30-col Excel/ML dataset · Slide PNG: 6M default (pick 1M–All Time & Category/Group in Analytics) · JSON: Full backup."}
+              </p>
 
               <div className="flex flex-wrap gap-2 border-t border-[#745bc7]/15 pt-2.5">
                 {!user && (

@@ -1,5 +1,10 @@
 import React, { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, SlidersHorizontal } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  ImageDown,
+  SlidersHorizontal,
+} from "lucide-react";
 import {
   Area,
   AreaChart,
@@ -21,8 +26,9 @@ import { SHIKAS_ASSETS } from "../../config/assets";
 import { useCashflow } from "../../context/CashflowContext";
 import {
   buildCategoryMap,
-  buildMonochromeShadeMap,
   getCategoryLabel,
+  getColorGroupLabel,
+  normalizeHexColor,
 } from "../../data/categories";
 import {
   computeCategoryBreakdownForMonths,
@@ -38,17 +44,32 @@ import {
   formatIdr,
   shiftMonthKey,
 } from "../../utils/format";
+import { exportVisualReportPng } from "../../services/visualReportService";
 import { computePendingReimburseOverview } from "../../utils/reimburse";
 import { CategoryIcon } from "../common/CategoryIcon";
 import { MoneyDisplay } from "../common/MoneyDisplay";
 import { SandboxBanner } from "../common/SandboxBanner";
 
 const RANGE_OPTIONS: Array<{ id: AnalyticsRange; en: string; idLabel: string }> = [
+  { id: "1m", en: "1M", idLabel: "1 BLN" },
   { id: "3m", en: "3M", idLabel: "3 BLN" },
   { id: "6m", en: "6M", idLabel: "6 BLN" },
   { id: "12m", en: "12M", idLabel: "12 BLN" },
   { id: "all", en: "ALL TIME", idLabel: "SEMUA" },
 ];
+
+type BreakdownMode = "category" | "group";
+
+interface BreakdownSlice {
+  key: string;
+  label: string;
+  color: string;
+  amountIdr: number;
+  percentage: number;
+  count: number;
+  icon?: string;
+  subLabel?: string;
+}
 
 interface ChartPoint extends MonthlySeriesPoint {
   label: string;
@@ -58,14 +79,48 @@ interface ChartPoint extends MonthlySeriesPoint {
 export const AnalyticsView: React.FC = () => {
   const {
     store,
+    user,
     selectedMonth,
     setSelectedMonth,
     openCategoriesModal,
+    notify,
     t,
     locale,
   } = useCashflow();
   const [range, setRange] = useState<AnalyticsRange>("6m");
-  const [activeCatId, setActiveCatId] = useState<string | null>(null);
+  const [breakdownMode, setBreakdownMode] = useState<BreakdownMode>("category");
+  const [activeSliceKey, setActiveSliceKey] = useState<string | null>(null);
+  const [isExportingSlide, setIsExportingSlide] = useState(false);
+
+  const handleExportSlide = async () => {
+    if (isExportingSlide) return;
+    setIsExportingSlide(true);
+    try {
+      const fmt = await exportVisualReportPng({
+        store,
+        selectedMonth,
+        range,
+        breakdownMode,
+        locale,
+        ownerLabel: user?.displayName,
+      });
+      notify(
+        locale === "id"
+          ? `Slide presentasi ${fmt.toUpperCase()} (16:9) berhasil diunduh.`
+          : `Presentation slide ${fmt.toUpperCase()} (16:9) downloaded.`,
+        "success"
+      );
+    } catch {
+      notify(
+        locale === "id"
+          ? "Gagal membuat slide visual."
+          : "Failed to generate visual slide.",
+        "danger"
+      );
+    } finally {
+      setIsExportingSlide(false);
+    }
+  };
 
   const categoryMap = useMemo(
     () => buildCategoryMap(store.categories),
@@ -154,27 +209,85 @@ export const AnalyticsView: React.FC = () => {
     [store.transactions, rangeMonths, cycleStartDay]
   );
 
-  // Distinct monochrome dark->light tones within the same color family so duplicate-color slices are immediately readable
-  const breakdownShadeMap = useMemo(
-    () =>
-      buildMonochromeShadeMap(
-        expenseBreakdown.map((item) => item.categoryId),
-        categoryMap
-      ),
-    [expenseBreakdown, categoryMap]
-  );
-
-  const activeBreakdownItem = useMemo(
-    () =>
-      activeCatId
-        ? expenseBreakdown.find((item) => item.categoryId === activeCatId) ?? null
-        : null,
-    [activeCatId, expenseBreakdown]
-  );
-
   const totalBreakdownExpense = useMemo(
     () => expenseBreakdown.reduce((acc, item) => acc + item.amountIdr, 0),
     [expenseBreakdown]
+  );
+
+  const colorGroupBreakdown = useMemo<BreakdownSlice[]>(() => {
+    const groups = new Map<
+      string,
+      { amountIdr: number; count: number; catNames: string[] }
+    >();
+    for (const item of expenseBreakdown) {
+      const color = normalizeHexColor(categoryMap[item.categoryId]?.color);
+      const prev = groups.get(color) ?? {
+        amountIdr: 0,
+        count: 0,
+        catNames: [],
+      };
+      prev.amountIdr += item.amountIdr;
+      prev.count += item.count;
+      prev.catNames.push(
+        getCategoryLabel(item.categoryId, locale, store.categories)
+      );
+      groups.set(color, prev);
+    }
+
+    return Array.from(groups.entries())
+      .map(([color, data]) => ({
+        key: color,
+        label: getColorGroupLabel(color, store.settings.colorLabels),
+        color,
+        amountIdr: data.amountIdr,
+        percentage:
+          totalBreakdownExpense > 0
+            ? (data.amountIdr / totalBreakdownExpense) * 100
+            : 0,
+        count: data.count,
+        subLabel: data.catNames.join(", "),
+      }))
+      .sort((a, b) => b.amountIdr - a.amountIdr);
+  }, [
+    expenseBreakdown,
+    categoryMap,
+    locale,
+    store.categories,
+    store.settings.colorLabels,
+    totalBreakdownExpense,
+  ]);
+
+  const breakdownSlices = useMemo<BreakdownSlice[]>(() => {
+    if (breakdownMode === "group") {
+      return colorGroupBreakdown;
+    }
+    return expenseBreakdown.map((item) => {
+      const cat = categoryMap[item.categoryId];
+      return {
+        key: item.categoryId,
+        label: getCategoryLabel(item.categoryId, locale, store.categories),
+        color: cat?.color ?? "#745bc7",
+        amountIdr: item.amountIdr,
+        percentage: item.percentage,
+        count: item.count,
+        icon: cat?.icon,
+      };
+    });
+  }, [
+    breakdownMode,
+    colorGroupBreakdown,
+    expenseBreakdown,
+    categoryMap,
+    locale,
+    store.categories,
+  ]);
+
+  const activeBreakdownSlice = useMemo(
+    () =>
+      activeSliceKey
+        ? breakdownSlices.find((item) => item.key === activeSliceKey) ?? null
+        : null,
+    [activeSliceKey, breakdownSlices]
   );
 
   const currentSummary = useMemo(
@@ -200,6 +313,7 @@ export const AnalyticsView: React.FC = () => {
   );
 
   const rangeTag = useMemo(() => {
+    if (range === "1m") return locale === "id" ? "1 BULAN" : "1 MONTH";
     if (range === "3m") return locale === "id" ? "3 BULAN" : "3 MONTHS";
     if (range === "6m") return locale === "id" ? "6 BULAN" : "6 MONTHS";
     if (range === "12m") return locale === "id" ? "12 BULAN" : "12 MONTHS";
@@ -211,14 +325,48 @@ export const AnalyticsView: React.FC = () => {
     const mask = (v: number, showSign = false) =>
       store.settings.privacyMode ? "Rp •••••••" : formatIdr(v, showSign);
 
-    const top = expenseBreakdown[0];
-    if (top) {
+    if (breakdownMode === "group" && colorGroupBreakdown[0]) {
+      const topGroup = colorGroupBreakdown[0];
+      const memberHint = topGroup.subLabel ? ` (${topGroup.subLabel})` : "";
+      list.push(
+        locale === "id"
+          ? `Grup pengeluaran terbesar pada periode ${rangeTag.toLowerCase()} adalah "${topGroup.label}" (${topGroup.percentage.toFixed(1)}% · ${mask(topGroup.amountIdr)})${memberHint}.`
+          : `Largest spending group over ${rangeTag.toLowerCase()} is "${topGroup.label}" (${topGroup.percentage.toFixed(1)}% · ${mask(topGroup.amountIdr)})${memberHint}.`
+      );
+    } else if (expenseBreakdown[0]) {
+      const top = expenseBreakdown[0];
       const catName = getCategoryLabel(top.categoryId, locale, store.categories);
       list.push(
         locale === "id"
           ? `Pengeluaran terbesar pada periode ${rangeTag.toLowerCase()} adalah "${catName}" (${top.percentage.toFixed(1)}% · ${mask(top.amountIdr)}).`
           : `Largest spending category over ${rangeTag.toLowerCase()} is "${catName}" (${top.percentage.toFixed(1)}% · ${mask(top.amountIdr)}).`
       );
+    }
+
+    if (range !== "1m") {
+      const activeCycles = seriesData.filter(
+        (pt) => pt.incomeIdr > 0 || pt.expenseIdr > 0
+      );
+      if (activeCycles.length >= 2 && periodTotals.expenseIdr > 0) {
+        const avgExpenseIdr = Math.round(
+          periodTotals.expenseIdr / activeCycles.length
+        );
+        const avgDelta =
+          range !== "all" && currentSummary.expenseIdr > 0
+            ? computePercentDelta(currentSummary.expenseIdr, avgExpenseIdr)
+            : null;
+        const deltaSuffix =
+          avgDelta !== null && Math.abs(avgDelta) >= 0.5
+            ? locale === "id"
+              ? ` (siklus ini ${Math.abs(avgDelta).toFixed(1)}% ${avgDelta <= 0 ? "lebih hemat" : "lebih tinggi"} dari rata-rata)`
+              : ` (current cycle is ${Math.abs(avgDelta).toFixed(1)}% ${avgDelta <= 0 ? "below" : "above"} average)`
+            : "";
+        list.push(
+          locale === "id"
+            ? `Rata-rata pengeluaran ${mask(avgExpenseIdr)}/periode dari ${activeCycles.length} periode aktif${deltaSuffix}.`
+            : `Average spending is ${mask(avgExpenseIdr)}/cycle across ${activeCycles.length} active periods${deltaSuffix}.`
+        );
+      }
     }
 
     if (range !== "all") {
@@ -285,6 +433,8 @@ export const AnalyticsView: React.FC = () => {
 
     return list;
   }, [
+    breakdownMode,
+    colorGroupBreakdown,
     expenseBreakdown,
     currentSummary,
     prevSummary,
@@ -393,7 +543,7 @@ export const AnalyticsView: React.FC = () => {
 
       {/* Primary Analytics Frame (Starts directly below nav — 100% consistent with CASHFLOW) */}
       <section className="vn-frame overflow-hidden">
-        {/* Vivid SHIZUKU Watercolor Band Header Strip + Integrated Period Switcher */}
+        {/* Vivid SHIZUKU Watercolor Band Header Strip + Integrated Period Switcher & Visual Slide Export */}
         <div className="shikas-band-strip flex flex-wrap items-center justify-between gap-2 px-4 py-2 text-white">
           <span className="font-mono text-[10px] font-semibold tracking-[0.2em] uppercase drop-shadow-2xs">
             {locale === "id"
@@ -401,35 +551,52 @@ export const AnalyticsView: React.FC = () => {
               : `CASHFLOW (${rangeTag}) // 雫`}
           </span>
 
-          {range === "all" ? (
-            <span className="border border-white/40 bg-white/15 px-2.5 py-0.5 font-mono text-[10px] font-semibold tracking-[0.14em] uppercase">
-              {seriesData.length > 1
-                ? `${seriesData[0].label} — ${seriesData[seriesData.length - 1].label}`
-                : rangeTag}
-            </span>
-          ) : (
-            <div className="inline-flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => setSelectedMonth(shiftMonthKey(selectedMonth, -1))}
-                aria-label="Previous month"
-                className="flex h-6 w-6 items-center justify-center border border-white/40 bg-white/15 text-white transition hover:bg-white/30"
-              >
-                <ChevronLeft className="h-3.5 w-3.5" />
-              </button>
-              <span className="min-w-[116px] text-center font-mono text-[10.5px] font-semibold tracking-[0.1em] uppercase drop-shadow-2xs sm:text-[11px] sm:tracking-[0.12em]">
-                {formatCycleLabel(selectedMonth, locale, cycleStartDay)}
+          <div className="flex flex-wrap items-center gap-2">
+            {range === "all" ? (
+              <span className="border border-white/40 bg-white/15 px-2.5 py-0.5 font-mono text-[10px] font-semibold tracking-[0.14em] uppercase">
+                {seriesData.length > 1
+                  ? `${seriesData[0].label} — ${seriesData[seriesData.length - 1].label}`
+                  : rangeTag}
               </span>
-              <button
-                type="button"
-                onClick={() => setSelectedMonth(shiftMonthKey(selectedMonth, 1))}
-                aria-label="Next month"
-                className="flex h-6 w-6 items-center justify-center border border-white/40 bg-white/15 text-white transition hover:bg-white/30"
-              >
-                <ChevronRight className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          )}
+            ) : (
+              <div className="inline-flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setSelectedMonth(shiftMonthKey(selectedMonth, -1))}
+                  aria-label="Previous month"
+                  className="flex h-6 w-6 items-center justify-center border border-white/40 bg-white/15 text-white transition hover:bg-white/30"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </button>
+                <span className="min-w-[116px] text-center font-mono text-[10.5px] font-semibold tracking-[0.1em] uppercase drop-shadow-2xs sm:text-[11px] sm:tracking-[0.12em]">
+                  {formatCycleLabel(selectedMonth, locale, cycleStartDay)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedMonth(shiftMonthKey(selectedMonth, 1))}
+                  aria-label="Next month"
+                  className="flex h-6 w-6 items-center justify-center border border-white/40 bg-white/15 text-white transition hover:bg-white/30"
+                >
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
+
+            <button
+              type="button"
+              disabled={isExportingSlide}
+              onClick={() => void handleExportSlide()}
+              title={
+                locale === "id"
+                  ? "Ekspor laporan visual presentasi 16:9 (PNG Retina)"
+                  : "Export 16:9 visual presentation slide (Retina PNG)"
+              }
+              className="inline-flex h-6 items-center gap-1 border border-white/50 bg-white/18 px-2 font-mono text-[9.5px] font-bold tracking-[0.12em] text-white uppercase transition hover:bg-white/32 disabled:opacity-55"
+            >
+              <ImageDown className="h-3 w-3 shrink-0" />
+              <span>{isExportingSlide ? "..." : "SLIDE PNG"}</span>
+            </button>
+          </div>
         </div>
 
         {/* Unified Single-Row Toolbar: 3M | 6M | 12M | ALL + Period Totals */}
@@ -443,7 +610,7 @@ export const AnalyticsView: React.FC = () => {
                   key={opt.id}
                   type="button"
                   onClick={() => setRange(opt.id)}
-                  className={`px-3 py-1 font-mono text-[10px] font-semibold tracking-[0.12em] uppercase transition ${
+                  className={`px-2 py-1 font-mono text-[9.5px] font-semibold tracking-[0.1em] uppercase transition sm:px-3 sm:text-[10px] sm:tracking-[0.12em] ${
                     idx > 0 ? "border-l border-[#745bc7]/40" : ""
                   } ${
                     active
@@ -564,14 +731,30 @@ export const AnalyticsView: React.FC = () => {
                   dataKey="incomeIdr"
                   fill="#2276a8"
                   radius={[0, 0, 0, 0]}
-                  maxBarSize={seriesData.length > 8 ? 14 : hasSavingsPockets ? 18 : 24}
+                  maxBarSize={
+                    seriesData.length === 1
+                      ? 36
+                      : seriesData.length > 8
+                        ? 14
+                        : hasSavingsPockets
+                          ? 18
+                          : 24
+                  }
                   animationDuration={360}
                 />
                 <Bar
                   dataKey="expenseIdr"
                   fill="#d749d5"
                   radius={[0, 0, 0, 0]}
-                  maxBarSize={seriesData.length > 8 ? 14 : hasSavingsPockets ? 18 : 24}
+                  maxBarSize={
+                    seriesData.length === 1
+                      ? 36
+                      : seriesData.length > 8
+                        ? 14
+                        : hasSavingsPockets
+                          ? 18
+                          : 24
+                  }
                   animationDuration={360}
                 />
                 {hasSavingsPockets && (
@@ -579,7 +762,13 @@ export const AnalyticsView: React.FC = () => {
                     dataKey="savingsFlowIdr"
                     fill="#745bc7"
                     radius={[0, 0, 0, 0]}
-                    maxBarSize={seriesData.length > 8 ? 14 : 18}
+                    maxBarSize={
+                      seriesData.length === 1
+                        ? 36
+                        : seriesData.length > 8
+                          ? 14
+                          : 18
+                    }
                     animationDuration={360}
                   />
                 )}
@@ -604,15 +793,42 @@ export const AnalyticsView: React.FC = () => {
 
       {/* Expense Breakdown + Cumulative Balance Trajectory (Synced with Range) */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
-        <section className="vn-frame overflow-hidden lg:col-span-6">
+        <section className="vn-frame flex flex-col overflow-hidden lg:col-span-6">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#745bc7]/25 bg-[#f4effd] px-4 py-2">
             <h2 className="font-mono text-[10px] font-bold tracking-[0.16em] text-[#745bc7] uppercase">
               {locale === "id" ? "KOMPOSISI PENGELUARAN" : "EXPENSE BREAKDOWN"}
             </h2>
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-[9px] font-semibold tracking-[0.14em] text-[#5d5370] uppercase">
-                {rangeTag}
-              </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex border border-[#745bc7]/45 bg-white">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBreakdownMode("category");
+                    setActiveSliceKey(null);
+                  }}
+                  className={`px-2 py-0.5 font-mono text-[8.5px] font-bold tracking-[0.1em] uppercase transition ${
+                    breakdownMode === "category"
+                      ? "bg-[#745bc7] text-white"
+                      : "text-[#5d5370] hover:bg-[#f4effd] hover:text-[#14100e]"
+                  }`}
+                >
+                  {locale === "id" ? "KATEGORI" : "CATEGORY"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBreakdownMode("group");
+                    setActiveSliceKey(null);
+                  }}
+                  className={`border-l border-[#745bc7]/35 px-2 py-0.5 font-mono text-[8.5px] font-bold tracking-[0.1em] uppercase transition ${
+                    breakdownMode === "group"
+                      ? "bg-[#745bc7] text-white"
+                      : "text-[#5d5370] hover:bg-[#f4effd] hover:text-[#14100e]"
+                  }`}
+                >
+                  {locale === "id" ? "GRUP WARNA" : "GROUP"}
+                </button>
+              </div>
               <button
                 type="button"
                 onClick={() => openCategoriesModal("expense")}
@@ -624,61 +840,57 @@ export const AnalyticsView: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-white/95 p-4 sm:p-5">
-            {expenseBreakdown.length === 0 ? (
+          <div className="flex flex-1 flex-col justify-center bg-white/95 p-4 sm:p-5">
+            {breakdownSlices.length === 0 ? (
               <p className="py-16 text-center font-mono text-xs text-[#5d5370]">
                 {t.analytics.noExpenseData}
               </p>
             ) : (
-              <div className="grid grid-cols-1 items-center gap-4 sm:grid-cols-[164px_1fr]">
-                {/* Interactive Donut Chart with Monochrome Shade Steps + Center Readout */}
+              <div className="grid grid-cols-1 items-center gap-4 sm:grid-cols-[156px_minmax(0,1fr)]">
+                {/* Interactive Donut Chart with True Category/Group Colors + Clean Center Readout (no overlapping floating tooltip) */}
                 <div
-                  className="relative mx-auto h-[164px] w-[164px]"
-                  onMouseLeave={() => setActiveCatId(null)}
+                  className="relative mx-auto h-[156px] w-[156px] shrink-0"
+                  onMouseLeave={() => setActiveSliceKey(null)}
                 >
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
-                        data={expenseBreakdown}
+                        data={breakdownSlices}
                         dataKey="amountIdr"
-                        nameKey="categoryId"
-                        innerRadius={48}
-                        outerRadius={72}
+                        nameKey="label"
+                        innerRadius={46}
+                        outerRadius={70}
                         paddingAngle={2}
                         animationDuration={360}
                         onMouseEnter={(_, idx) => {
-                          const target = expenseBreakdown[idx];
-                          if (target) setActiveCatId(target.categoryId);
+                          const target = breakdownSlices[idx];
+                          if (target) setActiveSliceKey(target.key);
                         }}
                         onClick={(_, idx) => {
-                          const target = expenseBreakdown[idx];
+                          const target = breakdownSlices[idx];
                           if (target) {
-                            setActiveCatId((curr) =>
-                              curr === target.categoryId ? null : target.categoryId
+                            setActiveSliceKey((curr) =>
+                              curr === target.key ? null : target.key
                             );
                           }
                         }}
                       >
-                        {expenseBreakdown.map((entry) => {
-                          const fill =
-                            breakdownShadeMap[entry.categoryId] ??
-                            categoryMap[entry.categoryId]?.color ??
-                            "#745bc7";
+                        {breakdownSlices.map((entry) => {
                           const dimmed =
-                            activeCatId !== null &&
-                            activeCatId !== entry.categoryId;
+                            activeSliceKey !== null &&
+                            activeSliceKey !== entry.key;
                           return (
                             <Cell
-                              key={entry.categoryId}
-                              fill={fill}
+                              key={entry.key}
+                              fill={entry.color}
                               fillOpacity={dimmed ? 0.25 : 1}
                               stroke={
-                                activeCatId === entry.categoryId
+                                activeSliceKey === entry.key
                                   ? "#14100e"
                                   : "#ffffff"
                               }
                               strokeWidth={
-                                activeCatId === entry.categoryId ? 1.5 : 1
+                                activeSliceKey === entry.key ? 2 : 1.5
                               }
                               style={{
                                 cursor: "pointer",
@@ -688,44 +900,27 @@ export const AnalyticsView: React.FC = () => {
                           );
                         })}
                       </Pie>
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "rgba(253,249,255,0.98)",
-                          borderColor: "#745bc7",
-                          borderRadius: "0px",
-                          fontFamily: "JetBrains Mono, monospace",
-                          fontSize: "11px",
-                        }}
-                        formatter={(val: number, name: string) => [
-                          formatTooltip(val),
-                          getCategoryLabel(name, locale, store.categories),
-                        ]}
-                      />
                     </PieChart>
                   </ResponsiveContainer>
 
                   {/* Center Donut Readout (Active Slice or Period Total) */}
-                  <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-7 text-center">
-                    {activeBreakdownItem ? (
+                  <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
+                    {activeBreakdownSlice ? (
                       <>
                         <span className="w-full truncate font-mono text-[9px] font-bold tracking-[0.06em] text-[#5d5370] uppercase">
-                          {getCategoryLabel(
-                            activeBreakdownItem.categoryId,
-                            locale,
-                            store.categories
-                          )}
+                          {activeBreakdownSlice.label}
                         </span>
                         <span className="font-mono-num text-sm font-bold leading-tight text-[#14100e]">
-                          {activeBreakdownItem.percentage > 0 &&
-                          activeBreakdownItem.percentage < 0.5
+                          {activeBreakdownSlice.percentage > 0 &&
+                          activeBreakdownSlice.percentage < 0.5
                             ? "<1%"
-                            : `${activeBreakdownItem.percentage.toFixed(0)}%`}
+                            : `${activeBreakdownSlice.percentage.toFixed(0)}%`}
                         </span>
                         <span className="font-mono text-[9.5px] font-semibold text-[#745bc7]">
                           {store.settings.privacyMode
                             ? "•••"
                             : formatCompactIdr(
-                                activeBreakdownItem.amountIdr,
+                                activeBreakdownSlice.amountIdr,
                                 locale
                               )}
                         </span>
@@ -745,83 +940,91 @@ export const AnalyticsView: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Ranked Category Stat Bars with Mini Icons & Synchronized Monochrome Shades */}
-                <div className="space-y-1.5">
-                  {expenseBreakdown.map((item) => {
-                    const cat = categoryMap[item.categoryId];
-                    const barColor =
-                      breakdownShadeMap[item.categoryId] ??
-                      cat?.color ??
-                      "#745bc7";
+                {/* Ranked Category or Color-Group Stat Bars */}
+                <div className="min-w-0 space-y-1.5">
+                  {breakdownSlices.map((item) => {
                     const pctLabel =
                       item.percentage > 0 && item.percentage < 0.5
                         ? "<1%"
                         : `${item.percentage.toFixed(0)}%`;
-                    const isHighlighted = activeCatId === item.categoryId;
+                    const isHighlighted = activeSliceKey === item.key;
                     const isDimmed =
-                      activeCatId !== null && activeCatId !== item.categoryId;
+                      activeSliceKey !== null && activeSliceKey !== item.key;
 
                     return (
                       <div
-                        key={item.categoryId}
+                        key={item.key}
                         role="button"
                         tabIndex={0}
-                        onMouseEnter={() => setActiveCatId(item.categoryId)}
-                        onMouseLeave={() => setActiveCatId(null)}
+                        title={
+                          item.subLabel
+                            ? `${item.label}: ${item.subLabel}`
+                            : item.label
+                        }
+                        onMouseEnter={() => setActiveSliceKey(item.key)}
+                        onMouseLeave={() => setActiveSliceKey(null)}
                         onClick={() =>
-                          setActiveCatId((curr) =>
-                            curr === item.categoryId ? null : item.categoryId
+                          setActiveSliceKey((curr) =>
+                            curr === item.key ? null : item.key
                           )
                         }
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault();
-                            setActiveCatId((curr) =>
-                              curr === item.categoryId ? null : item.categoryId
+                            setActiveSliceKey((curr) =>
+                              curr === item.key ? null : item.key
                             );
                           }
                         }}
-                        className={`cursor-pointer border px-2 py-1.5 transition ${
+                        className={`min-w-0 cursor-pointer border px-2 py-1.5 transition ${
                           isHighlighted
                             ? "border-[#745bc7]/60 bg-[#f4effe]"
                             : "border-transparent hover:bg-[#faf7ff]"
                         } ${isDimmed ? "opacity-55" : "opacity-100"}`}
                       >
-                        <div className="flex items-center justify-between gap-2 font-mono text-[11px]">
-                          <span className="flex min-w-0 items-center gap-1.5">
-                            <span
-                              className="flex h-[18px] w-[18px] shrink-0 items-center justify-center text-white"
-                              style={{ backgroundColor: barColor }}
-                            >
-                              <CategoryIcon
-                                name={cat?.icon}
-                                className="h-2.5 w-2.5"
+                        <div className="flex min-w-0 items-center justify-between gap-2 font-mono text-[11px]">
+                          <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                            {item.icon ? (
+                              <span
+                                className="flex h-[18px] w-[18px] shrink-0 items-center justify-center text-white"
+                                style={{ backgroundColor: item.color }}
+                              >
+                                <CategoryIcon
+                                  name={item.icon}
+                                  className="h-2.5 w-2.5"
+                                />
+                              </span>
+                            ) : (
+                              <span
+                                className="h-3.5 w-3.5 shrink-0 border border-black/10"
+                                style={{ backgroundColor: item.color }}
                               />
-                            </span>
+                            )}
                             <span className="truncate font-semibold text-[#14100e]">
-                              {getCategoryLabel(
-                                item.categoryId,
-                                locale,
-                                store.categories
-                              )}
+                              {item.label}
                             </span>
                           </span>
-                          <div className="shrink-0 text-right">
+                          <div className="flex shrink-0 items-baseline gap-1.5 text-right">
                             <MoneyDisplay
                               amountIdr={item.amountIdr}
                               className="text-[11px] font-bold text-[#14100e]"
                             />
-                            <span className="ml-1.5 text-[10px] text-[#745bc7]">
+                            <span className="w-7 text-right text-[10px] font-semibold text-[#745bc7]">
                               {pctLabel}
                             </span>
                           </div>
                         </div>
+                        {item.subLabel && (
+                          <p className="mt-0.5 truncate pl-5 font-mono text-[9.5px] text-[#5d5370]">
+                            {item.subLabel}
+                          </p>
+                        )}
                         <div className="mt-1 h-1.5 w-full bg-[#745bc7]/12">
                           <div
                             className="h-full transition-all duration-300"
                             style={{
                               width: `${Math.min(100, Math.max(item.percentage > 0 ? 1.5 : 0, item.percentage))}%`,
-                              backgroundColor: barColor,
+                              backgroundColor: item.color,
                             }}
                           />
                         </div>
@@ -834,7 +1037,7 @@ export const AnalyticsView: React.FC = () => {
           </div>
         </section>
 
-        <section className="vn-frame overflow-hidden lg:col-span-6">
+        <section className="vn-frame flex flex-col overflow-hidden lg:col-span-6">
           <div className="flex items-center justify-between border-b border-[#745bc7]/25 bg-[#f4effd] px-4 py-2">
             <h2 className="font-mono text-[10px] font-bold tracking-[0.16em] text-[#745bc7] uppercase">
               {t.analytics.balanceGrowth}
@@ -844,8 +1047,8 @@ export const AnalyticsView: React.FC = () => {
             </span>
           </div>
 
-          <div className="bg-white/95 p-4 sm:p-5">
-            <div className="h-[220px] w-full">
+          <div className="flex flex-1 flex-col justify-center bg-white/95 p-4 sm:p-5">
+            <div className="h-[220px] min-h-[220px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart
                   data={seriesData}
@@ -938,6 +1141,16 @@ export const AnalyticsView: React.FC = () => {
                     strokeWidth={2.2}
                     animationDuration={360}
                     fill="url(#shikasVesselArea)"
+                    dot={
+                      seriesData.length <= 2
+                        ? {
+                            r: 4,
+                            fill: "#745bc7",
+                            stroke: "#ffffff",
+                            strokeWidth: 1.5,
+                          }
+                        : false
+                    }
                   />
                   {hasSavingsPockets && (
                     <Area
@@ -948,6 +1161,16 @@ export const AnalyticsView: React.FC = () => {
                       strokeDasharray="4 3"
                       animationDuration={360}
                       fill="none"
+                      dot={
+                        seriesData.length <= 2
+                          ? {
+                              r: 3.5,
+                              fill: "#2276a8",
+                              stroke: "#ffffff",
+                              strokeWidth: 1.5,
+                            }
+                          : false
+                      }
                     />
                   )}
                 </AreaChart>

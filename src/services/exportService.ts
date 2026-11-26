@@ -6,11 +6,19 @@ import type {
   Transaction,
 } from "../types/cashflow";
 import {
+  buildCategoryMap,
   getCategoryLabel,
+  getColorGroupLabel,
   normalizeCategoryId,
+  normalizeHexColor,
   sanitizeCategories,
+  sanitizeColorLabels,
 } from "../data/categories";
-import { computeAccountBalances } from "../utils/calculations";
+import {
+  computeAccountBalances,
+  computeTimeRangeSeries,
+  type MonthlySeriesPoint,
+} from "../utils/calculations";
 import {
   clampCycleStartDay,
   formatCycleLabel,
@@ -60,35 +68,69 @@ function triggerFileDownload(
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+const WEEKDAY_NAMES = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+] as const;
+
+function getIsoWeekdayName(isoDate: string): string {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  if (!y || !m || !d) return "";
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return WEEKDAY_NAMES[dt.getUTCDay()] ?? "";
+}
+
 export function buildTransactionsCsvContent(
   transactions: Transaction[],
   locale: Locale,
   accounts: PocketAccount[] = [],
   cycleStartDay = 1,
-  categories?: CategoryDefinition[]
+  categories?: CategoryDefinition[],
+  colorLabels?: Record<string, string>
 ): string {
-  const accMap = new Map(accounts.map((a) => [a.id, a.name]));
+  const accMap = new Map(accounts.map((a) => [a.id, a]));
+  const catMap = buildCategoryMap(categories);
+  const savingsIds = new Set(
+    accounts.filter((a) => a.role === "savings").map((a) => a.id)
+  );
   const safeCycleDay = clampCycleStartDay(cycleStartDay);
 
   const headers = [
+    "Transaction ID",
     "Date",
+    "Day of Week",
+    "Cycle Key",
     "Cycle",
     "Type",
+    "Category ID",
     "Category",
+    "Color Group",
+    "Color Hex",
     "Pocket",
+    "Pocket Role",
     "To Pocket",
+    "To Pocket Role",
     "Merchant",
     "Note",
     "Gross Amount (IDR)",
     "Admin Fee (IDR)",
+    "Net Income (IDR)",
+    "Net Expense (IDR)",
+    "Savings Flow (IDR)",
     "Reimburse Status",
+    "Reimburse Mode",
     "Reimburse From",
     "Reimburse Target (IDR)",
     "Reimbursed (IDR)",
-    "Net Income (IDR)",
-    "Net Expense (IDR)",
+    "Reimburse Remaining (IDR)",
     "Reimburse To Pocket",
     "Reimburse Payments Detail",
+    "Created At",
   ];
 
   const sorted = [...transactions].sort((a, b) =>
@@ -114,49 +156,106 @@ export function buildTransactionsCsvContent(
           ? fee
           : 0;
 
+    const fromAcc = tx.accountId ? accMap.get(tx.accountId) : undefined;
+    const toAcc = tx.toAccountId ? accMap.get(tx.toAccountId) : undefined;
+    const fromSavings = Boolean(tx.accountId && savingsIds.has(tx.accountId));
+    const toSavings = Boolean(tx.toAccountId && savingsIds.has(tx.toAccountId));
+
+    let savingsFlow = 0;
+    if (tx.type === "income") {
+      if (fromSavings) savingsFlow += tx.amountIdr;
+    } else if (tx.type === "expense") {
+      if (fromSavings) savingsFlow -= tx.amountIdr;
+      let cap = Math.max(0, Math.round(tx.amountIdr || 0));
+      for (const e of tx.reimburse?.entries ?? []) {
+        const amt = Math.min(cap, Math.max(0, Math.round(e.amountIdr || 0)));
+        if (amt <= 0) continue;
+        cap -= amt;
+        if (e.accountId && savingsIds.has(e.accountId)) {
+          savingsFlow += amt;
+        }
+      }
+    } else if (tx.type === "transfer") {
+      if (toSavings && !fromSavings) savingsFlow += tx.amountIdr;
+      else if (fromSavings && !toSavings) savingsFlow -= tx.amountIdr + fee;
+      else if (fromSavings && toSavings && fee > 0) savingsFlow -= fee;
+    }
+
+    const catColorHex =
+      tx.type === "expense"
+        ? normalizeHexColor(catMap[tx.categoryId]?.color)
+        : "";
+    const colorGroupName = catColorHex
+      ? getColorGroupLabel(catColorHex, colorLabels)
+      : "";
+
     const reimburseStatus = prog.isReimburse ? prog.status.toUpperCase() : "";
-    const reimburseTarget = prog.isReimburse
+    const reimburseMode = prog.isReimburse
       ? prog.isFlexible
         ? "FLEXIBLE"
-        : prog.expectedIdr ?? ""
+        : "FIXED"
       : "";
+    const reimburseTarget: number | string =
+      prog.isReimburse && !prog.isFlexible && prog.expectedIdr
+        ? prog.expectedIdr
+        : "";
+    const reimburseRemaining =
+      prog.isReimburse && prog.isPending && !prog.isFlexible
+        ? prog.remainingExpectedIdr
+        : 0;
 
     const entries = tx.type === "expense" ? tx.reimburse?.entries ?? [] : [];
     const reimbursePockets = Array.from(
       new Set(
         entries
-          .map((e) => (e.accountId ? accMap.get(e.accountId) ?? e.accountId : ""))
+          .map((e) =>
+            e.accountId ? accMap.get(e.accountId)?.name ?? e.accountId : ""
+          )
           .filter(Boolean)
       )
     ).join(" / ");
 
     const reimburseDetail = entries
       .map((e) => {
-        const dest = e.accountId ? accMap.get(e.accountId) ?? e.accountId : "Unassigned";
+        const dest = e.accountId
+          ? accMap.get(e.accountId)?.name ?? e.accountId
+          : "Unassigned";
         const noteSuffix = e.note ? ` (${e.note})` : "";
         return `${e.date}: +${formatIdr(e.amountIdr)} -> ${dest}${noteSuffix}`;
       })
       .join(" ; ");
 
     return [
+      tx.id,
       tx.date,
+      getIsoWeekdayName(tx.date),
+      cycleKey,
       cycleLabel,
       tx.type.toUpperCase(),
+      tx.categoryId,
       getCategoryLabel(tx.categoryId, locale, categories),
-      tx.accountId ? accMap.get(tx.accountId) ?? tx.accountId : "",
-      tx.toAccountId ? accMap.get(tx.toAccountId) ?? tx.toAccountId : "",
+      colorGroupName,
+      catColorHex,
+      fromAcc?.name ?? tx.accountId ?? "",
+      fromAcc ? fromAcc.role.toUpperCase() : "",
+      toAcc?.name ?? tx.toAccountId ?? "",
+      toAcc ? toAcc.role.toUpperCase() : "",
       tx.merchant ?? "",
       tx.note,
       tx.amountIdr,
       fee,
+      netIncome,
+      netExpense,
+      savingsFlow,
       reimburseStatus,
+      reimburseMode,
       tx.reimburse?.from ?? "",
       reimburseTarget,
       reimbursed,
-      netIncome,
-      netExpense,
+      reimburseRemaining,
       reimbursePockets,
       reimburseDetail,
+      tx.createdAt,
     ];
   });
 
@@ -171,14 +270,16 @@ export function exportTransactionsToCsv(
   locale: Locale,
   accounts: PocketAccount[] = [],
   cycleStartDay = 1,
-  categories?: CategoryDefinition[]
+  categories?: CategoryDefinition[],
+  colorLabels?: Record<string, string>
 ): void {
   const csv = buildTransactionsCsvContent(
     transactions,
     locale,
     accounts,
     cycleStartDay,
-    categories
+    categories,
+    colorLabels
   );
   const stamp = new Date().toISOString().slice(0, 10);
   triggerFileDownload(
@@ -198,6 +299,12 @@ export interface ShikasBackupEnvelope extends CashflowStoreData {
     transactionCount: number;
     categoriesCount: number;
     pendingReimburseCount: number;
+    colorGroups: Array<{
+      color: string;
+      label: string;
+      categoryIds: string[];
+      categoryNames: string[];
+    }>;
     pockets: Array<{
       id: string;
       name: string;
@@ -205,6 +312,7 @@ export interface ShikasBackupEnvelope extends CashflowStoreData {
       openingBalanceIdr: number;
       liveBalanceIdr: number;
     }>;
+    monthlyCycles: MonthlySeriesPoint[];
   };
 }
 
@@ -214,6 +322,48 @@ export function buildBackupJsonPayload(
   const balances = computeAccountBalances(data.accounts, data.transactions);
   const pending = computePendingReimburseOverview(data.transactions);
   const cleanCategories = sanitizeCategories(data.categories);
+  const cleanColorLabels = sanitizeColorLabels(data.settings.colorLabels);
+  const cycleStartDay = clampCycleStartDay(data.settings.cycleStartDay);
+
+  const colorGroupMap = new Map<
+    string,
+    { categoryIds: string[]; categoryNames: string[] }
+  >();
+  for (const cat of cleanCategories) {
+    if (cat.type !== "expense") continue;
+    const hex = normalizeHexColor(cat.color);
+    const entry = colorGroupMap.get(hex) ?? {
+      categoryIds: [],
+      categoryNames: [],
+    };
+    entry.categoryIds.push(cat.id);
+    entry.categoryNames.push(cat.nameEn || cat.nameId);
+    colorGroupMap.set(hex, entry);
+  }
+
+  const colorGroups = Array.from(colorGroupMap.entries()).map(
+    ([color, info]) => ({
+      color,
+      label: getColorGroupLabel(color, cleanColorLabels),
+      categoryIds: info.categoryIds,
+      categoryNames: info.categoryNames,
+    })
+  );
+
+  const anchorMonth =
+    data.transactions.length > 0
+      ? getCycleKeyForDate(data.transactions[0].date, cycleStartDay)
+      : getCycleKeyForDate(new Date().toISOString().slice(0, 10), cycleStartDay);
+  const monthlyCycles =
+    data.transactions.length > 0
+      ? computeTimeRangeSeries(
+          data.transactions,
+          anchorMonth,
+          "all",
+          data.accounts,
+          cycleStartDay
+        )
+      : [];
 
   return {
     app: "shikas",
@@ -222,7 +372,10 @@ export function buildBackupJsonPayload(
     accounts: data.accounts,
     categories: cleanCategories,
     transactions: data.transactions,
-    settings: data.settings,
+    settings: {
+      ...data.settings,
+      colorLabels: cleanColorLabels,
+    },
     summary: {
       totalBalanceIdr: balances.totalBalanceIdr,
       dailyTotalIdr: balances.dailyTotalIdr,
@@ -230,6 +383,7 @@ export function buildBackupJsonPayload(
       transactionCount: data.transactions.length,
       categoriesCount: cleanCategories.filter((c) => c.type !== "transfer").length,
       pendingReimburseCount: pending.pendingCount,
+      colorGroups,
       pockets: balances.items.map((item) => ({
         id: item.account.id,
         name: item.account.name,
@@ -237,6 +391,7 @@ export function buildBackupJsonPayload(
         openingBalanceIdr: item.account.openingBalanceIdr,
         liveBalanceIdr: item.balanceIdr,
       })),
+      monthlyCycles,
     },
   };
 }
@@ -352,6 +507,7 @@ export function parseBackupJson(rawText: string): CashflowStoreData {
         typeof parsed.settings?.shizukuWebsiteUrl === "string"
           ? parsed.settings.shizukuWebsiteUrl
           : "",
+      colorLabels: sanitizeColorLabels(parsed.settings?.colorLabels),
     },
   };
 }

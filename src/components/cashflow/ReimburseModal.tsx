@@ -2,10 +2,12 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   Calendar,
   CheckCircle2,
+  PiggyBank,
   RotateCcw,
   Star,
   Trash2,
   User,
+  Wallet,
   X,
 } from "lucide-react";
 import { useCashflow } from "../../context/CashflowContext";
@@ -358,10 +360,11 @@ export const ReimburseModal: React.FC = () => {
                               : "border-[#745bc7]/28 bg-white text-[#5d5370] hover:border-[#745bc7] hover:text-[#14100e]"
                           }`}
                         >
-                          <span
-                            className="h-2 w-2 shrink-0"
-                            style={{ backgroundColor: acc.color }}
-                          />
+                          {acc.role === "savings" ? (
+                            <PiggyBank className="h-3 w-3 shrink-0 text-[#745bc7]" />
+                          ) : (
+                            <Wallet className="h-3 w-3 shrink-0 text-[#2276a8]" />
+                          )}
                           <span>{acc.name}</span>
                           {acc.isDefault && (
                             <Star className="h-2.5 w-2.5 fill-[#745bc7] text-[#745bc7]" />
@@ -516,10 +519,11 @@ export const ReimburseModal: React.FC = () => {
                           {dest && (
                             <span className="inline-flex items-center gap-1 text-[#14100e]">
                               <span className="text-[#745bc7]">→</span>
-                              <span
-                                className="h-1.5 w-1.5 shrink-0"
-                                style={{ backgroundColor: dest.color }}
-                              />
+                              {dest.role === "savings" ? (
+                                <PiggyBank className="h-3 w-3 shrink-0 text-[#745bc7]" />
+                              ) : (
+                                <Wallet className="h-3 w-3 shrink-0 text-[#2276a8]" />
+                              )}
                               <span className="font-semibold">{dest.name}</span>
                             </span>
                           )}

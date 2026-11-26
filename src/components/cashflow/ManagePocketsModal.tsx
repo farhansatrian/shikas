@@ -1,31 +1,26 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Pencil, Star, Trash2, X } from "lucide-react";
+import { Pencil, PiggyBank, Star, Trash2, Wallet, X } from "lucide-react";
 import { useCashflow } from "../../context/CashflowContext";
 import type { AccountRole, PocketAccount } from "../../types/cashflow";
 import { computeAccountBalances } from "../../utils/calculations";
 import { MoneyDisplay } from "../common/MoneyDisplay";
 
-const POCKET_COLORS = [
-  { hex: "#2276a8", label: "Cerulean" },
-  { hex: "#745bc7", label: "Iris" },
-  { hex: "#1f8f6b", label: "Emerald" },
-  { hex: "#c837a5", label: "Magenta" },
-  { hex: "#4e5d78", label: "Slate" },
-];
-
 const QUICK_PRESETS: Array<{
   name: string;
   role: AccountRole;
-  color: string;
 }> = [
-  { name: "Wondr", role: "daily", color: "#2276a8" },
-  { name: "GoPay", role: "daily", color: "#1f8f6b" },
-  { name: "BCA", role: "savings", color: "#745bc7" },
-  { name: "Mandiri", role: "daily", color: "#2276a8" },
-  { name: "Jago", role: "savings", color: "#c837a5" },
-  { name: "OVO", role: "daily", color: "#745bc7" },
-  { name: "Cash", role: "daily", color: "#4e5d78" },
+  { name: "Wondr", role: "daily" },
+  { name: "GoPay", role: "daily" },
+  { name: "BCA", role: "savings" },
+  { name: "Mandiri", role: "daily" },
+  { name: "Jago", role: "savings" },
+  { name: "OVO", role: "daily" },
+  { name: "Cash", role: "daily" },
 ];
+
+function getRoleAccentColor(role: AccountRole): string {
+  return role === "savings" ? "#745bc7" : "#2276a8";
+}
 
 function formatDigitsWithDots(digits: string): string {
   const clean = digits.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
@@ -49,7 +44,6 @@ export const ManagePocketsModal: React.FC = () => {
   const [name, setName] = useState("");
   const [role, setRole] = useState<AccountRole>("daily");
   const [openingDigits, setOpeningDigits] = useState("");
-  const [color, setColor] = useState("#2276a8");
   const [isDefault, setIsDefault] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -63,7 +57,6 @@ export const ManagePocketsModal: React.FC = () => {
     setName("");
     setRole("daily");
     setOpeningDigits("");
-    setColor("#2276a8");
     setIsDefault(store.accounts.length === 0);
     setError(null);
   };
@@ -91,7 +84,6 @@ export const ManagePocketsModal: React.FC = () => {
     setOpeningDigits(
       acc.openingBalanceIdr > 0 ? String(acc.openingBalanceIdr) : ""
     );
-    setColor(acc.color);
     setIsDefault(Boolean(acc.isDefault));
     setError(null);
   };
@@ -100,7 +92,6 @@ export const ManagePocketsModal: React.FC = () => {
     setEditingId(null);
     setName(preset.name);
     setRole(preset.role);
-    setColor(preset.color);
     setIsDefault(store.accounts.length === 0 && preset.role === "daily");
     setError(null);
   };
@@ -123,7 +114,7 @@ export const ManagePocketsModal: React.FC = () => {
         name: trimmed,
         role,
         openingBalanceIdr,
-        color,
+        color: getRoleAccentColor(role),
         isDefault,
       },
       editingId ?? undefined
@@ -133,7 +124,6 @@ export const ManagePocketsModal: React.FC = () => {
     setName("");
     setRole("daily");
     setOpeningDigits("");
-    setColor("#2276a8");
     setIsDefault(false);
     setError(null);
   };
@@ -195,10 +185,19 @@ export const ManagePocketsModal: React.FC = () => {
                   >
                     <div className="flex min-w-0 items-center gap-2.5">
                       <span
-                        className="h-7 w-1 shrink-0"
-                        style={{ backgroundColor: account.color }}
+                        className={`flex h-7 w-7 shrink-0 items-center justify-center border ${
+                          account.role === "savings"
+                            ? "border-[#745bc7]/45 bg-[#745bc7]/10 text-[#745bc7]"
+                            : "border-[#2276a8]/40 bg-[#2276a8]/10 text-[#2276a8]"
+                        }`}
                         aria-hidden="true"
-                      />
+                      >
+                        {account.role === "savings" ? (
+                          <PiggyBank className="h-3.5 w-3.5" />
+                        ) : (
+                          <Wallet className="h-3.5 w-3.5" />
+                        )}
+                      </span>
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-1.5">
                           <span className="truncate font-mono text-xs font-bold text-[#14100e]">
@@ -327,15 +326,23 @@ export const ManagePocketsModal: React.FC = () => {
                               : "border-[#745bc7]/35 bg-white text-[#14100e] hover:border-[#745bc7] hover:bg-[#f4effe]"
                         }`}
                       >
-                        <span
-                          className="h-1.5 w-1.5 shrink-0"
-                          style={{
-                            backgroundColor:
+                        {preset.role === "savings" ? (
+                          <PiggyBank
+                            className={`h-3 w-3 shrink-0 ${
                               name.toLowerCase() === preset.name.toLowerCase()
-                                ? "#ffffff"
-                                : preset.color,
-                          }}
-                        />
+                                ? "text-white"
+                                : "text-[#745bc7]"
+                            }`}
+                          />
+                        ) : (
+                          <Wallet
+                            className={`h-3 w-3 shrink-0 ${
+                              name.toLowerCase() === preset.name.toLowerCase()
+                                ? "text-white"
+                                : "text-[#2276a8]"
+                            }`}
+                          />
+                        )}
                         <span>{preset.name}</span>
                       </button>
                     );
@@ -344,46 +351,22 @@ export const ManagePocketsModal: React.FC = () => {
               </div>
             )}
 
-            {/* Name + Color Swatches */}
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_auto]">
-              <div>
-                <label className="block font-mono text-[10px] font-semibold tracking-[0.14em] text-[#5d5370] uppercase">
-                  {t.pockets.nameLabel}
-                </label>
-                <input
-                  type="text"
-                  maxLength={40}
-                  placeholder={t.pockets.namePlaceholder}
-                  value={name}
-                  onChange={(e) => {
-                    setName(e.target.value);
-                    if (error) setError(null);
-                  }}
-                  className="mt-1.5 w-full border border-[#745bc7]/40 bg-white px-3 py-2 text-xs text-[#14100e] outline-none transition placeholder:text-[#5d5370]/65 focus:border-[#745bc7]"
-                />
-              </div>
-
-              <div>
-                <span className="block font-mono text-[10px] font-semibold tracking-[0.14em] text-[#5d5370] uppercase">
-                  {locale === "id" ? "WARNA" : "COLOR"}
-                </span>
-                <div className="mt-1.5 flex items-center gap-1.5 py-1">
-                  {POCKET_COLORS.map((swatch) => (
-                    <button
-                      key={swatch.hex}
-                      type="button"
-                      onClick={() => setColor(swatch.hex)}
-                      aria-label={swatch.label}
-                      className={`h-6 w-6 border transition ${
-                        color === swatch.hex
-                          ? "scale-110 border-[#14100e] ring-2 ring-[#745bc7]/35"
-                          : "border-white/60 opacity-75 hover:opacity-100"
-                      }`}
-                      style={{ backgroundColor: swatch.hex }}
-                    />
-                  ))}
-                </div>
-              </div>
+            {/* Pocket Name */}
+            <div>
+              <label className="block font-mono text-[10px] font-semibold tracking-[0.14em] text-[#5d5370] uppercase">
+                {t.pockets.nameLabel}
+              </label>
+              <input
+                type="text"
+                maxLength={40}
+                placeholder={t.pockets.namePlaceholder}
+                value={name}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  if (error) setError(null);
+                }}
+                className="mt-1.5 w-full border border-[#745bc7]/40 bg-white px-3 py-2 text-xs text-[#14100e] outline-none transition placeholder:text-[#5d5370]/65 focus:border-[#745bc7]"
+              />
             </div>
 
             {/* Pocket Role 2-Tab Sharp Switcher */}
@@ -401,9 +384,10 @@ export const ManagePocketsModal: React.FC = () => {
                       : "bg-white text-[#5d5370] hover:bg-[#f5effe]"
                   }`}
                 >
-                  <p className="font-mono text-[10.5px] font-bold tracking-[0.12em] uppercase">
-                    {role === "daily" ? "▶ " : ""}
-                    {t.pockets.dailyLabel}
+                  <p className="flex items-center gap-1.5 font-mono text-[10.5px] font-bold tracking-[0.12em] uppercase">
+                    {role === "daily" ? "▶" : null}
+                    <Wallet className="h-3.5 w-3.5 shrink-0 text-[#2276a8]" />
+                    <span>{t.pockets.dailyLabel}</span>
                   </p>
                   <p className="mt-0.5 text-[10.5px] text-[#5d5370]">
                     {t.pockets.dailyDesc}
@@ -418,9 +402,10 @@ export const ManagePocketsModal: React.FC = () => {
                       : "bg-white text-[#5d5370] hover:bg-[#f5effe]"
                   }`}
                 >
-                  <p className="font-mono text-[10.5px] font-bold tracking-[0.12em] uppercase">
-                    {role === "savings" ? "▶ " : ""}
-                    {t.pockets.savingsLabel}
+                  <p className="flex items-center gap-1.5 font-mono text-[10.5px] font-bold tracking-[0.12em] uppercase">
+                    {role === "savings" ? "▶" : null}
+                    <PiggyBank className="h-3.5 w-3.5 shrink-0 text-[#745bc7]" />
+                    <span>{t.pockets.savingsLabel}</span>
                   </p>
                   <p className="mt-0.5 text-[10.5px] text-[#5d5370]">
                     {t.pockets.savingsDesc}

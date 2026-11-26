@@ -1,5 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { ArrowRight, Calendar, HandCoins, Star, X } from "lucide-react";
+import {
+  ArrowRight,
+  Calendar,
+  HandCoins,
+  PiggyBank,
+  Star,
+  Wallet,
+  X,
+} from "lucide-react";
 import { useCashflow } from "../../context/CashflowContext";
 import type { ReimbursementInfo, TransactionType } from "../../types/cashflow";
 import { formatIdr, todayIsoDate } from "../../utils/format";
@@ -304,9 +312,8 @@ export const TransactionModal: React.FC = () => {
         reimburse: nextReimburse,
         note:
           note.trim() ||
-          filteredCategories.find((c) => c.id === categoryId)?.[
-            locale === "id" ? "nameId" : "nameEn"
-          ] ||
+          filteredCategories.find((c) => c.id === categoryId)?.nameEn ||
+          filteredCategories.find((c) => c.id === categoryId)?.nameId ||
           "Entry",
       },
       editingTx?.id
@@ -486,14 +493,19 @@ export const TransactionModal: React.FC = () => {
                                   : "border-[#745bc7]/30 bg-white text-[#14100e] hover:border-[#745bc7]"
                               }`}
                             >
-                              <span
-                                className="h-2 w-2 shrink-0"
-                                style={{
-                                  backgroundColor: selected
-                                    ? "#ffffff"
-                                    : acc.color,
-                                }}
-                              />
+                              {acc.role === "savings" ? (
+                                <PiggyBank
+                                  className={`h-3 w-3 shrink-0 ${
+                                    selected ? "text-white" : "text-[#745bc7]"
+                                  }`}
+                                />
+                              ) : (
+                                <Wallet
+                                  className={`h-3 w-3 shrink-0 ${
+                                    selected ? "text-white" : "text-[#2276a8]"
+                                  }`}
+                                />
+                              )}
                               <span>{acc.name}</span>
                             </button>
                           );
@@ -520,14 +532,19 @@ export const TransactionModal: React.FC = () => {
                                   : "border-[#745bc7]/30 bg-white text-[#14100e] hover:border-[#745bc7]"
                               }`}
                             >
-                              <span
-                                className="h-2 w-2 shrink-0"
-                                style={{
-                                  backgroundColor: selected
-                                    ? "#ffffff"
-                                    : acc.color,
-                                }}
-                              />
+                              {acc.role === "savings" ? (
+                                <PiggyBank
+                                  className={`h-3 w-3 shrink-0 ${
+                                    selected ? "text-white" : "text-[#745bc7]"
+                                  }`}
+                                />
+                              ) : (
+                                <Wallet
+                                  className={`h-3 w-3 shrink-0 ${
+                                    selected ? "text-white" : "text-[#2276a8]"
+                                  }`}
+                                />
+                              )}
                               <span>{acc.name}</span>
                               {acc.role === "savings" && (
                                 <span
@@ -662,10 +679,11 @@ export const TransactionModal: React.FC = () => {
                                   : "border-[#745bc7]/28 bg-white/80 text-[#5d5370] hover:border-[#745bc7] hover:text-[#14100e]"
                               }`}
                             >
-                              <span
-                                className="h-2 w-2 shrink-0"
-                                style={{ backgroundColor: acc.color }}
-                              />
+                              {acc.role === "savings" ? (
+                                <PiggyBank className="h-3 w-3 shrink-0 text-[#745bc7]" />
+                              ) : (
+                                <Wallet className="h-3 w-3 shrink-0 text-[#2276a8]" />
+                              )}
                               <span>{acc.name}</span>
                               {acc.isDefault && (
                                 <Star className="h-2.5 w-2.5 fill-[#745bc7] text-[#745bc7]" />
@@ -718,20 +736,32 @@ export const TransactionModal: React.FC = () => {
                                 : "border-[#745bc7]/25 bg-white/70 text-[#5d5370] hover:border-[#745bc7]/70 hover:bg-white hover:text-[#14100e]"
                             }`}
                           >
-                            <span
-                              className="flex h-5 w-5 shrink-0 items-center justify-center border"
-                              style={{
-                                borderColor: selected ? c.color : `${c.color}55`,
-                                backgroundColor: selected
-                                  ? c.color
-                                  : "transparent",
-                                color: selected ? "#ffffff" : c.color,
-                              }}
-                            >
-                              <CategoryIcon name={c.icon} className="h-3 w-3" />
-                            </span>
+                            {isIncome ? (
+                              <span
+                                className={`flex h-5 w-5 shrink-0 items-center justify-center border ${
+                                  selected
+                                    ? "border-[#2276a8] bg-[#2276a8]/18 text-[#2276a8]"
+                                    : "border-[#2276a8]/45 bg-[#2276a8]/6 text-[#2276a8]"
+                                }`}
+                              >
+                                <CategoryIcon name={c.icon} className="h-3 w-3" />
+                              </span>
+                            ) : (
+                              <span
+                                className="flex h-5 w-5 shrink-0 items-center justify-center border"
+                                style={{
+                                  borderColor: selected ? c.color : `${c.color}55`,
+                                  backgroundColor: selected
+                                    ? c.color
+                                    : "transparent",
+                                  color: selected ? "#ffffff" : c.color,
+                                }}
+                              >
+                                <CategoryIcon name={c.icon} className="h-3 w-3" />
+                              </span>
+                            )}
                             <span className="truncate">
-                              {locale === "id" ? c.nameId : c.nameEn}
+                              {c.nameEn || c.nameId}
                             </span>
                           </button>
                         );

@@ -73,6 +73,7 @@ export interface AppSettings {
   rainEnabled: boolean;
   cycleStartDay: number; // 1..28 (1 = calendar month; e.g. 25 = 25th to 24th next month)
   shizukuWebsiteUrl: string;
+  colorLabels?: Record<string, string>; // Optional custom labels per expense color hex (e.g. "#2276a8": "Needs")
 }
 
 export interface CashflowStoreData {

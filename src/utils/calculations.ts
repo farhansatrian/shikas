@@ -11,7 +11,7 @@ import {
   getReimburseProgress,
 } from "./reimburse";
 
-export type AnalyticsRange = "3m" | "6m" | "12m" | "all";
+export type AnalyticsRange = "1m" | "3m" | "6m" | "12m" | "all";
 
 export interface MonthlySummary {
   month: string;
@@ -431,6 +431,15 @@ export function computeTimeRangeSeries(
   accounts: PocketAccount[] = [],
   cycleStartDay = 1
 ): MonthlySeriesPoint[] {
+  if (range === "1m") {
+    return computeMultiMonthSeries(
+      transactions,
+      anchorMonthKey,
+      1,
+      accounts,
+      cycleStartDay
+    );
+  }
   if (range === "3m") {
     return computeMultiMonthSeries(
       transactions,
