@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { ArrowRight, Calendar, HandCoins, Star, X } from "lucide-react";
 import { useCashflow } from "../../context/CashflowContext";
-import { CATEGORIES } from "../../data/categories";
 import type { ReimbursementInfo, TransactionType } from "../../types/cashflow";
 import { formatIdr, todayIsoDate } from "../../utils/format";
 import { getReimbursedTotalIdr } from "../../utils/reimburse";
@@ -28,10 +27,12 @@ export const TransactionModal: React.FC = () => {
   const {
     store,
     isTxModalOpen,
+    isCategoriesModalOpen,
     editingTx,
     defaultTxType,
     closeTxModal,
     openPocketsModal,
+    openCategoriesModal,
     openReimburseModal,
     saveTransaction,
     t,
@@ -111,12 +112,16 @@ export const TransactionModal: React.FC = () => {
       setRawDigits("");
       setFeeDigits("");
       setDate(todayIsoDate());
+      const firstIncomeCat =
+        store.categories.find((c) => c.type === "income")?.id ?? "other_income";
+      const firstExpenseCat =
+        store.categories.find((c) => c.type === "expense")?.id ?? "other_expense";
       setCategoryId(
         defaultTxType === "income"
-          ? "salary"
+          ? firstIncomeCat
           : defaultTxType === "transfer"
             ? "transfer"
-            : "food"
+            : firstExpenseCat
       );
       setAccountId(defaultAccountId);
       setToAccountId(pickDefaultToAccount(defaultAccountId));
@@ -128,19 +133,19 @@ export const TransactionModal: React.FC = () => {
     }
   }, [isTxModalOpen, editingTx, defaultTxType, defaultAccountId]);
 
-  // Close cleanly on Escape key
+  // Close cleanly on Escape key (only when ManageCategoriesModal is not open on top)
   useEffect(() => {
-    if (!isTxModalOpen) return;
+    if (!isTxModalOpen || isCategoriesModalOpen) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") closeTxModal();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [isTxModalOpen, closeTxModal]);
+  }, [isTxModalOpen, isCategoriesModalOpen, closeTxModal]);
 
   const filteredCategories = useMemo(
-    () => CATEGORIES.filter((c) => c.type === type),
-    [type]
+    () => store.categories.filter((c) => c.type === type),
+    [store.categories, type]
   );
 
   useEffect(() => {
@@ -679,9 +684,20 @@ export const TransactionModal: React.FC = () => {
 
                   {/* Sharp RPG Category Grid */}
                   <div>
-                    <label className="block font-mono text-[10px] font-semibold tracking-[0.16em] text-[#5d5370] uppercase">
-                      {t.txModal.category}
-                    </label>
+                    <div className="flex items-center justify-between">
+                      <label className="font-mono text-[10px] font-semibold tracking-[0.16em] text-[#5d5370] uppercase">
+                        {t.txModal.category}
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          openCategoriesModal(isIncome ? "income" : "expense")
+                        }
+                        className="font-mono text-[9.5px] font-semibold tracking-[0.1em] text-[#745bc7] uppercase hover:underline"
+                      >
+                        {t.actions.manageCategories}
+                      </button>
+                    </div>
                     <div
                       className={`mt-2 grid gap-1.5 ${
                         filteredCategories.length <= 2

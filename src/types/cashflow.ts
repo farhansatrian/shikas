@@ -30,6 +30,7 @@ export interface CategoryDefinition {
   nameEn: string;
   color: string;
   icon: string;
+  isSystem?: boolean; // Protected fallback/system category (editable, cannot be deleted)
 }
 
 export type ReimburseStatus = "pending" | "settled";
@@ -77,6 +78,7 @@ export interface AppSettings {
 export interface CashflowStoreData {
   version: number;
   accounts: PocketAccount[];
+  categories: CategoryDefinition[];
   transactions: Transaction[];
   settings: AppSettings;
 }

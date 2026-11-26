@@ -1,10 +1,15 @@
 import type {
   CashflowStoreData,
+  CategoryDefinition,
   Locale,
   PocketAccount,
   Transaction,
 } from "../types/cashflow";
-import { getCategoryLabel, normalizeCategoryId } from "../data/categories";
+import {
+  getCategoryLabel,
+  normalizeCategoryId,
+  sanitizeCategories,
+} from "../data/categories";
 import { computeAccountBalances } from "../utils/calculations";
 import {
   clampCycleStartDay,
@@ -59,7 +64,8 @@ export function buildTransactionsCsvContent(
   transactions: Transaction[],
   locale: Locale,
   accounts: PocketAccount[] = [],
-  cycleStartDay = 1
+  cycleStartDay = 1,
+  categories?: CategoryDefinition[]
 ): string {
   const accMap = new Map(accounts.map((a) => [a.id, a.name]));
   const safeCycleDay = clampCycleStartDay(cycleStartDay);
@@ -136,7 +142,7 @@ export function buildTransactionsCsvContent(
       tx.date,
       cycleLabel,
       tx.type.toUpperCase(),
-      getCategoryLabel(tx.categoryId, locale),
+      getCategoryLabel(tx.categoryId, locale, categories),
       tx.accountId ? accMap.get(tx.accountId) ?? tx.accountId : "",
       tx.toAccountId ? accMap.get(tx.toAccountId) ?? tx.toAccountId : "",
       tx.merchant ?? "",
@@ -164,13 +170,15 @@ export function exportTransactionsToCsv(
   transactions: Transaction[],
   locale: Locale,
   accounts: PocketAccount[] = [],
-  cycleStartDay = 1
+  cycleStartDay = 1,
+  categories?: CategoryDefinition[]
 ): void {
   const csv = buildTransactionsCsvContent(
     transactions,
     locale,
     accounts,
-    cycleStartDay
+    cycleStartDay,
+    categories
   );
   const stamp = new Date().toISOString().slice(0, 10);
   triggerFileDownload(
@@ -188,6 +196,7 @@ export interface ShikasBackupEnvelope extends CashflowStoreData {
     dailyTotalIdr: number;
     savingsTotalIdr: number;
     transactionCount: number;
+    categoriesCount: number;
     pendingReimburseCount: number;
     pockets: Array<{
       id: string;
@@ -204,12 +213,14 @@ export function buildBackupJsonPayload(
 ): ShikasBackupEnvelope {
   const balances = computeAccountBalances(data.accounts, data.transactions);
   const pending = computePendingReimburseOverview(data.transactions);
+  const cleanCategories = sanitizeCategories(data.categories);
 
   return {
     app: "shikas",
     exportedAt: new Date().toISOString(),
     version: 5,
     accounts: data.accounts,
+    categories: cleanCategories,
     transactions: data.transactions,
     settings: data.settings,
     summary: {
@@ -217,6 +228,7 @@ export function buildBackupJsonPayload(
       dailyTotalIdr: balances.dailyTotalIdr,
       savingsTotalIdr: balances.savingsTotalIdr,
       transactionCount: data.transactions.length,
+      categoriesCount: cleanCategories.filter((c) => c.type !== "transfer").length,
       pendingReimburseCount: pending.pendingCount,
       pockets: balances.items.map((item) => ({
         id: item.account.id,
@@ -278,6 +290,7 @@ export function parseBackupJson(rawText: string): CashflowStoreData {
 
   const todayFallback = new Date().toISOString().slice(0, 10);
   const cleanAccounts = sanitizeAccounts(parsed.accounts);
+  const cleanCategories = sanitizeCategories(parsed.categories);
   const cleanTx: Transaction[] = parsed.transactions
     .filter(
       (tx) =>
@@ -306,7 +319,8 @@ export function parseBackupJson(rawText: string): CashflowStoreData {
                   ? "transfer"
                   : "other_expense")
           ),
-          tx.type
+          tx.type,
+          cleanCategories
         ),
         note: String(tx.note ?? ""),
         merchant: tx.merchant ? String(tx.merchant) : undefined,
@@ -327,6 +341,7 @@ export function parseBackupJson(rawText: string): CashflowStoreData {
   return {
     version: 5,
     accounts: cleanAccounts,
+    categories: cleanCategories,
     transactions: cleanTx,
     settings: {
       locale: parsed.settings?.locale === "id" ? "id" : "en",

@@ -7,6 +7,7 @@ import {
   Minus,
   Plus,
   RotateCcw,
+  SlidersHorizontal,
   Trash2,
   Upload,
   X,
@@ -66,6 +67,7 @@ export const AccountPanel: React.FC = () => {
     t,
     locale,
     updateSettings,
+    openCategoriesModal,
     resetToDemoData,
     resetToFreshEmpty,
     importStoreData,
@@ -403,6 +405,25 @@ export const AccountPanel: React.FC = () => {
                   )}
                 </p>
               </div>
+
+              <div className="flex items-center justify-between gap-3 py-3">
+                <div>
+                  <p className="text-xs font-semibold text-[#14100e]">
+                    {t.categories.manageFromPanel}
+                  </p>
+                  <p className="mt-0.5 text-[11px] leading-snug text-[#5d5370]">
+                    {t.categories.manageFromPanelDesc}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => openCategoriesModal("expense")}
+                  className="vn-btn-action shrink-0 px-3 py-1.5 text-[10px]"
+                >
+                  <SlidersHorizontal className="h-3 w-3" />
+                  <span>{t.actions.manageCategories}</span>
+                </button>
+              </div>
             </div>
           </section>
 
@@ -420,7 +441,8 @@ export const AccountPanel: React.FC = () => {
                       store.transactions,
                       locale,
                       store.accounts,
-                      store.settings.cycleStartDay
+                      store.settings.cycleStartDay,
+                      store.categories
                     );
                     notify(
                       locale === "id"

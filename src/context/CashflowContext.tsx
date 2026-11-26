@@ -10,6 +10,7 @@ import React, {
 import type {
   AppSettings,
   CashflowStoreData,
+  CategoryDefinition,
   Locale,
   NavTab,
   PocketAccount,
@@ -20,7 +21,12 @@ import type {
   TransactionType,
 } from "../types/cashflow";
 import { SHIZUKU_ECOSYSTEM } from "../config/ecosystem";
-import { normalizeCategoryId } from "../data/categories";
+import {
+  cloneDefaultCategories,
+  isSystemCategoryId,
+  normalizeCategoryId,
+  sanitizeCategories,
+} from "../data/categories";
 import { createDemoSeedData, createFreshEmptyData } from "../data/seedData";
 import { sanitizeAccounts } from "../services/exportService";
 import {
@@ -65,9 +71,11 @@ function loadLocalModeStore(): CashflowStoreData {
       return fresh;
     }
     const defaults = createFreshEmptyData().settings;
+    const cleanCategories = sanitizeCategories(parsed.categories);
     return {
       version: 5,
       accounts: sanitizeAccounts(parsed.accounts),
+      categories: cleanCategories,
       transactions: parsed.transactions
         .filter(
           (tx) =>
@@ -78,7 +86,11 @@ function loadLocalModeStore(): CashflowStoreData {
         )
         .map((tx) => ({
           ...tx,
-          categoryId: normalizeCategoryId(tx.categoryId, tx.type),
+          categoryId: normalizeCategoryId(
+            tx.categoryId,
+            tx.type,
+            cleanCategories
+          ),
           accountId: tx.accountId || undefined,
           toAccountId: tx.toAccountId || undefined,
           feeIdr:
@@ -162,6 +174,22 @@ interface CashflowContextValue {
   ) => void;
   deleteAccount: (id: string) => void;
   setDefaultAccount: (id: string) => void;
+  // Custom Categories Modal
+  isCategoriesModalOpen: boolean;
+  categoriesModalTab: "expense" | "income";
+  openCategoriesModal: (tab?: "expense" | "income") => void;
+  closeCategoriesModal: () => void;
+  saveCategory: (
+    payload: {
+      type: "expense" | "income";
+      name: string;
+      color: string;
+      icon: string;
+    },
+    existingId?: string
+  ) => void;
+  deleteCategory: (id: string) => void;
+  resetCategoriesToDefault: () => void;
   // Transaction Modal
   isTxModalOpen: boolean;
   editingTx: Transaction | null;
@@ -223,6 +251,10 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
   const [authModalMode, setAuthModalMode] = useState<AuthModalMode>("signin");
   const [isAccountPanelOpen, setAccountPanelOpen] = useState(false);
   const [isPocketsModalOpen, setPocketsModalOpen] = useState(false);
+  const [isCategoriesModalOpen, setCategoriesModalOpen] = useState(false);
+  const [categoriesModalTab, setCategoriesModalTab] = useState<
+    "expense" | "income"
+  >("expense");
 
   const [isTxModalOpen, setTxModalOpen] = useState(false);
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
@@ -454,6 +486,7 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
       const nextStore: CashflowStoreData = {
         ...base,
         accounts: importSandbox ? store.accounts : [],
+        categories: importSandbox ? store.categories : cloneDefaultCategories(),
         transactions: importSandbox ? store.transactions : [],
         settings: {
           ...store.settings,
@@ -474,7 +507,7 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
         "success"
       );
     },
-    [notify, store.accounts, store.settings, store.transactions]
+    [notify, store.accounts, store.categories, store.settings, store.transactions]
   );
 
   const signOut = useCallback(async () => {
@@ -606,6 +639,148 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
       })),
     }));
   }, []);
+
+  const openCategoriesModal = useCallback(
+    (tab: "expense" | "income" = "expense") => {
+      setAccountPanelOpen(false);
+      setCategoriesModalTab(tab);
+      setCategoriesModalOpen(true);
+    },
+    []
+  );
+
+  const closeCategoriesModal = useCallback(() => {
+    setCategoriesModalOpen(false);
+  }, []);
+
+  const saveCategory = useCallback(
+    (
+      payload: {
+        type: "expense" | "income";
+        name: string;
+        color: string;
+        icon: string;
+      },
+      existingId?: string
+    ) => {
+      const trimmed = payload.name.trim().slice(0, 48);
+      if (!trimmed) return;
+      const currentLocale = store.settings.locale;
+
+      setStore((prev) => {
+        if (existingId) {
+          return {
+            ...prev,
+            categories: prev.categories.map((cat) => {
+              if (cat.id !== existingId) return cat;
+              const prevActiveLabel =
+                currentLocale === "id" ? cat.nameId : cat.nameEn;
+              const nameChanged = prevActiveLabel !== trimmed;
+              return {
+                ...cat,
+                nameId: nameChanged ? trimmed : cat.nameId,
+                nameEn: nameChanged ? trimmed : cat.nameEn,
+                color: payload.color,
+                icon: payload.icon,
+              };
+            }),
+          };
+        }
+
+        const created: CategoryDefinition = {
+          id: generateId("cat"),
+          type: payload.type,
+          nameId: trimmed,
+          nameEn: trimmed,
+          color: payload.color,
+          icon: payload.icon,
+        };
+
+        // Insert neatly right before the fallback Other category of the same type
+        const fallbackId =
+          payload.type === "income" ? "other_income" : "other_expense";
+        const idx = prev.categories.findIndex((c) => c.id === fallbackId);
+        const nextCategories = [...prev.categories];
+        if (idx >= 0) {
+          nextCategories.splice(idx, 0, created);
+        } else {
+          nextCategories.push(created);
+        }
+        return { ...prev, categories: nextCategories };
+      });
+
+      notify(
+        currentLocale === "id"
+          ? existingId
+            ? "Kategori diperbarui."
+            : "Kategori baru ditambahkan."
+          : existingId
+            ? "Category updated."
+            : "Category added.",
+        "success"
+      );
+    },
+    [notify, store.settings.locale]
+  );
+
+  const deleteCategory = useCallback(
+    (id: string) => {
+      if (isSystemCategoryId(id)) return;
+      const target = store.categories.find((c) => c.id === id);
+      if (!target) return;
+      const fallbackId =
+        target.type === "income" ? "other_income" : "other_expense";
+      const affectedCount = store.transactions.filter(
+        (tx) => tx.categoryId === id
+      ).length;
+
+      setStore((prev) => ({
+        ...prev,
+        categories: prev.categories.filter((c) => c.id !== id),
+        transactions: prev.transactions.map((tx) =>
+          tx.categoryId === id ? { ...tx, categoryId: fallbackId } : tx
+        ),
+      }));
+
+      notify(
+        store.settings.locale === "id"
+          ? affectedCount > 0
+            ? `Kategori dihapus. ${affectedCount} catatan dipindah ke Lainnya (bisa diubah kapan saja).`
+            : "Kategori dihapus."
+          : affectedCount > 0
+            ? `Category deleted. ${affectedCount} ${affectedCount === 1 ? "entry" : "entries"} moved to Other (editable anytime).`
+            : "Category deleted.",
+        "iris"
+      );
+    },
+    [notify, store.categories, store.settings.locale, store.transactions]
+  );
+
+  const resetCategoriesToDefault = useCallback(() => {
+    const defaults = cloneDefaultCategories();
+    const defaultIds = new Set(defaults.map((c) => c.id));
+
+    setStore((prev) => ({
+      ...prev,
+      categories: defaults,
+      transactions: prev.transactions.map((tx) => {
+        if (tx.type === "transfer") return tx;
+        if (defaultIds.has(tx.categoryId)) return tx;
+        return {
+          ...tx,
+          categoryId:
+            tx.type === "income" ? "other_income" : "other_expense",
+        };
+      }),
+    }));
+
+    notify(
+      store.settings.locale === "id"
+        ? "Daftar kategori dikembalikan ke default."
+        : "Categories restored to defaults.",
+      "success"
+    );
+  }, [notify, store.settings.locale]);
 
   const openNewTxModal = useCallback(
     (type: TransactionType = "expense") => {
@@ -805,7 +980,11 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
               type: payload.type,
               date: payload.date,
               amountIdr: cleanAmt,
-              categoryId: normalizeCategoryId(payload.categoryId, payload.type),
+              categoryId: normalizeCategoryId(
+                payload.categoryId,
+                payload.type,
+                store.categories
+              ),
               note: payload.note,
               merchant: payload.merchant || undefined,
               accountId: payload.accountId || undefined,
@@ -857,7 +1036,7 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
         "success"
       );
     },
-    [notify, store.settings.locale]
+    [notify, store.categories, store.settings.locale]
   );
 
   const deleteTransaction = useCallback(
@@ -987,13 +1166,19 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
   const importStoreData = useCallback(
     (data: CashflowStoreData) => {
       const cycleStartDay = clampCycleStartDay(data.settings.cycleStartDay);
+      const cleanCategories = sanitizeCategories(data.categories);
       const normalized: CashflowStoreData = {
         ...data,
         version: 5,
         accounts: sanitizeAccounts(data.accounts),
+        categories: cleanCategories,
         transactions: data.transactions.map((tx) => ({
           ...tx,
-          categoryId: normalizeCategoryId(tx.categoryId, tx.type),
+          categoryId: normalizeCategoryId(
+            tx.categoryId,
+            tx.type,
+            cleanCategories
+          ),
           reimburse:
             tx.type === "expense"
               ? sanitizeReimbursement(tx.reimburse, tx.amountIdr)
@@ -1038,6 +1223,13 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
       saveAccount,
       deleteAccount,
       setDefaultAccount,
+      isCategoriesModalOpen,
+      categoriesModalTab,
+      openCategoriesModal,
+      closeCategoriesModal,
+      saveCategory,
+      deleteCategory,
+      resetCategoriesToDefault,
       isTxModalOpen,
       editingTx,
       defaultTxType,
@@ -1085,6 +1277,13 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
       saveAccount,
       deleteAccount,
       setDefaultAccount,
+      isCategoriesModalOpen,
+      categoriesModalTab,
+      openCategoriesModal,
+      closeCategoriesModal,
+      saveCategory,
+      deleteCategory,
+      resetCategoriesToDefault,
       isTxModalOpen,
       editingTx,
       defaultTxType,

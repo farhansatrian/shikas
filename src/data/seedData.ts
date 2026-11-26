@@ -3,6 +3,7 @@ import type {
   PocketAccount,
   Transaction,
 } from "../types/cashflow";
+import { cloneDefaultCategories } from "./categories";
 import { getMonthKey, shiftMonthKey } from "../utils/format";
 
 function dateInMonth(monthKey: string, day: number): string {
@@ -165,6 +166,7 @@ export function createDemoSeedData(): CashflowStoreData {
   return {
     version: 5,
     accounts,
+    categories: cloneDefaultCategories(),
     transactions,
     settings: {
       locale: "en",
@@ -180,6 +182,7 @@ export function createFreshEmptyData(): CashflowStoreData {
   return {
     version: 5,
     accounts: [],
+    categories: cloneDefaultCategories(),
     transactions: [],
     settings: {
       locale: "en",

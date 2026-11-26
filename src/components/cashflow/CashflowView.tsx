@@ -12,7 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { useCashflow } from "../../context/CashflowContext";
-import { CATEGORY_MAP, getCategoryLabel } from "../../data/categories";
+import { buildCategoryMap, getCategoryLabel } from "../../data/categories";
 import type { TransactionType } from "../../types/cashflow";
 import {
   computeCategoryBreakdown,
@@ -105,12 +105,23 @@ export const CashflowView: React.FC = () => {
     [store.accounts]
   );
 
-  // Clear stale account filter if the selected account was deleted
+  const categoryMap = useMemo(
+    () => buildCategoryMap(store.categories),
+    [store.categories]
+  );
+
+  // Clear stale account or category filter if the selected item was deleted
   useEffect(() => {
     if (accountFilter !== "all" && !accountMap.has(accountFilter)) {
       setAccountFilter("all");
     }
   }, [accountFilter, accountMap]);
+
+  useEffect(() => {
+    if (categoryFilter !== "all" && !categoryMap[categoryFilter]) {
+      setCategoryFilter("all");
+    }
+  }, [categoryFilter, categoryMap]);
 
   useEffect(() => {
     if (!isCatMenuOpen) return;
@@ -221,7 +232,7 @@ export const CashflowView: React.FC = () => {
 
   const getFilterCategoryLabel = (catId: string) => {
     if (catId === "all") return t.cashflow.allCategories;
-    const baseLabel = getCategoryLabel(catId, locale);
+    const baseLabel = getCategoryLabel(catId, locale, store.categories);
     if (typeFilter === "all" && catId === "other_income") return `${baseLabel} (+)`;
     if (typeFilter === "all" && catId === "other_expense") return `${baseLabel} (-)`;
     return baseLabel;
@@ -237,7 +248,11 @@ export const CashflowView: React.FC = () => {
         }
         if (!matchesAccountFilter(tx)) return false;
         if (!q) return true;
-        const catLabel = getCategoryLabel(tx.categoryId, locale).toLowerCase();
+        const catLabel = getCategoryLabel(
+          tx.categoryId,
+          locale,
+          store.categories
+        ).toLowerCase();
         const fromName = tx.accountId
           ? (accountMap.get(tx.accountId)?.name ?? "").toLowerCase()
           : "";
@@ -273,6 +288,7 @@ export const CashflowView: React.FC = () => {
     accountFilter,
     query,
     locale,
+    store.categories,
     accountMap,
   ]);
 
@@ -453,7 +469,11 @@ export const CashflowView: React.FC = () => {
     }
 
     if (topExpenseCat) {
-      const catName = getCategoryLabel(topExpenseCat.categoryId, locale);
+      const catName = getCategoryLabel(
+        topExpenseCat.categoryId,
+        locale,
+        store.categories
+      );
       lines.push(
         locale === "id"
           ? `Pengeluaran terbesar bulan ini ada di kategori ${catName} (${topExpenseCat.percentage.toFixed(0)}% · ${mask(topExpenseCat.amountIdr)}).`
@@ -886,8 +906,8 @@ export const CashflowView: React.FC = () => {
         {/* Unified Toolbar (4 Type Tabs + Active Pocket Chip + Category Menu + Search) */}
         <div className="flex flex-col gap-2.5 border-b border-[#745bc7]/20 bg-[#fdf9ff] px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-5">
           <div className="flex flex-wrap items-center gap-2">
-            {/* Compact Sharp Type Tabs (5 Tabs: ALL | INCOME | EXPENSE | TRANSFER | REIMBURSE) */}
-            <div className="inline-flex w-fit max-w-full overflow-x-auto border border-[#745bc7]/55 bg-white">
+            {/* Compact Sharp Type Tabs (All 5 immediately visible on mobile, joined RPG bar on sm+) */}
+            <div className="flex flex-wrap gap-1.5 sm:inline-flex sm:w-fit sm:flex-nowrap sm:gap-0 sm:border sm:border-[#745bc7]/55 sm:bg-white">
               {(["all", "income", "expense", "transfer", "reimburse"] as const).map(
                 (tab, idx) => {
                   const active = typeFilter === tab;
@@ -909,12 +929,12 @@ export const CashflowView: React.FC = () => {
                         handleSetTypeFilter(tab);
                         setCatMenuOpen(false);
                       }}
-                      className={`inline-flex shrink-0 items-center gap-1 px-2.5 py-1 font-mono text-[9.5px] font-semibold tracking-[0.1em] uppercase transition sm:px-3 sm:text-[10px] sm:tracking-[0.12em] ${
-                        idx > 0 ? "border-l border-[#745bc7]/40" : ""
+                      className={`inline-flex shrink-0 items-center gap-1 border border-[#745bc7]/50 px-2.5 py-1.5 font-mono text-[9.5px] font-semibold tracking-[0.1em] uppercase transition sm:border-0 sm:px-3 sm:py-1 sm:text-[10px] sm:tracking-[0.12em] ${
+                        idx > 0 ? "sm:border-l sm:border-[#745bc7]/40" : ""
                       } ${
                         active
-                          ? "bg-[#745bc7] text-white"
-                          : "text-[#5d5370] hover:bg-[#f4effd] hover:text-[#14100e]"
+                          ? "border-[#745bc7] bg-[#745bc7] text-white"
+                          : "bg-white text-[#5d5370] hover:bg-[#f4effd] hover:text-[#14100e]"
                       }`}
                     >
                       <span>{label}</span>
@@ -974,7 +994,7 @@ export const CashflowView: React.FC = () => {
                         backgroundColor:
                           categoryFilter === "all"
                             ? "#745bc7"
-                            : CATEGORY_MAP[categoryFilter]?.color ?? "#745bc7",
+                            : categoryMap[categoryFilter]?.color ?? "#745bc7",
                       }}
                     />
                     <span className="truncate font-medium">
@@ -1038,7 +1058,7 @@ export const CashflowView: React.FC = () => {
                       </li>
 
                       {activeMonthCategories.map(({ id: catId, count }) => {
-                        const cat = CATEGORY_MAP[catId];
+                        const cat = categoryMap[catId];
                         const selected = categoryFilter === catId;
                         return (
                           <li key={catId}>
@@ -1171,7 +1191,7 @@ export const CashflowView: React.FC = () => {
 
             <ul className="divide-y divide-[#745bc7]/12">
               {filteredTransactions.map((tx) => {
-                const cat = CATEGORY_MAP[tx.categoryId];
+                const cat = categoryMap[tx.categoryId];
                 const isIncome = tx.type === "income";
                 const isTransfer = tx.type === "transfer";
                 const hoverBar = isIncome
@@ -1203,7 +1223,7 @@ export const CashflowView: React.FC = () => {
                 return (
                   <li
                     key={tx.id}
-                    className="group relative flex items-center justify-between gap-3 px-4 py-3 transition hover:bg-[#f7f3fe] sm:gap-4 sm:px-5"
+                    className="group relative flex flex-col gap-2 px-4 py-3 transition hover:bg-[#f7f3fe] sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-5"
                   >
                     {/* Crisp Left Hover Accent */}
                     <span
@@ -1223,69 +1243,164 @@ export const CashflowView: React.FC = () => {
                       {formatShortDate(tx.date, locale)}
                     </span>
 
-                    {/* Flush-Left Aligned Entry Info */}
+                    {/* Entry Info (Full width on mobile with inline right amount; flush-left on desktop) */}
                     <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <p className="truncate text-[13.5px] font-semibold text-[#14100e]">
-                          {tx.note}
-                        </p>
-                        {reimburseProg.isReimburse && (
+                      <div className="flex items-start justify-between gap-2.5 sm:block">
+                        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                          <p className="truncate text-[13.5px] font-semibold text-[#14100e]">
+                            {tx.note}
+                          </p>
+                          {reimburseProg.isReimburse && (
+                            <button
+                              type="button"
+                              onClick={() => openReimburseModal(tx.id)}
+                              className={`shrink-0 border px-1.5 py-0.2 font-mono text-[8.5px] font-bold tracking-[0.12em] uppercase transition ${
+                                reimburseProg.isSettled
+                                  ? "border-[#1f8f6b]/50 bg-[#1f8f6b]/10 text-[#1f8f6b] hover:bg-[#1f8f6b] hover:text-white"
+                                  : reimburseProg.isPartial
+                                    ? "border-[#2276a8]/50 bg-[#2276a8]/10 text-[#2276a8] hover:bg-[#2276a8] hover:text-white"
+                                    : "border-[#d97706]/55 bg-[#d97706]/10 text-[#b45309] hover:bg-[#d97706] hover:text-white"
+                              }`}
+                            >
+                              {reimburseProg.isSettled
+                                ? t.reimburse.statusSettled
+                                : reimburseProg.isPartial
+                                  ? t.reimburse.statusPartial
+                                  : t.reimburse.statusPending}
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Mobile-Only Right Amount on Row 1 for Generous Note Breathing Room */}
+                        <div className="shrink-0 sm:hidden">
+                          {isTransfer ? (
+                            <span className="inline-flex items-center gap-1 text-[13.5px] font-bold text-[#745bc7]">
+                              <span className="font-mono text-[11px] opacity-80">
+                                ⇄
+                              </span>
+                              <MoneyDisplay amountIdr={tx.amountIdr} />
+                            </span>
+                          ) : isIncome ? (
+                            <MoneyDisplay
+                              amountIdr={tx.amountIdr}
+                              showSign
+                              className="text-[13.5px] font-bold text-[#2276a8]"
+                            />
+                          ) : (
+                            <div className="text-right">
+                              <MoneyDisplay
+                                amountIdr={
+                                  reimburseProg.netExpenseIdr > 0
+                                    ? -reimburseProg.netExpenseIdr
+                                    : 0
+                                }
+                                showSign={reimburseProg.netExpenseIdr > 0}
+                                className={`block text-[13.5px] font-bold ${
+                                  reimburseProg.isReimburse &&
+                                  reimburseProg.netExpenseIdr === 0
+                                    ? "text-[#1f8f6b]"
+                                    : "text-[#14100e]"
+                                }`}
+                              />
+                              {reimburseProg.reimbursedIdr > 0 && (
+                                <span className="block font-mono text-[9.5px] text-[#5d5370] line-through">
+                                  {mask(reimburseProg.grossIdr)}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="mt-1 flex items-center justify-between gap-2 sm:mt-0.5">
+                        <div className="flex min-w-0 items-center gap-1.5 font-mono text-[11px] text-[#5d5370]">
+                          <span
+                            className="h-1.5 w-1.5 shrink-0"
+                            style={{ backgroundColor: cat?.color ?? "#745bc7" }}
+                          />
+                          <span className="truncate">
+                            <span className="sm:hidden">
+                              {formatShortDate(tx.date, locale)} ·{" "}
+                            </span>
+                            {isTransfer ? (
+                              <>
+                                {fromAcc?.name ?? "—"} → {toAcc?.name ?? "—"}
+                                {tx.feeIdr && tx.feeIdr > 0
+                                  ? ` · +${mask(tx.feeIdr)} ${locale === "id" ? "admin" : "fee"}`
+                                  : ""}
+                              </>
+                            ) : (
+                              <>
+                                {getCategoryLabel(
+                                  tx.categoryId,
+                                  locale,
+                                  store.categories
+                                )}
+                                {fromAcc ? ` · ${fromAcc.name}` : ""}
+                                {tx.merchant ? ` · ${tx.merchant}` : ""}
+                                {reimburseProg.isReimburse && tx.reimburse?.from
+                                  ? ` · ${locale === "id" ? "Dari" : "From"} ${tx.reimburse.from}`
+                                  : ""}
+                                {reimburseProg.reimbursedIdr > 0
+                                  ? ` · ${locale === "id" ? "Diganti" : "Reimb."} ${mask(reimburseProg.reimbursedIdr)}${reimburseDestNames.length > 0 ? ` → ${reimburseDestNames.join(", ")}` : ""}`
+                                  : ""}
+                              </>
+                            )}
+                          </span>
+                        </div>
+
+                        {/* Mobile-Only Row 2 Compact Thumb Actions */}
+                        <div className="flex shrink-0 items-center gap-0.5 sm:hidden">
+                          {reimburseProg.isReimburse && (
+                            <button
+                              type="button"
+                              onClick={() => openReimburseModal(tx.id)}
+                              aria-label={
+                                reimburseProg.isPending
+                                  ? t.reimburse.receiveBtn
+                                  : t.reimburse.manageBtn
+                              }
+                              className={`p-1.5 transition hover:bg-white ${
+                                reimburseProg.isPending
+                                  ? "text-[#b45309]"
+                                  : "text-[#1f8f6b]"
+                              }`}
+                            >
+                              <HandCoins className="h-3.5 w-3.5" />
+                            </button>
+                          )}
                           <button
                             type="button"
-                            onClick={() => openReimburseModal(tx.id)}
-                            className={`shrink-0 border px-1.5 py-0.2 font-mono text-[8.5px] font-bold tracking-[0.12em] uppercase transition ${
-                              reimburseProg.isSettled
-                                ? "border-[#1f8f6b]/50 bg-[#1f8f6b]/10 text-[#1f8f6b] hover:bg-[#1f8f6b] hover:text-white"
-                                : reimburseProg.isPartial
-                                  ? "border-[#2276a8]/50 bg-[#2276a8]/10 text-[#2276a8] hover:bg-[#2276a8] hover:text-white"
-                                  : "border-[#d97706]/55 bg-[#d97706]/10 text-[#b45309] hover:bg-[#d97706] hover:text-white"
-                            }`}
+                            onClick={() => openEditTxModal(tx)}
+                            aria-label={t.actions.edit}
+                            className="p-1.5 text-[#5d5370] transition hover:bg-white hover:text-[#745bc7]"
                           >
-                            {reimburseProg.isSettled
-                              ? t.reimburse.statusSettled
-                              : reimburseProg.isPartial
-                                ? t.reimburse.statusPartial
-                                : t.reimburse.statusPending}
+                            <Pencil className="h-3.5 w-3.5" />
                           </button>
-                        )}
-                      </div>
-                      <div className="mt-0.5 flex items-center gap-1.5 font-mono text-[11px] text-[#5d5370]">
-                        <span
-                          className="h-1.5 w-1.5 shrink-0"
-                          style={{ backgroundColor: cat?.color ?? "#745bc7" }}
-                        />
-                        <span className="truncate">
-                          <span className="sm:hidden">
-                            {formatShortDate(tx.date, locale)} ·{" "}
-                          </span>
-                          {isTransfer ? (
-                            <>
-                              {fromAcc?.name ?? "—"} → {toAcc?.name ?? "—"}
-                              {tx.feeIdr && tx.feeIdr > 0
-                                ? ` · +${mask(tx.feeIdr)} ${locale === "id" ? "admin" : "fee"}`
-                                : ""}
-                            </>
-                          ) : (
-                            <>
-                              {getCategoryLabel(tx.categoryId, locale)}
-                              {fromAcc ? ` · ${fromAcc.name}` : ""}
-                              {tx.merchant ? ` · ${tx.merchant}` : ""}
-                              {reimburseProg.isReimburse && tx.reimburse?.from
-                                ? ` · ${locale === "id" ? "Dari" : "From"} ${tx.reimburse.from}`
-                                : ""}
-                              {reimburseProg.reimbursedIdr > 0
-                                ? ` · ${locale === "id" ? "Diganti" : "Reimb."} ${mask(reimburseProg.reimbursedIdr)}${reimburseDestNames.length > 0 ? ` → ${reimburseDestNames.join(", ")}` : ""}`
-                                : ""}
-                            </>
-                          )}
-                        </span>
+                          <button
+                            type="button"
+                            onClick={() => duplicateTransaction(tx)}
+                            aria-label={t.actions.duplicate}
+                            className="p-1.5 text-[#5d5370] transition hover:bg-white hover:text-[#745bc7]"
+                          >
+                            <Copy className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteTransaction(tx.id)}
+                            aria-label={t.actions.delete}
+                            className="p-1.5 text-[#5d5370] transition hover:bg-white hover:text-[#c837a5]"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
 
-                    {/* Crisp Right Amount + Quiet Actions */}
-                    <div className="flex shrink-0 items-center gap-2 sm:gap-4">
+                    {/* Desktop Right Amount + Quiet Actions */}
+                    <div className="hidden shrink-0 items-center gap-4 sm:flex">
                       {isTransfer ? (
-                        <span className="inline-flex items-center gap-1 text-[13.5px] font-bold text-[#745bc7] sm:text-sm">
+                        <span className="inline-flex items-center gap-1 text-sm font-bold text-[#745bc7]">
                           <span className="font-mono text-[11px] opacity-80">
                             ⇄
                           </span>
@@ -1295,7 +1410,7 @@ export const CashflowView: React.FC = () => {
                         <MoneyDisplay
                           amountIdr={tx.amountIdr}
                           showSign
-                          className="text-[13.5px] font-bold text-[#2276a8] sm:text-sm"
+                          className="text-sm font-bold text-[#2276a8]"
                         />
                       ) : (
                         <div className="text-right">
@@ -1306,7 +1421,7 @@ export const CashflowView: React.FC = () => {
                                 : 0
                             }
                             showSign={reimburseProg.netExpenseIdr > 0}
-                            className={`block text-[13.5px] font-bold sm:text-sm ${
+                            className={`block text-sm font-bold ${
                               reimburseProg.isReimburse &&
                               reimburseProg.netExpenseIdr === 0
                                 ? "text-[#1f8f6b]"
@@ -1321,7 +1436,7 @@ export const CashflowView: React.FC = () => {
                         </div>
                       )}
 
-                      <div className="flex items-center gap-0.5 sm:min-w-[82px] sm:justify-end sm:opacity-45 sm:transition sm:group-hover:opacity-100">
+                      <div className="flex min-w-[82px] items-center justify-end gap-0.5 opacity-45 transition group-hover:opacity-100">
                         {reimburseProg.isReimburse && (
                           <button
                             type="button"

@@ -29,9 +29,9 @@
    - Strip saldo kantong (*Pockets Strip*) menghitung posisi saldo aktual tiap rekening secara *real-time* dari saldo awal + seluruh histori mutasi.
 
 3. **Pencatatan Pemasukan, Pengeluaran & Transfer Antar-Kantong (`CASHFLOW`)**
-   - Pencatatan cepat dalam format Rupiah (**IDR / `Rp`**) dengan **kategori ringkas & terstruktur**:
-     - **Pemasukan (2 kategori)**: 💼 Gaji (*Salary*) · ➕ Lainnya (*Other*)
-     - **Pengeluaran (8 kategori)**: 🍽️ Makan & Minum · 🏠 Tagihan & Kost · 🚆 Transportasi · 🛍️ Belanja · 🎵 Hiburan · 🎁 Berbagi · 🏦 Admin Bank · 🧾 Lainnya
+   - Pencatatan cepat dalam format Rupiah (**IDR / `Rp`**) dengan **kategori fleksibel & dapat dikustomisasi per akun (`Manage Categories`)**:
+     - **Starter Pemasukan (2 kategori)**: 💼 Gaji (*Salary*) · ➕ Lainnya (*Other*) — bebas tambah/ubah/hapus (mis. *Freelance*, *Dividen*, *Bonus*) lengkap dengan warna & ikon.
+     - **Starter Pengeluaran (8 kategori)**: 🍽️ Makan & Minum · 🏠 Tagihan & Kost · 🚆 Transportasi · 🛍️ Belanja · 🎵 Hiburan · 🎁 Berbagi · 🏦 Admin Bank · 🧾 Lainnya — bebas tambah/ubah/hapus; seluruh grafik **Analytics**, filter log, ekspor CSV, dan backup JSON otomatis mengikuti kategori aktifmu. Jika kategori terpakai dihapus, transaksinya otomatis berpindah ke *Lainnya* dan tetap bisa diedit kapan saja.
      - **Transfer (1 kategori khusus)**: ⇄ Pindah saldo antar-kantong secara internal.
    - **Akuntansi Harian vs Tabungan & Biaya Admin Akurat (`feeIdr`)**: Saat melakukan transfer dari *Daily* ke *Savings* (misal Rp 3.000.000 dengan biaya admin Rp 2.500), saldo sumber berkurang `Rp 3.002.500`, saldo tujuan bertambah `Rp 3.000.000`, `NET CASHFLOW · DAILY` mencerminkan sisa arus kas harian non-tabungan, **`SAVINGS FLOW`** melacak arus bersih tabungan, dan **hanya biaya admin Rp 2.500** yang dihitung sebagai pengeluaran murni—sementara pengeluaran langsung dari kantong *Savings* tetap tercatat penuh di `Expense` & `Analytics`.
    - **Sistem Reimburse Fleksibel & Anti-Kotor (`REIMBURSE // 雫`)**: Tandai pengeluaran talangan/patungan dengan toggle *Reimburse* (nama pengutang & target nominal bersifat opsional/fleksibel). Pembayaran balik (sebagian/`SEBAGIAN` maupun langsung `LUNAS` di nominal berapa pun) langsung menambah saldo kantong tujuan (bisa beda kantong, mis. bayar via *GoPay* lalu diganti ke *Wondr*) dan mengurangi pengeluaran bersih pada siklus transaksi aslinya **tanpa mengotori `Income`**. Dilengkapi panel pengingat `MENUNGGU REIMBURSE // 雫` lintas bulan dan tab filter **`REIMBURSE`** di `CASHFLOW LOG`.

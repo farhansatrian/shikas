@@ -230,7 +230,7 @@ export const ReimburseModal: React.FC = () => {
 
             <p className="mt-2 text-sm font-bold text-[#14100e]">{tx.note}</p>
             <p className="mt-0.5 font-mono text-[10.5px] text-[#5d5370]">
-              {getCategoryLabel(tx.categoryId, locale)}
+              {getCategoryLabel(tx.categoryId, locale, store.categories)}
               {sourcePocket ? ` · ${sourcePocket.name}` : ""}
               {" · "}
               {progress.isFlexible
@@ -384,7 +384,7 @@ export const ReimburseModal: React.FC = () => {
                   <label className="block font-mono text-[10px] font-semibold tracking-[0.16em] text-[#5d5370] uppercase">
                     {t.reimburse.receivedDateLabel}
                   </label>
-                  <div className="mt-1.5 flex items-center gap-1.5">
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                     <button
                       type="button"
                       onClick={() => setDate(today)}
@@ -407,7 +407,7 @@ export const ReimburseModal: React.FC = () => {
                     >
                       {locale === "id" ? "KEMARIN" : "YEST"}
                     </button>
-                    <div className="flex min-w-0 flex-1 items-center gap-1 border border-[#745bc7]/35 bg-white px-2 py-1.5 focus-within:border-[#745bc7]">
+                    <div className="flex min-w-[132px] flex-1 items-center gap-1 border border-[#745bc7]/35 bg-white px-2 py-1.5 focus-within:border-[#745bc7]">
                       <Calendar className="h-3 w-3 shrink-0 text-[#745bc7]" />
                       <input
                         type="date"

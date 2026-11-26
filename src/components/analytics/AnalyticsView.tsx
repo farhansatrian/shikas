@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, SlidersHorizontal } from "lucide-react";
 import {
   Area,
   AreaChart,
@@ -19,7 +19,7 @@ import {
 } from "recharts";
 import { SHIKAS_ASSETS } from "../../config/assets";
 import { useCashflow } from "../../context/CashflowContext";
-import { CATEGORY_MAP, getCategoryLabel } from "../../data/categories";
+import { buildCategoryMap, getCategoryLabel } from "../../data/categories";
 import {
   computeCategoryBreakdownForMonths,
   computeMonthlySummary,
@@ -51,8 +51,20 @@ interface ChartPoint extends MonthlySeriesPoint {
 }
 
 export const AnalyticsView: React.FC = () => {
-  const { store, selectedMonth, setSelectedMonth, t, locale } = useCashflow();
+  const {
+    store,
+    selectedMonth,
+    setSelectedMonth,
+    openCategoriesModal,
+    t,
+    locale,
+  } = useCashflow();
   const [range, setRange] = useState<AnalyticsRange>("6m");
+
+  const categoryMap = useMemo(
+    () => buildCategoryMap(store.categories),
+    [store.categories]
+  );
 
   const cycleStartDay = store.settings.cycleStartDay;
 
@@ -172,7 +184,7 @@ export const AnalyticsView: React.FC = () => {
 
     const top = expenseBreakdown[0];
     if (top) {
-      const catName = getCategoryLabel(top.categoryId, locale);
+      const catName = getCategoryLabel(top.categoryId, locale, store.categories);
       list.push(
         locale === "id"
           ? `Pengeluaran terbesar pada periode ${rangeTag.toLowerCase()} adalah "${catName}" (${top.percentage.toFixed(1)}% · ${mask(top.amountIdr)}).`
@@ -266,6 +278,7 @@ export const AnalyticsView: React.FC = () => {
     periodTotals,
     pendingReimburse,
     hasSavingsPockets,
+    store.categories,
     store.settings.privacyMode,
   ]);
 
@@ -571,13 +584,23 @@ export const AnalyticsView: React.FC = () => {
       {/* Expense Breakdown + Cumulative Balance Trajectory (Synced with Range) */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
         <section className="vn-frame overflow-hidden lg:col-span-6">
-          <div className="flex items-center justify-between border-b border-[#745bc7]/25 bg-[#f4effd] px-4 py-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#745bc7]/25 bg-[#f4effd] px-4 py-2">
             <h2 className="font-mono text-[10px] font-bold tracking-[0.16em] text-[#745bc7] uppercase">
               {locale === "id" ? "KOMPOSISI PENGELUARAN" : "EXPENSE BREAKDOWN"}
             </h2>
-            <span className="font-mono text-[9px] font-semibold tracking-[0.14em] text-[#5d5370] uppercase">
-              {rangeTag}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-[9px] font-semibold tracking-[0.14em] text-[#5d5370] uppercase">
+                {rangeTag}
+              </span>
+              <button
+                type="button"
+                onClick={() => openCategoriesModal("expense")}
+                className="inline-flex items-center gap-1 border border-[#745bc7]/45 bg-white px-2 py-0.5 font-mono text-[9px] font-bold tracking-[0.1em] text-[#745bc7] uppercase transition hover:bg-[#745bc7] hover:text-white"
+              >
+                <SlidersHorizontal className="h-2.5 w-2.5" />
+                <span>{t.actions.manageCategories}</span>
+              </button>
+            </div>
           </div>
 
           <div className="bg-white/95 p-4 sm:p-5">
@@ -602,7 +625,7 @@ export const AnalyticsView: React.FC = () => {
                         {expenseBreakdown.map((entry) => (
                           <Cell
                             key={entry.categoryId}
-                            fill={CATEGORY_MAP[entry.categoryId]?.color ?? "#745bc7"}
+                            fill={categoryMap[entry.categoryId]?.color ?? "#745bc7"}
                           />
                         ))}
                       </Pie>
@@ -616,7 +639,7 @@ export const AnalyticsView: React.FC = () => {
                         }}
                         formatter={(val: number, name: string) => [
                           formatTooltip(val),
-                          getCategoryLabel(name, locale),
+                          getCategoryLabel(name, locale, store.categories),
                         ]}
                       />
                     </PieChart>
@@ -626,7 +649,7 @@ export const AnalyticsView: React.FC = () => {
                 {/* Ranked Category Stat Bars */}
                 <div className="space-y-2.5">
                   {expenseBreakdown.map((item) => {
-                    const cat = CATEGORY_MAP[item.categoryId];
+                    const cat = categoryMap[item.categoryId];
                     const barColor = cat?.color ?? "#745bc7";
                     const pctLabel =
                       item.percentage > 0 && item.percentage < 0.5
@@ -636,7 +659,11 @@ export const AnalyticsView: React.FC = () => {
                       <div key={item.categoryId}>
                         <div className="flex items-center justify-between gap-2 font-mono text-[11px]">
                           <span className="truncate font-semibold text-[#14100e]">
-                            {getCategoryLabel(item.categoryId, locale)}
+                            {getCategoryLabel(
+                              item.categoryId,
+                              locale,
+                              store.categories
+                            )}
                           </span>
                           <div className="shrink-0 text-right">
                             <MoneyDisplay

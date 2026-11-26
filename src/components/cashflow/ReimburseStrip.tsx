@@ -113,7 +113,7 @@ export const ReimburseStrip: React.FC = () => {
                       {tx.note}
                     </p>
                     <p className="mt-0.5 truncate font-mono text-[10.5px] text-[#5d5370]">
-                      {getCategoryLabel(tx.categoryId, locale)}
+                      {getCategoryLabel(tx.categoryId, locale, store.categories)}
                       {fromAcc ? ` · ${fromAcc.name}` : ""}
                       {" · "}
                       {locale === "id" ? "Bayar" : "Paid"}{" "}

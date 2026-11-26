@@ -1,5 +1,5 @@
 import { SHIZUKU_ECOSYSTEM, isCloudSyncConfigured } from "../config/ecosystem";
-import { normalizeCategoryId } from "../data/categories";
+import { normalizeCategoryId, sanitizeCategories } from "../data/categories";
 import { clampCycleStartDay } from "../utils/format";
 import { sanitizeReimbursement } from "../utils/reimburse";
 import { sanitizeAccounts } from "./exportService";
@@ -359,9 +359,11 @@ function normalizeStorePayload(
   parsed: Partial<CashflowStoreData>
 ): CashflowStoreData | null {
   if (!Array.isArray(parsed.transactions)) return null;
+  const cleanCategories = sanitizeCategories(parsed.categories);
   return {
     version: 5,
     accounts: sanitizeAccounts(parsed.accounts),
+    categories: cleanCategories,
     transactions: parsed.transactions
       .filter(
         (tx) =>
@@ -372,7 +374,7 @@ function normalizeStorePayload(
       )
       .map((tx) => ({
         ...tx,
-        categoryId: normalizeCategoryId(tx.categoryId, tx.type),
+        categoryId: normalizeCategoryId(tx.categoryId, tx.type, cleanCategories),
         accountId: tx.accountId || undefined,
         toAccountId: tx.toAccountId || undefined,
         feeIdr:
