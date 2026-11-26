@@ -26,6 +26,7 @@ import {
   isSystemCategoryId,
   normalizeCategoryId,
   sanitizeCategories,
+  sortCategoriesByColor,
 } from "../data/categories";
 import { createDemoSeedData, createFreshEmptyData } from "../data/seedData";
 import { sanitizeAccounts } from "../services/exportService";
@@ -671,19 +672,21 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
         if (existingId) {
           return {
             ...prev,
-            categories: prev.categories.map((cat) => {
-              if (cat.id !== existingId) return cat;
-              const prevActiveLabel =
-                currentLocale === "id" ? cat.nameId : cat.nameEn;
-              const nameChanged = prevActiveLabel !== trimmed;
-              return {
-                ...cat,
-                nameId: nameChanged ? trimmed : cat.nameId,
-                nameEn: nameChanged ? trimmed : cat.nameEn,
-                color: payload.color,
-                icon: payload.icon,
-              };
-            }),
+            categories: sortCategoriesByColor(
+              prev.categories.map((cat) => {
+                if (cat.id !== existingId) return cat;
+                const prevActiveLabel =
+                  currentLocale === "id" ? cat.nameId : cat.nameEn;
+                const nameChanged = prevActiveLabel !== trimmed;
+                return {
+                  ...cat,
+                  nameId: nameChanged ? trimmed : cat.nameId,
+                  nameEn: nameChanged ? trimmed : cat.nameEn,
+                  color: payload.color,
+                  icon: payload.icon,
+                };
+              })
+            ),
           };
         }
 
@@ -696,17 +699,10 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
           icon: payload.icon,
         };
 
-        // Insert neatly right before the fallback Other category of the same type
-        const fallbackId =
-          payload.type === "income" ? "other_income" : "other_expense";
-        const idx = prev.categories.findIndex((c) => c.id === fallbackId);
-        const nextCategories = [...prev.categories];
-        if (idx >= 0) {
-          nextCategories.splice(idx, 0, created);
-        } else {
-          nextCategories.push(created);
-        }
-        return { ...prev, categories: nextCategories };
+        return {
+          ...prev,
+          categories: sortCategoriesByColor([...prev.categories, created]),
+        };
       });
 
       notify(

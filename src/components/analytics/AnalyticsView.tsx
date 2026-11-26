@@ -19,7 +19,11 @@ import {
 } from "recharts";
 import { SHIKAS_ASSETS } from "../../config/assets";
 import { useCashflow } from "../../context/CashflowContext";
-import { buildCategoryMap, getCategoryLabel } from "../../data/categories";
+import {
+  buildCategoryMap,
+  buildMonochromeShadeMap,
+  getCategoryLabel,
+} from "../../data/categories";
 import {
   computeCategoryBreakdownForMonths,
   computeMonthlySummary,
@@ -35,6 +39,7 @@ import {
   shiftMonthKey,
 } from "../../utils/format";
 import { computePendingReimburseOverview } from "../../utils/reimburse";
+import { CategoryIcon } from "../common/CategoryIcon";
 import { MoneyDisplay } from "../common/MoneyDisplay";
 import { SandboxBanner } from "../common/SandboxBanner";
 
@@ -60,6 +65,7 @@ export const AnalyticsView: React.FC = () => {
     locale,
   } = useCashflow();
   const [range, setRange] = useState<AnalyticsRange>("6m");
+  const [activeCatId, setActiveCatId] = useState<string | null>(null);
 
   const categoryMap = useMemo(
     () => buildCategoryMap(store.categories),
@@ -146,6 +152,29 @@ export const AnalyticsView: React.FC = () => {
         cycleStartDay
       ),
     [store.transactions, rangeMonths, cycleStartDay]
+  );
+
+  // Distinct monochrome dark->light tones within the same color family so duplicate-color slices are immediately readable
+  const breakdownShadeMap = useMemo(
+    () =>
+      buildMonochromeShadeMap(
+        expenseBreakdown.map((item) => item.categoryId),
+        categoryMap
+      ),
+    [expenseBreakdown, categoryMap]
+  );
+
+  const activeBreakdownItem = useMemo(
+    () =>
+      activeCatId
+        ? expenseBreakdown.find((item) => item.categoryId === activeCatId) ?? null
+        : null,
+    [activeCatId, expenseBreakdown]
+  );
+
+  const totalBreakdownExpense = useMemo(
+    () => expenseBreakdown.reduce((acc, item) => acc + item.amountIdr, 0),
+    [expenseBreakdown]
   );
 
   const currentSummary = useMemo(
@@ -601,25 +630,63 @@ export const AnalyticsView: React.FC = () => {
                 {t.analytics.noExpenseData}
               </p>
             ) : (
-              <div className="grid grid-cols-1 items-center gap-4 sm:grid-cols-[144px_1fr]">
-                <div className="mx-auto h-[156px] w-[144px]">
+              <div className="grid grid-cols-1 items-center gap-4 sm:grid-cols-[164px_1fr]">
+                {/* Interactive Donut Chart with Monochrome Shade Steps + Center Readout */}
+                <div
+                  className="relative mx-auto h-[164px] w-[164px]"
+                  onMouseLeave={() => setActiveCatId(null)}
+                >
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
                         data={expenseBreakdown}
                         dataKey="amountIdr"
                         nameKey="categoryId"
-                        innerRadius={40}
-                        outerRadius={64}
+                        innerRadius={48}
+                        outerRadius={72}
                         paddingAngle={2}
                         animationDuration={360}
+                        onMouseEnter={(_, idx) => {
+                          const target = expenseBreakdown[idx];
+                          if (target) setActiveCatId(target.categoryId);
+                        }}
+                        onClick={(_, idx) => {
+                          const target = expenseBreakdown[idx];
+                          if (target) {
+                            setActiveCatId((curr) =>
+                              curr === target.categoryId ? null : target.categoryId
+                            );
+                          }
+                        }}
                       >
-                        {expenseBreakdown.map((entry) => (
-                          <Cell
-                            key={entry.categoryId}
-                            fill={categoryMap[entry.categoryId]?.color ?? "#745bc7"}
-                          />
-                        ))}
+                        {expenseBreakdown.map((entry) => {
+                          const fill =
+                            breakdownShadeMap[entry.categoryId] ??
+                            categoryMap[entry.categoryId]?.color ??
+                            "#745bc7";
+                          const dimmed =
+                            activeCatId !== null &&
+                            activeCatId !== entry.categoryId;
+                          return (
+                            <Cell
+                              key={entry.categoryId}
+                              fill={fill}
+                              fillOpacity={dimmed ? 0.25 : 1}
+                              stroke={
+                                activeCatId === entry.categoryId
+                                  ? "#14100e"
+                                  : "#ffffff"
+                              }
+                              strokeWidth={
+                                activeCatId === entry.categoryId ? 1.5 : 1
+                              }
+                              style={{
+                                cursor: "pointer",
+                                transition: "fill-opacity 160ms ease",
+                              }}
+                            />
+                          );
+                        })}
                       </Pie>
                       <Tooltip
                         contentStyle={{
@@ -636,26 +703,108 @@ export const AnalyticsView: React.FC = () => {
                       />
                     </PieChart>
                   </ResponsiveContainer>
+
+                  {/* Center Donut Readout (Active Slice or Period Total) */}
+                  <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-7 text-center">
+                    {activeBreakdownItem ? (
+                      <>
+                        <span className="w-full truncate font-mono text-[9px] font-bold tracking-[0.06em] text-[#5d5370] uppercase">
+                          {getCategoryLabel(
+                            activeBreakdownItem.categoryId,
+                            locale,
+                            store.categories
+                          )}
+                        </span>
+                        <span className="font-mono-num text-sm font-bold leading-tight text-[#14100e]">
+                          {activeBreakdownItem.percentage > 0 &&
+                          activeBreakdownItem.percentage < 0.5
+                            ? "<1%"
+                            : `${activeBreakdownItem.percentage.toFixed(0)}%`}
+                        </span>
+                        <span className="font-mono text-[9.5px] font-semibold text-[#745bc7]">
+                          {store.settings.privacyMode
+                            ? "•••"
+                            : formatCompactIdr(
+                                activeBreakdownItem.amountIdr,
+                                locale
+                              )}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="font-mono text-[8.5px] font-semibold tracking-[0.14em] text-[#5d5370] uppercase">
+                          TOTAL
+                        </span>
+                        <span className="font-mono-num mt-0.5 text-xs font-bold text-[#14100e]">
+                          {store.settings.privacyMode
+                            ? "•••"
+                            : formatCompactIdr(totalBreakdownExpense, locale)}
+                        </span>
+                      </>
+                    )}
+                  </div>
                 </div>
 
-                {/* Ranked Category Stat Bars */}
-                <div className="space-y-2.5">
+                {/* Ranked Category Stat Bars with Mini Icons & Synchronized Monochrome Shades */}
+                <div className="space-y-1.5">
                   {expenseBreakdown.map((item) => {
                     const cat = categoryMap[item.categoryId];
-                    const barColor = cat?.color ?? "#745bc7";
+                    const barColor =
+                      breakdownShadeMap[item.categoryId] ??
+                      cat?.color ??
+                      "#745bc7";
                     const pctLabel =
                       item.percentage > 0 && item.percentage < 0.5
                         ? "<1%"
                         : `${item.percentage.toFixed(0)}%`;
+                    const isHighlighted = activeCatId === item.categoryId;
+                    const isDimmed =
+                      activeCatId !== null && activeCatId !== item.categoryId;
+
                     return (
-                      <div key={item.categoryId}>
+                      <div
+                        key={item.categoryId}
+                        role="button"
+                        tabIndex={0}
+                        onMouseEnter={() => setActiveCatId(item.categoryId)}
+                        onMouseLeave={() => setActiveCatId(null)}
+                        onClick={() =>
+                          setActiveCatId((curr) =>
+                            curr === item.categoryId ? null : item.categoryId
+                          )
+                        }
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setActiveCatId((curr) =>
+                              curr === item.categoryId ? null : item.categoryId
+                            );
+                          }
+                        }}
+                        className={`cursor-pointer border px-2 py-1.5 transition ${
+                          isHighlighted
+                            ? "border-[#745bc7]/60 bg-[#f4effe]"
+                            : "border-transparent hover:bg-[#faf7ff]"
+                        } ${isDimmed ? "opacity-55" : "opacity-100"}`}
+                      >
                         <div className="flex items-center justify-between gap-2 font-mono text-[11px]">
-                          <span className="truncate font-semibold text-[#14100e]">
-                            {getCategoryLabel(
-                              item.categoryId,
-                              locale,
-                              store.categories
-                            )}
+                          <span className="flex min-w-0 items-center gap-1.5">
+                            <span
+                              className="flex h-[18px] w-[18px] shrink-0 items-center justify-center text-white"
+                              style={{ backgroundColor: barColor }}
+                            >
+                              <CategoryIcon
+                                name={cat?.icon}
+                                className="h-2.5 w-2.5"
+                              />
+                            </span>
+                            <span className="truncate font-semibold text-[#14100e]">
+                              {getCategoryLabel(
+                                item.categoryId,
+                                locale,
+                                store.categories
+                              )}
+                            </span>
                           </span>
                           <div className="shrink-0 text-right">
                             <MoneyDisplay

@@ -12,7 +12,13 @@ import {
   X,
 } from "lucide-react";
 import { useCashflow } from "../../context/CashflowContext";
-import { buildCategoryMap, getCategoryLabel } from "../../data/categories";
+import {
+  buildCategoryMap,
+  getCategoryLabel,
+  getColorGroupLabel,
+  getColorOrderIndex,
+  normalizeHexColor,
+} from "../../data/categories";
 import type { TransactionType } from "../../types/cashflow";
 import {
   computeCategoryBreakdown,
@@ -95,10 +101,13 @@ export const CashflowView: React.FC = () => {
   const [typeFilter, setTypeFilter] = useState<FilterType>("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [accountFilter, setAccountFilter] = useState("all");
+  const [colorFilter, setColorFilter] = useState("all");
   const [isCatMenuOpen, setCatMenuOpen] = useState(false);
+  const [isPocketMenuOpen, setPocketMenuOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [dialogueIdx, setDialogueIdx] = useState(0);
   const catMenuRef = useRef<HTMLDivElement | null>(null);
+  const pocketMenuRef = useRef<HTMLDivElement | null>(null);
 
   const accountMap = useMemo(
     () => new Map(store.accounts.map((acc) => [acc.id, acc])),
@@ -124,14 +133,23 @@ export const CashflowView: React.FC = () => {
   }, [categoryFilter, categoryMap]);
 
   useEffect(() => {
-    if (!isCatMenuOpen) return;
+    if (!isCatMenuOpen && !isPocketMenuOpen) return;
     const onPointerDown = (e: MouseEvent) => {
       if (catMenuRef.current && !catMenuRef.current.contains(e.target as Node)) {
         setCatMenuOpen(false);
       }
+      if (
+        pocketMenuRef.current &&
+        !pocketMenuRef.current.contains(e.target as Node)
+      ) {
+        setPocketMenuOpen(false);
+      }
     };
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setCatMenuOpen(false);
+      if (e.key === "Escape") {
+        setCatMenuOpen(false);
+        setPocketMenuOpen(false);
+      }
     };
     window.addEventListener("mousedown", onPointerDown);
     window.addEventListener("keydown", onKeyDown);
@@ -139,7 +157,7 @@ export const CashflowView: React.FC = () => {
       window.removeEventListener("mousedown", onPointerDown);
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [isCatMenuOpen]);
+  }, [isCatMenuOpen, isPocketMenuOpen]);
 
   const cycleStartDay = store.settings.cycleStartDay;
 
@@ -212,22 +230,132 @@ export const CashflowView: React.FC = () => {
     );
   };
 
+  const matchesColorFilter = (tx: (typeof monthTransactions)[number]) => {
+    if (colorFilter === "all") return true;
+    // Exclude Transfer from color-group filter so Transfer never collides with Violet categories
+    if (tx.type === "transfer") return false;
+    const txColor = normalizeHexColor(categoryMap[tx.categoryId]?.color);
+    return txColor === colorFilter;
+  };
+
+  // Active color groups present in the selected month (excludes Transfer)
+  const activeMonthColors = useMemo(() => {
+    const groups = new Map<
+      string,
+      { color: string; count: number; catNames: Set<string> }
+    >();
+    for (const tx of monthTransactions) {
+      if (tx.type === "transfer") continue;
+      if (!matchesTypeFilter(tx)) continue;
+      if (!matchesAccountFilter(tx)) continue;
+      const color = normalizeHexColor(categoryMap[tx.categoryId]?.color);
+      const entry = groups.get(color) ?? {
+        color,
+        count: 0,
+        catNames: new Set<string>(),
+      };
+      entry.count += 1;
+      entry.catNames.add(getCategoryLabel(tx.categoryId, locale, store.categories));
+      groups.set(color, entry);
+    }
+    return Array.from(groups.values())
+      .map((item) => ({
+        color: item.color,
+        count: item.count,
+        categoriesLabel: Array.from(item.catNames).join(", "),
+      }))
+      .sort((a, b) => {
+        const diff = getColorOrderIndex(a.color) - getColorOrderIndex(b.color);
+        return diff !== 0 ? diff : a.color.localeCompare(b.color);
+      });
+  }, [
+    monthTransactions,
+    typeFilter,
+    accountFilter,
+    categoryMap,
+    locale,
+    store.categories,
+  ]);
+
+  // Clear stale color filter if selected color no longer has entries in this month/filter
+  useEffect(() => {
+    if (
+      colorFilter !== "all" &&
+      !activeMonthColors.some((c) => c.color === colorFilter)
+    ) {
+      setColorFilter("all");
+    }
+  }, [colorFilter, activeMonthColors]);
+
+  const pocketCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    let total = 0;
+    for (const tx of monthTransactions) {
+      if (!matchesTypeFilter(tx)) continue;
+      if (!matchesColorFilter(tx)) continue;
+      if (categoryFilter !== "all" && tx.categoryId !== categoryFilter) continue;
+      total += 1;
+      const touched = new Set<string>();
+      if (tx.accountId) touched.add(tx.accountId);
+      if (tx.toAccountId) touched.add(tx.toAccountId);
+      for (const e of tx.reimburse?.entries ?? []) {
+        if (e.accountId) touched.add(e.accountId);
+      }
+      for (const accId of touched) {
+        counts.set(accId, (counts.get(accId) ?? 0) + 1);
+      }
+    }
+    return { counts, total };
+  }, [
+    monthTransactions,
+    typeFilter,
+    colorFilter,
+    categoryFilter,
+    categoryMap,
+  ]);
+
   const activeMonthCategories = useMemo(() => {
     const counts = new Map<string, number>();
     for (const tx of monthTransactions) {
       if (!matchesTypeFilter(tx)) continue;
       if (!matchesAccountFilter(tx)) continue;
+      if (!matchesColorFilter(tx)) continue;
       counts.set(tx.categoryId, (counts.get(tx.categoryId) ?? 0) + 1);
     }
-    return Array.from(counts.entries()).map(([id, count]) => ({ id, count }));
-  }, [monthTransactions, typeFilter, accountFilter]);
+    const orderIdx = new Map(store.categories.map((c, idx) => [c.id, idx]));
+    return Array.from(counts.entries())
+      .map(([id, count]) => ({ id, count }))
+      .sort((a, b) => {
+        // Keep Transfer distinctly separated at the very bottom
+        const aTransfer = a.id === "transfer" ? 1 : 0;
+        const bTransfer = b.id === "transfer" ? 1 : 0;
+        if (aTransfer !== bTransfer) return aTransfer - bTransfer;
+
+        const cDiff =
+          getColorOrderIndex(categoryMap[a.id]?.color) -
+          getColorOrderIndex(categoryMap[b.id]?.color);
+        if (cDiff !== 0) return cDiff;
+
+        return (orderIdx.get(a.id) ?? 999) - (orderIdx.get(b.id) ?? 999);
+      });
+  }, [
+    monthTransactions,
+    typeFilter,
+    accountFilter,
+    colorFilter,
+    categoryMap,
+    store.categories,
+  ]);
 
   const totalTypeFilteredCount = useMemo(
     () =>
       monthTransactions.filter(
-        (tx) => matchesTypeFilter(tx) && matchesAccountFilter(tx)
+        (tx) =>
+          matchesTypeFilter(tx) &&
+          matchesAccountFilter(tx) &&
+          matchesColorFilter(tx)
       ).length,
-    [monthTransactions, typeFilter, accountFilter]
+    [monthTransactions, typeFilter, accountFilter, colorFilter, categoryMap]
   );
 
   const getFilterCategoryLabel = (catId: string) => {
@@ -243,6 +371,7 @@ export const CashflowView: React.FC = () => {
     return monthTransactions
       .filter((tx) => {
         if (!matchesTypeFilter(tx)) return false;
+        if (!matchesColorFilter(tx)) return false;
         if (categoryFilter !== "all" && tx.categoryId !== categoryFilter) {
           return false;
         }
@@ -284,11 +413,13 @@ export const CashflowView: React.FC = () => {
   }, [
     monthTransactions,
     typeFilter,
+    colorFilter,
     categoryFilter,
     accountFilter,
     query,
     locale,
     store.categories,
+    categoryMap,
     accountMap,
   ]);
 
@@ -535,6 +666,7 @@ export const CashflowView: React.FC = () => {
   const handleSetTypeFilter = (next: FilterType) => {
     setTypeFilter(next);
     setCategoryFilter("all");
+    if (next === "transfer") setColorFilter("all");
   };
 
   const selectedAccountObj =
@@ -544,6 +676,7 @@ export const CashflowView: React.FC = () => {
     typeFilter !== "all" ||
     categoryFilter !== "all" ||
     accountFilter !== "all" ||
+    colorFilter !== "all" ||
     query.trim() !== "";
 
   return (
@@ -915,231 +1048,430 @@ export const CashflowView: React.FC = () => {
           </span>
         </div>
 
-        {/* Unified Toolbar (4 Type Tabs + Active Pocket Chip + Category Menu + Search) */}
-        <div className="flex flex-col gap-2.5 border-b border-[#745bc7]/20 bg-[#fdf9ff] px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-5">
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Compact Sharp Type Tabs (All 5 immediately visible on mobile, joined RPG bar on sm+) */}
-            <div className="flex flex-wrap gap-1.5 sm:inline-flex sm:w-fit sm:flex-nowrap sm:gap-0 sm:border sm:border-[#745bc7]/55 sm:bg-white">
-              {(["all", "income", "expense", "transfer", "reimburse"] as const).map(
-                (tab, idx) => {
-                  const active = typeFilter === tab;
-                  const label =
-                    tab === "all"
-                      ? t.cashflow.all
-                      : tab === "income"
-                        ? t.cashflow.income
-                        : tab === "expense"
-                          ? t.cashflow.expense
-                          : tab === "transfer"
-                            ? t.cashflow.transfer
-                            : t.cashflow.reimburse;
-                  return (
-                    <button
-                      key={tab}
-                      type="button"
-                      onClick={() => {
-                        handleSetTypeFilter(tab);
-                        setCatMenuOpen(false);
-                      }}
-                      className={`inline-flex shrink-0 items-center gap-1 border border-[#745bc7]/50 px-2.5 py-1.5 font-mono text-[9.5px] font-semibold tracking-[0.1em] uppercase transition sm:border-0 sm:px-3 sm:py-1 sm:text-[10px] sm:tracking-[0.12em] ${
-                        idx > 0 ? "sm:border-l sm:border-[#745bc7]/40" : ""
-                      } ${
-                        active
-                          ? "border-[#745bc7] bg-[#745bc7] text-white"
-                          : "bg-white text-[#5d5370] hover:bg-[#f4effd] hover:text-[#14100e]"
-                      }`}
-                    >
-                      <span>{label}</span>
-                      {tab === "reimburse" && pendingReimburse.pendingCount > 0 && (
-                        <span
-                          className={`px-1 font-mono text-[8.5px] font-bold ${
-                            active
-                              ? "bg-white/25 text-white"
-                              : "bg-[#d97706]/15 text-[#b45309]"
-                          }`}
-                        >
-                          {pendingReimburse.pendingCount}
-                        </span>
-                      )}
-                    </button>
-                  );
-                }
-              )}
-            </div>
-
-            {selectedAccountObj && (
-              <button
-                type="button"
-                onClick={() => setAccountFilter("all")}
-                className="inline-flex items-center gap-1.5 border border-[#745bc7] bg-[#f4effe] px-2.5 py-1 font-mono text-[10px] font-bold tracking-[0.08em] text-[#745bc7] uppercase transition hover:bg-[#745bc7] hover:text-white"
-              >
-                <span
-                  className="h-1.5 w-1.5 shrink-0"
-                  style={{ backgroundColor: selectedAccountObj.color }}
-                />
-                <span>{selectedAccountObj.name}</span>
-                <X className="h-3 w-3" />
-              </button>
-            )}
-          </div>
-
-          {/* Custom SHIZUKU RPG Category Dropdown + Search */}
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            {activeMonthCategories.length > 0 && typeFilter !== "transfer" && (
-              <div ref={catMenuRef} className="relative">
-                <button
-                  type="button"
-                  aria-haspopup="listbox"
-                  aria-expanded={isCatMenuOpen}
-                  aria-label={t.txModal.category}
-                  onClick={() => setCatMenuOpen((o) => !o)}
-                  className={`flex w-full items-center justify-between gap-2.5 border bg-white px-3 py-1.5 font-mono text-[11px] transition sm:min-w-[164px] ${
-                    isCatMenuOpen || categoryFilter !== "all"
-                      ? "border-[#745bc7] text-[#14100e]"
-                      : "border-[#745bc7]/40 text-[#14100e] hover:border-[#745bc7]"
-                  }`}
-                >
-                  <span className="flex min-w-0 items-center gap-2">
-                    <span
-                      className="h-2 w-2 shrink-0"
-                      style={{
-                        backgroundColor:
-                          categoryFilter === "all"
-                            ? "#745bc7"
-                            : categoryMap[categoryFilter]?.color ?? "#745bc7",
-                      }}
-                    />
-                    <span className="truncate font-medium">
-                      {getFilterCategoryLabel(categoryFilter)}
-                    </span>
-                  </span>
-                  <ChevronDown
-                    className={`h-3.5 w-3.5 shrink-0 text-[#745bc7] transition-transform duration-150 ${
-                      isCatMenuOpen ? "rotate-180" : ""
-                    }`}
-                  />
-                </button>
-
-                {isCatMenuOpen && (
-                  <div
-                    role="listbox"
-                    aria-label={t.txModal.category}
-                    className="animate-modal-in absolute right-0 left-0 z-30 mt-1.5 border-[1.5px] border-[#745bc7] bg-[#fdf9ff] shadow-[4px_4px_0_0_rgba(116,91,199,0.22)] sm:left-auto sm:w-[224px]"
-                  >
-                    <div className="border-b border-[#745bc7]/20 bg-[#f3ecfd] px-3 py-1.5 font-mono text-[9px] font-semibold tracking-[0.18em] text-[#745bc7] uppercase">
-                      {locale === "id"
-                        ? "PILIH KATEGORI // 雫"
-                        : "CATEGORY // 雫"}
-                    </div>
-
-                    <ul className="max-h-[260px] divide-y divide-[#745bc7]/10 overflow-y-auto py-0.5">
-                      <li>
-                        <button
-                          type="button"
-                          role="option"
-                          aria-selected={categoryFilter === "all"}
-                          onClick={() => {
-                            setCategoryFilter("all");
-                            setCatMenuOpen(false);
-                          }}
-                          className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left font-mono text-[11px] transition ${
-                            categoryFilter === "all"
-                              ? "bg-[#e5dcfb]/75 font-bold text-[#14100e]"
-                              : "text-[#4e4361] hover:bg-[#f5effe] hover:text-[#14100e]"
-                          }`}
-                        >
-                          <span className="flex min-w-0 items-center gap-2">
-                            <span
-                              className={`w-2.5 shrink-0 text-[9px] text-[#745bc7] ${
-                                categoryFilter === "all"
-                                  ? "opacity-100"
-                                  : "opacity-0"
-                              }`}
-                            >
-                              ▶
-                            </span>
-                            <span className="h-1.5 w-1.5 shrink-0 bg-[#745bc7]" />
-                            <span className="truncate">
-                              {t.cashflow.allCategories}
-                            </span>
+        {/* Unified Toolbar: Row 1 (Type Tabs + Pocket + Category + Search) & Row 2 (1-Tap Color Group Filter) */}
+        <div className="space-y-2.5 border-b border-[#745bc7]/20 bg-[#fdf9ff] px-4 py-3 sm:px-5">
+          <div className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Compact Sharp Type Tabs (All 5 immediately visible on mobile, joined RPG bar on sm+) */}
+              <div className="flex flex-wrap gap-1.5 sm:inline-flex sm:w-fit sm:flex-nowrap sm:gap-0 sm:border sm:border-[#745bc7]/55 sm:bg-white">
+                {(["all", "income", "expense", "transfer", "reimburse"] as const).map(
+                  (tab, idx) => {
+                    const active = typeFilter === tab;
+                    const label =
+                      tab === "all"
+                        ? t.cashflow.all
+                        : tab === "income"
+                          ? t.cashflow.income
+                          : tab === "expense"
+                            ? t.cashflow.expense
+                            : tab === "transfer"
+                              ? t.cashflow.transfer
+                              : t.cashflow.reimburse;
+                    return (
+                      <button
+                        key={tab}
+                        type="button"
+                        onClick={() => {
+                          handleSetTypeFilter(tab);
+                          setCatMenuOpen(false);
+                          setPocketMenuOpen(false);
+                        }}
+                        className={`inline-flex shrink-0 items-center gap-1 border border-[#745bc7]/50 px-2.5 py-1.5 font-mono text-[9.5px] font-semibold tracking-[0.1em] uppercase transition sm:border-0 sm:px-3 sm:py-1 sm:text-[10px] sm:tracking-[0.12em] ${
+                          idx > 0 ? "sm:border-l sm:border-[#745bc7]/40" : ""
+                        } ${
+                          active
+                            ? "border-[#745bc7] bg-[#745bc7] text-white"
+                            : "bg-white text-[#5d5370] hover:bg-[#f4effd] hover:text-[#14100e]"
+                        }`}
+                      >
+                        <span>{label}</span>
+                        {tab === "reimburse" && pendingReimburse.pendingCount > 0 && (
+                          <span
+                            className={`px-1 font-mono text-[8.5px] font-bold ${
+                              active
+                                ? "bg-white/25 text-white"
+                                : "bg-[#d97706]/15 text-[#b45309]"
+                            }`}
+                          >
+                            {pendingReimburse.pendingCount}
                           </span>
-                          <span className="shrink-0 text-[10px] text-[#5d5370]">
-                            {totalTypeFilteredCount}
-                          </span>
-                        </button>
-                      </li>
-
-                      {activeMonthCategories.map(({ id: catId, count }) => {
-                        const cat = categoryMap[catId];
-                        const selected = categoryFilter === catId;
-                        return (
-                          <li key={catId}>
-                            <button
-                              type="button"
-                              role="option"
-                              aria-selected={selected}
-                              onClick={() => {
-                                setCategoryFilter(catId);
-                                setCatMenuOpen(false);
-                              }}
-                              className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left font-mono text-[11px] transition ${
-                                selected
-                                  ? "bg-[#e5dcfb]/75 font-bold text-[#14100e]"
-                                  : "text-[#4e4361] hover:bg-[#f5effe] hover:text-[#14100e]"
-                              }`}
-                            >
-                              <span className="flex min-w-0 items-center gap-2">
-                                <span
-                                  className={`w-2.5 shrink-0 text-[9px] text-[#745bc7] ${
-                                    selected ? "opacity-100" : "opacity-0"
-                                  }`}
-                                >
-                                  ▶
-                                </span>
-                                <span
-                                  className="h-1.5 w-1.5 shrink-0"
-                                  style={{
-                                    backgroundColor: cat?.color ?? "#745bc7",
-                                  }}
-                                />
-                                <span className="truncate">
-                                  {getFilterCategoryLabel(catId)}
-                                </span>
-                              </span>
-                              <span className="shrink-0 text-[10px] text-[#5d5370]">
-                                {count}
-                              </span>
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
+                        )}
+                      </button>
+                    );
+                  }
                 )}
               </div>
-            )}
+            </div>
 
-            <div className="flex items-center gap-2 border border-[#745bc7]/40 bg-white px-2.5 py-1.5 transition focus-within:border-[#745bc7] sm:w-52">
-              <Search className="h-3.5 w-3.5 shrink-0 text-[#745bc7]" />
-              <input
-                type="text"
-                placeholder={t.cashflow.searchPlaceholder}
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                className="w-full bg-transparent font-mono text-[11px] text-[#14100e] outline-none placeholder:text-[#5d5370]/75"
-              />
-              {query && (
-                <button
-                  type="button"
-                  onClick={() => setQuery("")}
-                  aria-label="Clear search"
-                  className="text-[#5d5370] hover:text-[#14100e]"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
+            {/* Pocket Dropdown + Color-Sorted Category Dropdown + Search */}
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+              {/* Pocket Filter Dropdown (2-way synced with PocketsStrip) */}
+              {store.accounts.length > 0 && (
+                <div ref={pocketMenuRef} className="relative">
+                  <button
+                    type="button"
+                    aria-haspopup="listbox"
+                    aria-expanded={isPocketMenuOpen}
+                    aria-label={t.txModal.pocket}
+                    onClick={() => {
+                      setPocketMenuOpen((o) => !o);
+                      setCatMenuOpen(false);
+                    }}
+                    className={`flex w-full items-center justify-between gap-2 border bg-white px-3 py-1.5 font-mono text-[11px] transition sm:min-w-[144px] ${
+                      isPocketMenuOpen || accountFilter !== "all"
+                        ? "border-[#745bc7] text-[#14100e]"
+                        : "border-[#745bc7]/40 text-[#14100e] hover:border-[#745bc7]"
+                    }`}
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span
+                        className="h-2 w-2 shrink-0"
+                        style={{
+                          backgroundColor: selectedAccountObj?.color ?? "#745bc7",
+                        }}
+                      />
+                      <span className="truncate font-medium">
+                        {selectedAccountObj
+                          ? selectedAccountObj.name
+                          : locale === "id"
+                            ? "Semua Kantong"
+                            : "All Pockets"}
+                      </span>
+                    </span>
+                    <ChevronDown
+                      className={`h-3.5 w-3.5 shrink-0 text-[#745bc7] transition-transform duration-150 ${
+                        isPocketMenuOpen ? "rotate-180" : ""
+                      }`}
+                    />
+                  </button>
+
+                  {isPocketMenuOpen && (
+                    <div
+                      role="listbox"
+                      aria-label={t.txModal.pocket}
+                      className="animate-modal-in absolute right-0 left-0 z-30 mt-1.5 border-[1.5px] border-[#745bc7] bg-[#fdf9ff] shadow-[4px_4px_0_0_rgba(116,91,199,0.22)] sm:left-auto sm:w-[216px]"
+                    >
+                      <div className="border-b border-[#745bc7]/20 bg-[#f3ecfd] px-3 py-1.5 font-mono text-[9px] font-semibold tracking-[0.18em] text-[#745bc7] uppercase">
+                        {locale === "id"
+                          ? "PILIH KANTONG // 雫"
+                          : "POCKET // 雫"}
+                      </div>
+
+                      <ul className="max-h-[240px] divide-y divide-[#745bc7]/10 overflow-y-auto py-0.5">
+                        <li>
+                          <button
+                            type="button"
+                            role="option"
+                            aria-selected={accountFilter === "all"}
+                            onClick={() => {
+                              setAccountFilter("all");
+                              setPocketMenuOpen(false);
+                            }}
+                            className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left font-mono text-[11px] transition ${
+                              accountFilter === "all"
+                                ? "bg-[#e5dcfb]/75 font-bold text-[#14100e]"
+                                : "text-[#4e4361] hover:bg-[#f5effe] hover:text-[#14100e]"
+                            }`}
+                          >
+                            <span className="flex min-w-0 items-center gap-2">
+                              <span
+                                className={`w-2.5 shrink-0 text-[9px] text-[#745bc7] ${
+                                  accountFilter === "all"
+                                    ? "opacity-100"
+                                    : "opacity-0"
+                                }`}
+                              >
+                                ▶
+                              </span>
+                              <span className="h-1.5 w-1.5 shrink-0 bg-[#745bc7]" />
+                              <span className="truncate">
+                                {locale === "id"
+                                  ? "Semua Kantong"
+                                  : "All Pockets"}
+                              </span>
+                            </span>
+                            <span className="shrink-0 text-[10px] text-[#5d5370]">
+                              {pocketCounts.total}
+                            </span>
+                          </button>
+                        </li>
+
+                        {store.accounts.map((acc) => {
+                          const selected = accountFilter === acc.id;
+                          const cnt = pocketCounts.counts.get(acc.id) ?? 0;
+                          return (
+                            <li key={acc.id}>
+                              <button
+                                type="button"
+                                role="option"
+                                aria-selected={selected}
+                                onClick={() => {
+                                  setAccountFilter(acc.id);
+                                  setPocketMenuOpen(false);
+                                }}
+                                className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left font-mono text-[11px] transition ${
+                                  selected
+                                    ? "bg-[#e5dcfb]/75 font-bold text-[#14100e]"
+                                    : "text-[#4e4361] hover:bg-[#f5effe] hover:text-[#14100e]"
+                                }`}
+                              >
+                                <span className="flex min-w-0 items-center gap-2">
+                                  <span
+                                    className={`w-2.5 shrink-0 text-[9px] text-[#745bc7] ${
+                                      selected ? "opacity-100" : "opacity-0"
+                                    }`}
+                                  >
+                                    ▶
+                                  </span>
+                                  <span
+                                    className="h-1.5 w-1.5 shrink-0"
+                                    style={{ backgroundColor: acc.color }}
+                                  />
+                                  <span className="truncate">{acc.name}</span>
+                                </span>
+                                <span className="shrink-0 text-[10px] text-[#5d5370]">
+                                  {cnt}
+                                </span>
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  )}
+                </div>
               )}
+
+              {activeMonthCategories.length > 0 && typeFilter !== "transfer" && (
+                <div ref={catMenuRef} className="relative">
+                  <button
+                    type="button"
+                    aria-haspopup="listbox"
+                    aria-expanded={isCatMenuOpen}
+                    aria-label={t.txModal.category}
+                    onClick={() => {
+                      setCatMenuOpen((o) => !o);
+                      setPocketMenuOpen(false);
+                    }}
+                    className={`flex w-full items-center justify-between gap-2.5 border bg-white px-3 py-1.5 font-mono text-[11px] transition sm:min-w-[156px] ${
+                      isCatMenuOpen || categoryFilter !== "all"
+                        ? "border-[#745bc7] text-[#14100e]"
+                        : "border-[#745bc7]/40 text-[#14100e] hover:border-[#745bc7]"
+                    }`}
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      {categoryFilter === "transfer" ? (
+                        <span className="shrink-0 font-mono text-[10px] font-bold text-[#745bc7]">
+                          ⇄
+                        </span>
+                      ) : (
+                        <span
+                          className="h-2 w-2 shrink-0"
+                          style={{
+                            backgroundColor:
+                              categoryFilter === "all"
+                                ? "#745bc7"
+                                : categoryMap[categoryFilter]?.color ?? "#745bc7",
+                          }}
+                        />
+                      )}
+                      <span className="truncate font-medium">
+                        {getFilterCategoryLabel(categoryFilter)}
+                      </span>
+                    </span>
+                    <ChevronDown
+                      className={`h-3.5 w-3.5 shrink-0 text-[#745bc7] transition-transform duration-150 ${
+                        isCatMenuOpen ? "rotate-180" : ""
+                      }`}
+                    />
+                  </button>
+
+                  {isCatMenuOpen && (
+                    <div
+                      role="listbox"
+                      aria-label={t.txModal.category}
+                      className="animate-modal-in absolute right-0 left-0 z-30 mt-1.5 border-[1.5px] border-[#745bc7] bg-[#fdf9ff] shadow-[4px_4px_0_0_rgba(116,91,199,0.22)] sm:left-auto sm:w-[228px]"
+                    >
+                      <div className="border-b border-[#745bc7]/20 bg-[#f3ecfd] px-3 py-1.5 font-mono text-[9px] font-semibold tracking-[0.18em] text-[#745bc7] uppercase">
+                        {locale === "id"
+                          ? "PILIH KATEGORI // 雫"
+                          : "CATEGORY // 雫"}
+                      </div>
+
+                      <ul className="max-h-[260px] divide-y divide-[#745bc7]/10 overflow-y-auto py-0.5">
+                        <li>
+                          <button
+                            type="button"
+                            role="option"
+                            aria-selected={categoryFilter === "all"}
+                            onClick={() => {
+                              setCategoryFilter("all");
+                              setCatMenuOpen(false);
+                            }}
+                            className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left font-mono text-[11px] transition ${
+                              categoryFilter === "all"
+                                ? "bg-[#e5dcfb]/75 font-bold text-[#14100e]"
+                                : "text-[#4e4361] hover:bg-[#f5effe] hover:text-[#14100e]"
+                            }`}
+                          >
+                            <span className="flex min-w-0 items-center gap-2">
+                              <span
+                                className={`w-2.5 shrink-0 text-[9px] text-[#745bc7] ${
+                                  categoryFilter === "all"
+                                    ? "opacity-100"
+                                    : "opacity-0"
+                                }`}
+                              >
+                                ▶
+                              </span>
+                              <span className="h-1.5 w-1.5 shrink-0 bg-[#745bc7]" />
+                              <span className="truncate">
+                                {t.cashflow.allCategories}
+                              </span>
+                            </span>
+                            <span className="shrink-0 text-[10px] text-[#5d5370]">
+                              {totalTypeFilteredCount}
+                            </span>
+                          </button>
+                        </li>
+
+                        {activeMonthCategories.map(({ id: catId, count }) => {
+                          const cat = categoryMap[catId];
+                          const selected = categoryFilter === catId;
+                          const isTransferItem = catId === "transfer";
+                          return (
+                            <li
+                              key={catId}
+                              className={
+                                isTransferItem
+                                  ? "border-t-[1.5px] border-[#745bc7]/25 bg-[#faf7ff]"
+                                  : ""
+                              }
+                            >
+                              <button
+                                type="button"
+                                role="option"
+                                aria-selected={selected}
+                                onClick={() => {
+                                  setCategoryFilter(catId);
+                                  setCatMenuOpen(false);
+                                }}
+                                className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left font-mono text-[11px] transition ${
+                                  selected
+                                    ? "bg-[#e5dcfb]/75 font-bold text-[#14100e]"
+                                    : "text-[#4e4361] hover:bg-[#f5effe] hover:text-[#14100e]"
+                                }`}
+                              >
+                                <span className="flex min-w-0 items-center gap-2">
+                                  <span
+                                    className={`w-2.5 shrink-0 text-[9px] text-[#745bc7] ${
+                                      selected ? "opacity-100" : "opacity-0"
+                                    }`}
+                                  >
+                                    ▶
+                                  </span>
+                                  {isTransferItem ? (
+                                    <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center border border-[#745bc7]/55 bg-white font-mono text-[9px] font-bold text-[#745bc7]">
+                                      ⇄
+                                    </span>
+                                  ) : (
+                                    <span
+                                      className="h-2 w-2 shrink-0"
+                                      style={{
+                                        backgroundColor: cat?.color ?? "#745bc7",
+                                      }}
+                                    />
+                                  )}
+                                  <span className="truncate">
+                                    {getFilterCategoryLabel(catId)}
+                                  </span>
+                                </span>
+                                <span className="shrink-0 text-[10px] text-[#5d5370]">
+                                  {count}
+                                </span>
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 border border-[#745bc7]/40 bg-white px-2.5 py-1.5 transition focus-within:border-[#745bc7] sm:w-44">
+                <Search className="h-3.5 w-3.5 shrink-0 text-[#745bc7]" />
+                <input
+                  type="text"
+                  placeholder={t.cashflow.searchPlaceholder}
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  className="w-full bg-transparent font-mono text-[11px] text-[#14100e] outline-none placeholder:text-[#5d5370]/75"
+                />
+                {query && (
+                  <button
+                    type="button"
+                    onClick={() => setQuery("")}
+                    aria-label="Clear search"
+                    className="text-[#5d5370] hover:text-[#14100e]"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
+
+          {/* 1-Tap Color Group Filter Strip (Excludes Transfer so Violet stays purely Violet categories) */}
+          {activeMonthColors.length > 0 && typeFilter !== "transfer" && (
+            <div className="flex flex-wrap items-center gap-1.5 border-t border-[#745bc7]/12 pt-2">
+              <span className="mr-0.5 font-mono text-[9px] font-bold tracking-[0.14em] text-[#5d5370] uppercase">
+                {locale === "id" ? "WARNA:" : "COLOR:"}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setColorFilter("all");
+                  setCategoryFilter("all");
+                }}
+                className={`border px-2 py-0.5 font-mono text-[9.5px] font-semibold tracking-[0.08em] uppercase transition ${
+                  colorFilter === "all"
+                    ? "border-[#745bc7] bg-[#745bc7] text-white"
+                    : "border-[#745bc7]/35 bg-white text-[#5d5370] hover:border-[#745bc7] hover:text-[#14100e]"
+                }`}
+              >
+                {locale === "id" ? "SEMUA" : "ALL"}
+              </button>
+              {activeMonthColors.map((group) => {
+                const active = colorFilter === group.color;
+                const label = getColorGroupLabel(group.color, locale);
+                return (
+                  <button
+                    key={group.color}
+                    type="button"
+                    title={`${label}: ${group.categoriesLabel}`}
+                    onClick={() => {
+                      const next = active ? "all" : group.color;
+                      setColorFilter(next);
+                      setCategoryFilter("all");
+                    }}
+                    className={`inline-flex items-center gap-1.5 border px-2 py-0.5 font-mono text-[9.5px] font-semibold transition ${
+                      active
+                        ? "border-[#14100e] bg-[#f4effe] text-[#14100e] shadow-[2px_2px_0_0_rgba(116,91,199,0.22)]"
+                        : "border-[#745bc7]/30 bg-white text-[#5d5370] hover:border-[#745bc7] hover:text-[#14100e]"
+                    }`}
+                  >
+                    <span
+                      className="h-2.5 w-2.5 shrink-0 border border-black/10"
+                      style={{ backgroundColor: group.color }}
+                    />
+                    <span>{label}</span>
+                    <span className="text-[9px] opacity-70">{group.count}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Clean Single-Row Compact Ledger Table */}
@@ -1159,6 +1491,7 @@ export const CashflowView: React.FC = () => {
                     setTypeFilter("all");
                     setCategoryFilter("all");
                     setAccountFilter("all");
+                    setColorFilter("all");
                     setQuery("");
                   }}
                   className="vn-btn-action px-4 py-2"
@@ -1326,10 +1659,19 @@ export const CashflowView: React.FC = () => {
 
                       <div className="mt-1 flex items-center justify-between gap-2 sm:mt-0.5">
                         <div className="flex min-w-0 items-center gap-1.5 font-mono text-[11px] text-[#5d5370]">
-                          <span
-                            className="h-1.5 w-1.5 shrink-0"
-                            style={{ backgroundColor: cat?.color ?? "#745bc7" }}
-                          />
+                          {isTransfer ? (
+                            <span
+                              className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center border border-[#745bc7]/55 bg-[#f5effe] font-mono text-[8.5px] font-bold text-[#745bc7]"
+                              aria-hidden="true"
+                            >
+                              ⇄
+                            </span>
+                          ) : (
+                            <span
+                              className="h-1.5 w-1.5 shrink-0"
+                              style={{ backgroundColor: cat?.color ?? "#745bc7" }}
+                            />
+                          )}
                           <span className="truncate">
                             <span className="sm:hidden">
                               {formatShortDate(tx.date, locale)} ·{" "}
