@@ -292,25 +292,33 @@ export const CashflowView: React.FC = () => {
     accountMap,
   ]);
 
-  const spentRatio =
+  // Liquid daily health ratio: reflects spendable non-savings cashflow (income - expense - savingsFlow)
+  const liquidDailyIdr = monthSummary.dailyNetCashflowIdr;
+  const isDailyDeficit = liquidDailyIdr < 0;
+  const hasFlowData =
+    monthSummary.incomeIdr > 0 ||
+    monthSummary.expenseIdr > 0 ||
+    monthSummary.savingsNetFlowIdr !== 0;
+
+  const liquidRatio =
     monthSummary.incomeIdr > 0
-      ? Math.min(100, (monthSummary.expenseIdr / monthSummary.incomeIdr) * 100)
-      : monthSummary.expenseIdr > 0
+      ? Math.max(0, Math.min(100, (liquidDailyIdr / monthSummary.incomeIdr) * 100))
+      : liquidDailyIdr > 0
         ? 100
         : 0;
 
-  const savedRatio =
-    monthSummary.incomeIdr > 0 ? Math.max(0, 100 - spentRatio) : 0;
-
-  const isDeficit = monthSummary.netCashflowIdr < 0;
-  const hasFlowData =
-    monthSummary.incomeIdr > 0 || monthSummary.expenseIdr > 0;
+  const allocatedRatio =
+    monthSummary.incomeIdr > 0
+      ? Math.max(0, Math.min(100, 100 - liquidRatio))
+      : isDailyDeficit
+        ? 100
+        : 0;
 
   const mood: VesselMood = !hasFlowData
     ? "quiet"
-    : isDeficit || savedRatio < 15
+    : isDailyDeficit || liquidRatio < 15
       ? "drained"
-      : savedRatio >= 40
+      : liquidRatio >= 40
         ? "calm"
         : "balanced";
 
@@ -406,23 +414,23 @@ export const CashflowView: React.FC = () => {
           ? `Belum ada pemasukan/pengeluaran di ${monthLabel}. Klik "+ Pemasukan", "- Pengeluaran", atau "⇄ Transfer" untuk mulai.`
           : `No income or expense in ${monthLabel} yet. Click "+ Add Income", "- Add Expense", or "⇄ Transfer" to start.`
       );
-    } else if (isDeficit) {
+    } else if (isDailyDeficit) {
       lines.push(
         locale === "id"
-          ? `Pengeluaran ${monthLabel} melebihi pemasukan sebesar ${mask(Math.abs(monthSummary.netCashflowIdr))}.`
-          : `${monthLabel} expenses exceeded income by ${mask(Math.abs(monthSummary.netCashflowIdr))}.`
+          ? `Dana harian ${monthLabel} sedang defisit ${mask(Math.abs(liquidDailyIdr))}.`
+          : `${monthLabel} liquid daily cashflow is short by ${mask(Math.abs(liquidDailyIdr))}.`
       );
     } else if (monthSummary.hasSavingsPockets && monthSummary.savingsNetFlowIdr !== 0) {
       lines.push(
         locale === "id"
-          ? `${cycleStartDay === 1 ? "Bulan" : "Periode"} ${monthLabel}: ${savedRatio.toFixed(0)}% pemasukan tidak dibelanjakan — ${mask(monthSummary.dailyNetCashflowIdr)} di harian & ${monthSummary.savingsNetFlowIdr > 0 ? "+" : ""}${mask(monthSummary.savingsNetFlowIdr)} arus tabungan.`
-          : `${monthLabel}: ${savedRatio.toFixed(0)}% of income unspent — ${mask(monthSummary.dailyNetCashflowIdr)} daily net & ${monthSummary.savingsNetFlowIdr > 0 ? "+" : ""}${mask(monthSummary.savingsNetFlowIdr)} savings flow.`
+          ? `${cycleStartDay === 1 ? "Bulan" : "Periode"} ${monthLabel}: ${liquidRatio.toFixed(0)}% dana cair harian tersisa (${mask(liquidDailyIdr)}) & ${monthSummary.savingsNetFlowIdr > 0 ? "+" : ""}${mask(monthSummary.savingsNetFlowIdr)} arus tabungan.`
+          : `${monthLabel}: ${liquidRatio.toFixed(0)}% liquid daily cashflow remaining (${mask(liquidDailyIdr)}) & ${monthSummary.savingsNetFlowIdr > 0 ? "+" : ""}${mask(monthSummary.savingsNetFlowIdr)} savings flow.`
       );
     } else {
       lines.push(
         locale === "id"
-          ? `${cycleStartDay === 1 ? "Bulan" : "Periode"} ${monthLabel}: ${savedRatio.toFixed(0)}% dari pemasukan masih tersisa (${mask(monthSummary.netCashflowIdr)}).`
-          : `${monthLabel}: you've kept ${savedRatio.toFixed(0)}% of your income (${mask(monthSummary.netCashflowIdr)} left).`
+          ? `${cycleStartDay === 1 ? "Bulan" : "Periode"} ${monthLabel}: ${liquidRatio.toFixed(0)}% dari pemasukan masih tersedia (${mask(liquidDailyIdr)}).`
+          : `${monthLabel}: ${liquidRatio.toFixed(0)}% of your income remains liquid (${mask(liquidDailyIdr)} left).`
       );
     }
 
@@ -505,10 +513,11 @@ export const CashflowView: React.FC = () => {
     locale,
     lastTxEvent,
     hasFlowData,
-    isDeficit,
+    isDailyDeficit,
+    liquidDailyIdr,
     monthSummary,
     prevSummary,
-    savedRatio,
+    liquidRatio,
     topExpenseCat,
     savingsPocketNames,
     pendingReimburse,
@@ -545,15 +554,16 @@ export const CashflowView: React.FC = () => {
           1. INTERACTIVE STAGE: SHIZUKU Raindrop Vessel + Anime RPG Status Menu
          ===================================================================== */}
       <section className="grid grid-cols-1 gap-5 lg:grid-cols-12">
-        {/* Left: Live Interactive Savings Level Water Tank */}
+        {/* Left: Live Interactive Daily Liquid Health Water Tank */}
         <div className="lg:col-span-5">
           <RaindropVessel
-            savedRatio={savedRatio}
+            liquidRatio={liquidRatio}
             incomeIdr={monthSummary.incomeIdr}
-            netCashflowIdr={monthSummary.netCashflowIdr}
+            dailyNetCashflowIdr={liquidDailyIdr}
+            hasSavingsPockets={monthSummary.hasSavingsPockets}
             privacyMode={store.settings.privacyMode}
             hasData={hasFlowData}
-            isDeficit={isDeficit}
+            isDeficit={isDailyDeficit}
             mood={mood}
             locale={locale}
             burstEvent={lastTxEvent}
@@ -633,30 +643,42 @@ export const CashflowView: React.FC = () => {
               </div>
             </div>
 
-            {/* Notched 20-Segment Gauges with Plain Clear Labels */}
+            {/* Notched 20-Segment Gauges Synced with Liquid Daily Water Tank */}
             <div className="space-y-2.5">
               <div>
                 <div className="mb-1 flex items-center justify-between font-mono text-[10px] tracking-[0.14em] uppercase">
                   <span className="font-semibold text-[#2276a8]">
-                    {locale === "id" ? "TERSISA" : "SAVED"}
+                    {monthSummary.hasSavingsPockets
+                      ? locale === "id"
+                        ? "DANA HARIAN CAIR"
+                        : "DAILY LIQUID"
+                      : locale === "id"
+                        ? "TERSISA"
+                        : "LIQUID LEFT"}
                   </span>
                   <span className="font-semibold text-[#14100e]">
-                    {savedRatio.toFixed(0)}%
+                    {liquidRatio.toFixed(0)}%
                   </span>
                 </div>
-                <SegmentedRpgBar percent={savedRatio} variant="reserve" />
+                <SegmentedRpgBar percent={liquidRatio} variant="reserve" />
               </div>
 
               <div>
                 <div className="mb-1 flex items-center justify-between font-mono text-[10px] tracking-[0.14em] uppercase">
                   <span className="font-semibold text-[#c837a5]">
-                    {locale === "id" ? "TERPAKAI" : "SPENT"}
+                    {monthSummary.hasSavingsPockets && monthSummary.savingsNetFlowIdr > 0
+                      ? locale === "id"
+                        ? "TERPAKAI & TABUNGAN"
+                        : "SPENT & SAVED"
+                      : locale === "id"
+                        ? "TERPAKAI"
+                        : "SPENT"}
                   </span>
                   <span className="font-semibold text-[#14100e]">
-                    {spentRatio.toFixed(0)}%
+                    {allocatedRatio.toFixed(0)}%
                   </span>
                 </div>
-                <SegmentedRpgBar percent={spentRatio} variant="spent" />
+                <SegmentedRpgBar percent={allocatedRatio} variant="spent" />
               </div>
             </div>
 
@@ -813,16 +835,6 @@ export const CashflowView: React.FC = () => {
                           ? "belum lunas"
                           : "pending"
                         : t.reimburse.flexibleTag}
-                    </span>
-                  </div>
-                ) : monthSummary.reimbursedIdr > 0 ? (
-                  <div className="mt-0.5 flex flex-wrap items-baseline gap-1.5">
-                    <MoneyDisplay
-                      amountIdr={monthSummary.reimbursedIdr}
-                      className="text-sm font-bold text-[#1f8f6b] sm:text-[15px]"
-                    />
-                    <span className="font-mono text-[9px] font-semibold text-[#1f8f6b] uppercase">
-                      {t.reimburse.statusSettled}
                     </span>
                   </div>
                 ) : (

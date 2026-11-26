@@ -7,9 +7,10 @@ import { formatCompactIdr } from "../../utils/format";
 export type VesselMood = "calm" | "balanced" | "drained" | "quiet";
 
 interface RaindropVesselProps {
-  savedRatio: number;
+  liquidRatio: number;
   incomeIdr: number;
-  netCashflowIdr: number;
+  dailyNetCashflowIdr: number;
+  hasSavingsPockets: boolean;
   privacyMode: boolean;
   hasData: boolean;
   isDeficit: boolean;
@@ -91,9 +92,10 @@ function pctToCanvasY(pct: number, height: number): number {
 }
 
 export const RaindropVessel: React.FC<RaindropVesselProps> = ({
-  savedRatio,
+  liquidRatio,
   incomeIdr,
-  netCashflowIdr,
+  dailyNetCashflowIdr,
+  hasSavingsPockets,
   privacyMode,
   hasData,
   isDeficit,
@@ -119,14 +121,14 @@ export const RaindropVessel: React.FC<RaindropVesselProps> = ({
   useEffect(() => {
     moodRef.current = mood;
     isDeficitRef.current = isDeficit;
-    if (!hasData || incomeIdr <= 0) {
+    if (!hasData || (incomeIdr <= 0 && !isDeficit && dailyNetCashflowIdr <= 0)) {
       targetPctRef.current = 0;
     } else if (isDeficit) {
       targetPctRef.current = 4;
     } else {
-      targetPctRef.current = Math.max(0, Math.min(100, savedRatio));
+      targetPctRef.current = Math.max(0, Math.min(100, liquidRatio));
     }
-  }, [savedRatio, incomeIdr, hasData, isDeficit, mood]);
+  }, [liquidRatio, incomeIdr, dailyNetCashflowIdr, hasData, isDeficit, mood]);
 
   // Silent visual droplet burst when user saves/duplicates an entry
   useEffect(() => {
@@ -555,7 +557,7 @@ export const RaindropVessel: React.FC<RaindropVesselProps> = ({
   const moodMeta = MOOD_LABELS[mood];
 
   const compactDetail = (() => {
-    if (!hasData || incomeIdr <= 0) {
+    if (!hasData || (incomeIdr <= 0 && !isDeficit && dailyNetCashflowIdr <= 0)) {
       return locale === "id" ? "Belum ada pemasukan" : "No income recorded yet";
     }
     if (privacyMode) {
@@ -563,20 +565,33 @@ export const RaindropVessel: React.FC<RaindropVesselProps> = ({
     }
     if (isDeficit) {
       return locale === "id"
-        ? `Lebih ${formatCompactIdr(Math.abs(netCashflowIdr), locale)} dari masuk`
-        : `Over income by ${formatCompactIdr(Math.abs(netCashflowIdr), locale)}`;
+        ? `Dana harian minus ${formatCompactIdr(Math.abs(dailyNetCashflowIdr), locale)}`
+        : `Daily cashflow short by ${formatCompactIdr(Math.abs(dailyNetCashflowIdr), locale)}`;
+    }
+    if (incomeIdr <= 0) {
+      return locale === "id"
+        ? `+${formatCompactIdr(dailyNetCashflowIdr, locale)} dana cair`
+        : `+${formatCompactIdr(dailyNetCashflowIdr, locale)} liquid available`;
     }
     return locale === "id"
-      ? `${formatCompactIdr(netCashflowIdr, locale)} dari ${formatCompactIdr(incomeIdr, locale)}`
-      : `${formatCompactIdr(netCashflowIdr, locale)} of ${formatCompactIdr(incomeIdr, locale)}`;
+      ? `${formatCompactIdr(dailyNetCashflowIdr, locale)} dari ${formatCompactIdr(incomeIdr, locale)}`
+      : `${formatCompactIdr(dailyNetCashflowIdr, locale)} of ${formatCompactIdr(incomeIdr, locale)}`;
   })();
+
+  const headerTitle = hasSavingsPockets
+    ? locale === "id"
+      ? "LEVEL HARIAN // 雫"
+      : "DAILY LIQUID // 雫"
+    : locale === "id"
+      ? "SISA BULAN INI // 雫"
+      : "LIQUID LEVEL // 雫";
 
   return (
     <div className="vn-frame flex h-full flex-col overflow-hidden">
       {/* Vivid SHIZUKU Watercolor Band Header Strip */}
       <div className="shikas-band-strip flex items-center justify-between px-3.5 py-2 text-white">
         <span className="font-mono text-[10px] font-semibold tracking-[0.18em] uppercase drop-shadow-2xs">
-          {locale === "id" ? "SISA BULAN INI // 雫" : "SAVINGS LEVEL // 雫"}
+          {headerTitle}
         </span>
         <span className="inline-flex items-center gap-1.5 font-mono text-[10px] tracking-[0.14em] uppercase drop-shadow-2xs">
           <span
@@ -594,8 +609,8 @@ export const RaindropVessel: React.FC<RaindropVesselProps> = ({
         className="group relative min-h-[250px] w-full flex-1 cursor-pointer select-none overflow-hidden sm:min-h-[290px]"
         title={
           locale === "id"
-            ? "Tinggi air menunjukkan sisa pemasukan bulan ini"
-            : "Water height shows how much of this month's income remains"
+            ? "Tinggi air menunjukkan sisa dana cair harian bulan ini (di luar alokasi tabungan)"
+            : "Water height shows remaining liquid daily cashflow this month (excluding savings allocation)"
         }
       >
         <canvas ref={canvasRef} className="block h-full w-full" />
@@ -609,7 +624,7 @@ export const RaindropVessel: React.FC<RaindropVesselProps> = ({
           />
         </div>
 
-        {/* Crystal-Clear Human-Readable Savings Readout */}
+        {/* Crystal-Clear Human-Readable Liquid Daily Readout */}
         <div className="pointer-events-none absolute bottom-3 left-3 max-w-[calc(100%-24px)] border border-[#745bc7]/50 bg-[#fdf9ff]/92 px-3 py-1.5 backdrop-blur-xs">
           <p
             className={`font-mono-num text-sm font-bold leading-tight ${
@@ -620,9 +635,9 @@ export const RaindropVessel: React.FC<RaindropVesselProps> = ({
               ? locale === "id"
                 ? "DEFISIT"
                 : "DEFICIT"
-              : !hasData || incomeIdr <= 0
+              : !hasData || (incomeIdr <= 0 && dailyNetCashflowIdr <= 0)
                 ? "0%"
-                : `${savedRatio.toFixed(0)}% ${locale === "id" ? "TERSISA" : "SAVED"}`}
+                : `${liquidRatio.toFixed(0)}% ${locale === "id" ? "CAIR" : "LIQUID"}`}
           </p>
           <p className="mt-0.5 font-mono text-[10px] text-[#5d5370]">
             {compactDetail}

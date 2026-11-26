@@ -234,26 +234,16 @@ export const AnalyticsView: React.FC = () => {
       }
     }
 
-    if (periodTotals.reimbursedIdr > 0 || pendingReimburse.pendingCount > 0) {
-      if (periodTotals.reimbursedIdr > 0 && pendingReimburse.pendingCount > 0) {
-        list.push(
-          locale === "id"
-            ? `Total ${mask(periodTotals.reimbursedIdr)} pengeluaran sudah direimburse dalam ${rangeTag.toLowerCase()} (masih ada ${pendingReimburse.pendingCount} tagihan belum lunas).`
-            : `${mask(periodTotals.reimbursedIdr)} in expenses reimbursed over ${rangeTag.toLowerCase()} (${pendingReimburse.pendingCount} pending item${pendingReimburse.pendingCount > 1 ? "s" : ""} remaining).`
-        );
-      } else if (periodTotals.reimbursedIdr > 0) {
-        list.push(
-          locale === "id"
-            ? `Total ${mask(periodTotals.reimbursedIdr)} pengeluaran sudah direimburse dalam ${rangeTag.toLowerCase()} — pengeluaran tercatat adalah porsi bersihmu.`
-            : `${mask(periodTotals.reimbursedIdr)} in expenses reimbursed over ${rangeTag.toLowerCase()} — chart spending reflects your net share.`
-        );
-      } else {
-        list.push(
-          locale === "id"
-            ? `Masih ada ${pendingReimburse.pendingCount} catatan reimburse yang belum lunas.`
-            : `${pendingReimburse.pendingCount} pending reimbursement${pendingReimburse.pendingCount > 1 ? "s" : ""} still awaiting settlement.`
-        );
-      }
+    if (pendingReimburse.pendingCount > 0) {
+      const pendingDetail =
+        pendingReimburse.knownRemainingIdr > 0
+          ? ` (${mask(pendingReimburse.knownRemainingIdr)}${pendingReimburse.flexibleCount > 0 ? "+" : ""})`
+          : "";
+      list.push(
+        locale === "id"
+          ? `Masih ada ${pendingReimburse.pendingCount} catatan yang perlu direimburse${pendingDetail}.`
+          : `${pendingReimburse.pendingCount} item${pendingReimburse.pendingCount > 1 ? "s" : ""} still need reimbursement${pendingDetail}.`
+      );
     }
 
     if (periodTotals.incomeIdr > 0) {
@@ -313,13 +303,15 @@ export const AnalyticsView: React.FC = () => {
               {formatTooltip(pt.expenseIdr)}
             </span>
           </div>
-          {pt.reimbursedIdr > 0 && (
+          {pt.pendingReimburseCount > 0 && (
             <div className="flex items-center justify-between gap-4">
-              <span className="text-[#1f8f6b]">
-                {locale === "id" ? "Direimburse" : "Reimbursed"}
+              <span className="text-[#b45309]">
+                {locale === "id" ? "Perlu Reimburse" : "Need Reimburse"}
               </span>
-              <span className="font-mono-num font-bold text-[#1f8f6b]">
-                {formatTooltip(pt.reimbursedIdr)}
+              <span className="font-mono-num font-bold text-[#b45309]">
+                {pt.pendingReimburseKnownIdr > 0
+                  ? `${formatTooltip(pt.pendingReimburseKnownIdr)}${pt.pendingReimburseFlexibleCount > 0 ? "+" : ""}`
+                  : `${pt.pendingReimburseCount} pending`}
               </span>
             </div>
           )}

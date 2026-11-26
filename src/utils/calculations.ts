@@ -5,7 +5,11 @@ import {
   isDateInCycle,
   shiftMonthKey,
 } from "./format";
-import { getNetExpenseIdr, getReimbursedTotalIdr } from "./reimburse";
+import {
+  getNetExpenseIdr,
+  getReimbursedTotalIdr,
+  getReimburseProgress,
+} from "./reimburse";
 
 export type AnalyticsRange = "3m" | "6m" | "12m" | "all";
 
@@ -14,6 +18,9 @@ export interface MonthlySummary {
   incomeIdr: number;
   expenseIdr: number; // Net expenses (gross minus reimbursements) + transfer admin fees
   reimbursedIdr: number; // Total reimbursed back against this cycle's expenses
+  pendingReimburseCount: number; // Unsettled reimburse expenses originating in this cycle
+  pendingReimburseKnownIdr: number; // Sum of remaining expected targets for non-flexible pending items
+  pendingReimburseFlexibleCount: number; // Count of flexible (no target) pending items in this cycle
   transferFeeIdr: number;
   transferVolumeIdr: number;
   netCashflowIdr: number; // Total wealth flow: incomeIdr - expenseIdr
@@ -51,6 +58,9 @@ export interface MonthlySeriesPoint {
   incomeIdr: number;
   expenseIdr: number;
   reimbursedIdr: number;
+  pendingReimburseCount: number;
+  pendingReimburseKnownIdr: number;
+  pendingReimburseFlexibleCount: number;
   netIdr: number;
   dailyNetIdr: number;
   savingsFlowIdr: number;
@@ -202,6 +212,9 @@ export function computeMonthlySummary(
   let incomeIdr = 0;
   let expenseIdr = 0;
   let reimbursedIdr = 0;
+  let pendingReimburseCount = 0;
+  let pendingReimburseKnownIdr = 0;
+  let pendingReimburseFlexibleCount = 0;
   let transferFeeIdr = 0;
   let transferVolumeIdr = 0;
   let savingsInflowIdr = 0;
@@ -223,6 +236,18 @@ export function computeMonthlySummary(
       const netExp = getNetExpenseIdr(tx);
       expenseIdr += netExp;
       reimbursedIdr += txReimbursed;
+
+      if (tx.reimburse) {
+        const prog = getReimburseProgress(tx);
+        if (prog.isPending) {
+          pendingReimburseCount += 1;
+          if (prog.isFlexible) {
+            pendingReimburseFlexibleCount += 1;
+          } else {
+            pendingReimburseKnownIdr += prog.remainingExpectedIdr;
+          }
+        }
+      }
 
       if (tx.accountId && savingsIds.has(tx.accountId)) {
         savingsOutflowIdr += tx.amountIdr;
@@ -275,6 +300,9 @@ export function computeMonthlySummary(
     incomeIdr,
     expenseIdr,
     reimbursedIdr,
+    pendingReimburseCount,
+    pendingReimburseKnownIdr,
+    pendingReimburseFlexibleCount,
     transferFeeIdr,
     transferVolumeIdr,
     netCashflowIdr,
@@ -370,6 +398,9 @@ function buildSeriesPoint(
     incomeIdr: summary.incomeIdr,
     expenseIdr: summary.expenseIdr,
     reimbursedIdr: summary.reimbursedIdr,
+    pendingReimburseCount: summary.pendingReimburseCount,
+    pendingReimburseKnownIdr: summary.pendingReimburseKnownIdr,
+    pendingReimburseFlexibleCount: summary.pendingReimburseFlexibleCount,
     netIdr: summary.netCashflowIdr,
     dailyNetIdr: summary.dailyNetCashflowIdr,
     savingsFlowIdr: summary.savingsNetFlowIdr,
