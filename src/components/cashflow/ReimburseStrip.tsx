@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { HandCoins, User } from "lucide-react";
+import { Check, HandCoins, User, Users } from "lucide-react";
 import { useCashflow } from "../../context/CashflowContext";
 import { getCategoryLabel } from "../../data/categories";
 import { formatShortDate } from "../../utils/format";
@@ -97,11 +97,21 @@ export const ReimburseStrip: React.FC = () => {
                           : t.reimburse.statusPending}
                       </span>
 
-                      {payer && (
+                      {prog.isSplit ? (
                         <span className="inline-flex items-center gap-1 border border-[#745bc7]/35 bg-[#f4effe] px-1.5 py-0.5 font-mono text-[9.5px] font-semibold text-[#5b42a8]">
-                          <User className="h-2.5 w-2.5 shrink-0" />
-                          <span className="max-w-[140px] truncate">{payer}</span>
+                          <Users className="h-2.5 w-2.5 shrink-0" />
+                          <span>
+                            {prog.settledPayersCount}/{prog.payers.length}{" "}
+                            {locale === "id" ? "lunas" : "settled"}
+                          </span>
                         </span>
+                      ) : (
+                        payer && (
+                          <span className="inline-flex items-center gap-1 border border-[#745bc7]/35 bg-[#f4effe] px-1.5 py-0.5 font-mono text-[9.5px] font-semibold text-[#5b42a8]">
+                            <User className="h-2.5 w-2.5 shrink-0" />
+                            <span className="max-w-[140px] truncate">{payer}</span>
+                          </span>
+                        )
                       )}
 
                       <span className="font-mono text-[10px] text-[#5d5370] uppercase">
@@ -121,7 +131,46 @@ export const ReimburseStrip: React.FC = () => {
                         amountIdr={prog.grossIdr}
                         className="font-semibold text-[#14100e]"
                       />
+                      {prog.feeIdr > 0 && (
+                        <span>
+                          {" "}
+                          (+
+                          <MoneyDisplay amountIdr={prog.feeIdr} />{" "}
+                          {locale === "id" ? "admin" : "fee"})
+                        </span>
+                      )}
                     </p>
+
+                    {/* Per-person split status chips */}
+                    {prog.isSplit && (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {prog.payers.map((p) => (
+                          <span
+                            key={p.id}
+                            className={`inline-flex items-center gap-1 border px-1.5 py-0.5 font-mono text-[9px] font-semibold ${
+                              p.isSettled
+                                ? "border-[#1f8f6b]/45 bg-[#1f8f6b]/10 text-[#1f8f6b]"
+                                : p.isPartial
+                                  ? "border-[#2276a8]/45 bg-[#2276a8]/10 text-[#2276a8]"
+                                  : "border-[#d97706]/45 bg-[#d97706]/10 text-[#b45309]"
+                            }`}
+                          >
+                            {p.isSettled && (
+                              <Check className="h-2.5 w-2.5 shrink-0" />
+                            )}
+                            <span>{p.name}</span>
+                            {p.isPending && p.remainingExpectedIdr > 0 && (
+                              <span>
+                                ·{" "}
+                                <MoneyDisplay
+                                  amountIdr={p.remainingExpectedIdr}
+                                />
+                              </span>
+                            )}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <button
@@ -137,7 +186,7 @@ export const ReimburseStrip: React.FC = () => {
                 {/* Progress / Flexible Summary Footer */}
                 <div className="space-y-1.5 border-t border-[#745bc7]/15 pt-2 pl-1">
                   <div className="flex flex-wrap items-center justify-between gap-2 font-mono text-[10.5px]">
-                    {prog.isFlexible ? (
+                    {prog.isFlexible && prog.remainingExpectedIdr === 0 ? (
                       <>
                         <span className="text-[#5d5370]">
                           {prog.reimbursedIdr > 0 ? (
@@ -176,11 +225,15 @@ export const ReimburseStrip: React.FC = () => {
                             amountIdr={prog.reimbursedIdr}
                             className="font-bold text-[#1f8f6b]"
                           />
-                          {" / "}
-                          <MoneyDisplay
-                            amountIdr={prog.expectedIdr ?? 0}
-                            className="font-semibold text-[#14100e]"
-                          />
+                          {prog.expectedIdr !== undefined && (
+                            <>
+                              {" / "}
+                              <MoneyDisplay
+                                amountIdr={prog.expectedIdr}
+                                className="font-semibold text-[#14100e]"
+                              />
+                            </>
+                          )}
                         </span>
                         <span className="font-semibold text-[#b45309]">
                           {locale === "id" ? "Sisa" : "Left"}{" "}
@@ -188,6 +241,7 @@ export const ReimburseStrip: React.FC = () => {
                             amountIdr={prog.remainingExpectedIdr}
                             className="font-bold"
                           />
+                          {prog.hasFlexiblePendingPayer ? "+" : ""}
                         </span>
                       </>
                     )}

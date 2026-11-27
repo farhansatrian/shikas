@@ -35,19 +35,30 @@ export interface CategoryDefinition {
 
 export type ReimburseStatus = "pending" | "settled";
 
+export interface ReimbursementPayer {
+  id: string;
+  name: string; // e.g. "Andi"
+  expectedIdr?: number; // Optional target for this person; omitted = flexible
+  status: ReimburseStatus; // "pending" | "settled"
+  settledAt?: string; // ISO timestamp when marked settled
+}
+
 export interface ReimbursementEntry {
   id: string;
   date: string; // YYYY-MM-DD when friend/payer paid back
   amountIdr: number; // Always positive integer IDR
   accountId?: string; // Destination pocket receiving reimbursement (e.g. Wondr)
+  payerId?: string; // Optional link to ReimbursementPayer.id for multi-person split bills
   note?: string;
   createdAt: string;
 }
 
 export interface ReimbursementInfo {
   status: ReimburseStatus; // "pending" (waiting / partial) | "settled" (full / lunas)
-  expectedIdr?: number; // Optional target amount; omitted = flexible (amount unknown upfront)
-  from?: string; // Optional payer/person reminder (e.g. "Budi")
+  includeFee?: boolean; // Optional: include expense feeIdr in reimbursable total (default false)
+  expectedIdr?: number; // Optional target amount; omitted = flexible (or sum of fixed payer targets)
+  from?: string; // Optional payer/person reminder (single payer or comma-joined split payers)
+  payers?: ReimbursementPayer[]; // Optional multi-person split-bill payers (2+ people)
   settledAt?: string; // ISO timestamp when marked settled
   entries: ReimbursementEntry[]; // Partial or full repayments received
 }
@@ -56,13 +67,13 @@ export interface Transaction {
   id: string;
   type: TransactionType;
   date: string; // YYYY-MM-DD
-  amountIdr: number; // Always positive integer IDR (for transfer: amount credited to destination)
+  amountIdr: number; // Always positive integer IDR (principal amount; for transfer: amount credited to destination)
   categoryId: string;
   note: string;
   merchant?: string;
   accountId?: string; // Income: target pocket | Expense: source pocket | Transfer: FROM pocket
   toAccountId?: string; // Transfer only: TO pocket
-  feeIdr?: number; // Transfer only: optional admin fee deducted from FROM pocket & counted as expense
+  feeIdr?: number; // Transfer & Expense: optional admin fee deducted from source pocket & counted in Bank & Admin
   reimburse?: ReimbursementInfo; // Expense only: optional contra-expense reimbursement ledger
   createdAt: string;
 }

@@ -1,12 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Calendar,
+  Check,
   CheckCircle2,
   PiggyBank,
   RotateCcw,
   Star,
   Trash2,
   User,
+  Users,
   Wallet,
   X,
 } from "lucide-react";
@@ -39,6 +41,7 @@ export const ReimburseModal: React.FC = () => {
     recordReimbursement,
     deleteReimbursementEntry,
     setReimburseStatus,
+    setReimbursePayerStatus,
     t,
     locale,
   } = useCashflow();
@@ -62,6 +65,7 @@ export const ReimburseModal: React.FC = () => {
   );
 
   const [rawDigits, setRawDigits] = useState("");
+  const [selectedPayerId, setSelectedPayerId] = useState("");
   const [intoAccountId, setIntoAccountId] = useState("");
   const [date, setDate] = useState(todayIsoDate());
   const [note, setNote] = useState("");
@@ -69,18 +73,57 @@ export const ReimburseModal: React.FC = () => {
 
   const progress = useMemo(() => (tx ? getReimburseProgress(tx) : null), [tx]);
 
+  const pendingPayers = useMemo(
+    () => (progress ? progress.payers.filter((p) => p.isPending) : []),
+    [progress]
+  );
+
+  const payerNameById = useMemo(
+    () => new Map((progress?.payers ?? []).map((p) => [p.id, p.name])),
+    [progress]
+  );
+
   useEffect(() => {
     if (!tx || !progress) return;
     setError(null);
-    setRawDigits(
-      progress.remainingExpectedIdr > 0
-        ? String(progress.remainingExpectedIdr)
-        : ""
-    );
     setIntoAccountId(defaultAccountId);
     setDate(todayIsoDate());
     setNote("");
+    if (progress.isSplit) {
+      const firstPending = progress.payers.find((p) => p.isPending);
+      setSelectedPayerId(firstPending?.id ?? "");
+      setRawDigits(
+        firstPending && firstPending.remainingExpectedIdr > 0
+          ? String(Math.min(progress.maxReceivableIdr, firstPending.remainingExpectedIdr))
+          : ""
+      );
+    } else {
+      setSelectedPayerId("");
+      setRawDigits(
+        progress.remainingExpectedIdr > 0
+          ? String(progress.remainingExpectedIdr)
+          : ""
+      );
+    }
   }, [reimburseTxId, defaultAccountId]);
+
+  // Keep selectedPayerId pointed at a valid pending payer if the current one gets settled
+  useEffect(() => {
+    if (!progress || !progress.isSplit) return;
+    if (pendingPayers.length === 0) {
+      setSelectedPayerId("");
+      return;
+    }
+    if (!pendingPayers.some((p) => p.id === selectedPayerId)) {
+      const next = pendingPayers[0];
+      setSelectedPayerId(next.id);
+      setRawDigits(
+        next.remainingExpectedIdr > 0
+          ? String(Math.min(progress.maxReceivableIdr, next.remainingExpectedIdr))
+          : ""
+      );
+    }
+  }, [progress, pendingPayers, selectedPayerId]);
 
   useEffect(() => {
     if (!reimburseTxId) return;
@@ -93,6 +136,10 @@ export const ReimburseModal: React.FC = () => {
 
   if (!reimburseTxId || !tx || !progress || !tx.reimburse) return null;
 
+  const activePayer = progress.isSplit
+    ? progress.payers.find((p) => p.id === selectedPayerId) ?? pendingPayers[0]
+    : undefined;
+
   const parsedAmount = Number(rawDigits) || 0;
   const formattedAmount = formatDigitsWithDots(rawDigits);
   const today = todayIsoDate();
@@ -102,6 +149,19 @@ export const ReimburseModal: React.FC = () => {
 
   const willExhaustExpense =
     parsedAmount > 0 && parsedAmount >= progress.maxReceivableIdr;
+
+  const handleSelectPayer = (payerId: string) => {
+    setSelectedPayerId(payerId);
+    setError(null);
+    const target = progress.payers.find((p) => p.id === payerId);
+    if (target && target.remainingExpectedIdr > 0) {
+      setRawDigits(
+        String(Math.min(progress.maxReceivableIdr, target.remainingExpectedIdr))
+      );
+    } else {
+      setRawDigits("");
+    }
+  };
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const digitsOnly = e.target.value.replace(/\D/g, "").slice(0, 12);
@@ -117,18 +177,31 @@ export const ReimburseModal: React.FC = () => {
       return;
     }
 
+    const payerIdForEntry =
+      progress.isSplit && activePayer ? activePayer.id : undefined;
+
     recordReimbursement(
       tx.id,
       {
         amountIdr: parsedAmount,
-        accountId: accounts.length > 0 && intoAccountId ? intoAccountId : undefined,
+        accountId:
+          accounts.length > 0 && intoAccountId ? intoAccountId : undefined,
+        payerId: payerIdForEntry,
         date,
         note: note.trim() || undefined,
       },
       markSettled
     );
 
-    if (markSettled || parsedAmount >= progress.maxReceivableIdr) {
+    const willSettleEntireTx = progress.isSplit
+      ? parsedAmount >= progress.maxReceivableIdr ||
+        ((markSettled ||
+          (activePayer?.expectedIdr !== undefined &&
+            activePayer.reimbursedIdr + parsedAmount >= activePayer.expectedIdr)) &&
+          pendingPayers.length <= 1)
+      : markSettled || parsedAmount >= progress.maxReceivableIdr;
+
+    if (willSettleEntireTx) {
       closeReimburseModal();
     } else {
       setRawDigits("");
@@ -138,7 +211,24 @@ export const ReimburseModal: React.FC = () => {
   };
 
   const quickAmounts: Array<{ label: string; value: number }> = [];
-  if (progress.remainingExpectedIdr > 0 && progress.remainingExpectedIdr < progress.maxReceivableIdr) {
+  if (progress.isSplit && activePayer) {
+    const payerRem = Math.min(
+      progress.maxReceivableIdr,
+      activePayer.remainingExpectedIdr
+    );
+    if (payerRem > 0) {
+      quickAmounts.push({
+        label:
+          locale === "id"
+            ? `Sisa ${activePayer.name} (${formatIdr(payerRem)})`
+            : `${activePayer.name} left (${formatIdr(payerRem)})`,
+        value: payerRem,
+      });
+    }
+  } else if (
+    progress.remainingExpectedIdr > 0 &&
+    progress.remainingExpectedIdr < progress.maxReceivableIdr
+  ) {
     quickAmounts.push({
       label:
         locale === "id"
@@ -147,19 +237,25 @@ export const ReimburseModal: React.FC = () => {
       value: progress.remainingExpectedIdr,
     });
   }
-  const halfGross = Math.round(progress.grossIdr / 2);
+
+  const halfCap = Math.round(progress.reimburseCapIdr / 2);
   if (
+    !progress.isSplit &&
     progress.reimbursedIdr === 0 &&
-    halfGross > 0 &&
-    halfGross < progress.maxReceivableIdr &&
-    !quickAmounts.some((q) => q.value === halfGross)
+    halfCap > 0 &&
+    halfCap < progress.maxReceivableIdr &&
+    !quickAmounts.some((q) => q.value === halfCap)
   ) {
     quickAmounts.push({
-      label: `50% (${formatIdr(halfGross)})`,
-      value: halfGross,
+      label: `50% (${formatIdr(halfCap)})`,
+      value: halfCap,
     });
   }
-  if (progress.maxReceivableIdr > 0) {
+
+  if (
+    progress.maxReceivableIdr > 0 &&
+    !quickAmounts.some((q) => q.value === progress.maxReceivableIdr)
+  ) {
     quickAmounts.push({
       label:
         locale === "id"
@@ -177,7 +273,7 @@ export const ReimburseModal: React.FC = () => {
       <div
         role="dialog"
         aria-modal="true"
-        className="vn-dialogue animate-modal-in my-auto flex max-h-[92vh] w-full max-w-[540px] flex-col overflow-hidden"
+        className="vn-dialogue animate-modal-in my-auto flex max-h-[92vh] w-full max-w-[560px] flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Watercolor Header Strip */}
@@ -217,10 +313,33 @@ export const ReimburseModal: React.FC = () => {
                       : t.reimburse.statusPending}
                 </span>
 
-                {tx.reimburse.from && (
-                  <span className="inline-flex items-center gap-1 border border-[#745bc7]/35 bg-white px-1.5 py-0.5 font-mono text-[10px] font-semibold text-[#5b42a8]">
-                    <User className="h-2.5 w-2.5" />
-                    <span>{tx.reimburse.from}</span>
+                {progress.isSplit ? (
+                  <span className="inline-flex items-center gap-1 border border-[#745bc7]/40 bg-white px-1.5 py-0.5 font-mono text-[9.5px] font-semibold text-[#5b42a8]">
+                    <Users className="h-2.5 w-2.5" />
+                    <span>
+                      {progress.settledPayersCount}/{progress.payers.length}{" "}
+                      {locale === "id" ? "lunas" : "settled"}
+                    </span>
+                  </span>
+                ) : (
+                  tx.reimburse.from && (
+                    <span className="inline-flex items-center gap-1 border border-[#745bc7]/35 bg-white px-1.5 py-0.5 font-mono text-[10px] font-semibold text-[#5b42a8]">
+                      <User className="h-2.5 w-2.5" />
+                      <span>{tx.reimburse.from}</span>
+                    </span>
+                  )
+                )}
+
+                {progress.feeIdr > 0 && (
+                  <span className="border border-[#745bc7]/30 bg-white px-1.5 py-0.5 font-mono text-[9px] font-semibold text-[#5d5370]">
+                    +{formatIdr(progress.feeIdr)}{" "}
+                    {progress.includeFee
+                      ? locale === "id"
+                        ? "fee ikut"
+                        : "fee incl."
+                      : locale === "id"
+                        ? "fee terpisah"
+                        : "fee excl."}
                   </span>
                 )}
               </div>
@@ -234,12 +353,16 @@ export const ReimburseModal: React.FC = () => {
             <p className="mt-0.5 font-mono text-[10.5px] text-[#5d5370]">
               {getCategoryLabel(tx.categoryId, locale, store.categories)}
               {sourcePocket ? ` · ${sourcePocket.name}` : ""}
-              {" · "}
-              {progress.isFlexible
-                ? locale === "id"
-                  ? "Target: Fleksibel"
-                  : "Target: Flexible"
-                : `${locale === "id" ? "Target" : "Target"}: ${formatIdr(progress.expectedIdr ?? 0)}`}
+              {!progress.isSplit && (
+                <>
+                  {" · "}
+                  {progress.isFlexible
+                    ? locale === "id"
+                      ? "Target: Fleksibel"
+                      : "Target: Flexible"
+                    : `Target: ${formatIdr(progress.expectedIdr ?? 0)}`}
+                </>
+              )}
             </p>
 
             {/* 3-Cell Accounting Summary */}
@@ -272,15 +395,198 @@ export const ReimburseModal: React.FC = () => {
                 />
               </div>
             </div>
+
+            {/* Per-Person Split Breakdown (Multi-Person Reimburse) */}
+            {progress.isSplit && (
+              <div className="mt-3 border border-[#745bc7]/25 bg-white">
+                <div className="flex items-center justify-between border-b border-[#745bc7]/15 bg-[#f4effd] px-2.5 py-1.5 font-mono text-[9px] font-bold tracking-[0.14em] text-[#745bc7] uppercase">
+                  <span>
+                    {locale === "id" ? "STATUS PATUNGAN" : "SPLIT STATUS"} (
+                    {progress.payers.length})
+                  </span>
+                  <span>
+                    {progress.settledPayersCount}/{progress.payers.length}{" "}
+                    {locale === "id" ? "LUNAS" : "SETTLED"}
+                  </span>
+                </div>
+                <ul className="divide-y divide-[#745bc7]/12">
+                  {progress.payers.map((p) => {
+                    const isSelected = activePayer?.id === p.id && p.isPending;
+                    return (
+                      <li
+                        key={p.id}
+                        className={`flex items-center justify-between gap-2 px-2.5 py-2 transition ${
+                          isSelected ? "bg-[#f4effe]" : ""
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          disabled={!p.isPending}
+                          onClick={() => handleSelectPayer(p.id)}
+                          className="flex min-w-0 flex-1 items-center gap-2 text-left disabled:cursor-default"
+                        >
+                          <span
+                            className={`inline-flex h-4 w-4 shrink-0 items-center justify-center border font-mono text-[9px] font-bold ${
+                              p.isSettled
+                                ? "border-[#1f8f6b] bg-[#1f8f6b] text-white"
+                                : isSelected
+                                  ? "border-[#745bc7] bg-[#745bc7] text-white"
+                                  : "border-[#d97706]/55 bg-[#d97706]/10 text-[#b45309]"
+                            }`}
+                          >
+                            {p.isSettled ? (
+                              <Check className="h-2.5 w-2.5" />
+                            ) : isSelected ? (
+                              "▶"
+                            ) : (
+                              "·"
+                            )}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="flex flex-wrap items-center gap-1.5 font-mono text-[11px] font-bold text-[#14100e]">
+                              <span className="truncate">{p.name}</span>
+                              <span
+                                className={`border px-1 py-0 text-[8px] font-bold tracking-[0.1em] uppercase ${
+                                  p.isSettled
+                                    ? "border-[#1f8f6b]/45 bg-[#1f8f6b]/10 text-[#1f8f6b]"
+                                    : p.isPartial
+                                      ? "border-[#2276a8]/45 bg-[#2276a8]/10 text-[#2276a8]"
+                                      : "border-[#d97706]/50 bg-[#d97706]/10 text-[#b45309]"
+                                }`}
+                              >
+                                {p.isSettled
+                                  ? t.reimburse.statusSettled
+                                  : p.isPartial
+                                    ? t.reimburse.statusPartial
+                                    : t.reimburse.statusPending}
+                              </span>
+                            </p>
+                            <p className="font-mono text-[10px] text-[#5d5370]">
+                              {p.expectedIdr !== undefined ? (
+                                <>
+                                  <MoneyDisplay
+                                    amountIdr={p.reimbursedIdr}
+                                    className="font-semibold text-[#1f8f6b]"
+                                  />
+                                  {" / "}
+                                  <MoneyDisplay amountIdr={p.expectedIdr} />
+                                  {p.isPending && p.remainingExpectedIdr > 0 && (
+                                    <span className="text-[#b45309]">
+                                      {" "}
+                                      ({locale === "id" ? "sisa" : "left"}{" "}
+                                      <MoneyDisplay
+                                        amountIdr={p.remainingExpectedIdr}
+                                      />
+                                      )
+                                    </span>
+                                  )}
+                                </>
+                              ) : (
+                                <>
+                                  <MoneyDisplay
+                                    amountIdr={p.reimbursedIdr}
+                                    className="font-semibold text-[#1f8f6b]"
+                                  />
+                                  {" · "}
+                                  {t.reimburse.flexibleTag}
+                                </>
+                              )}
+                            </p>
+                          </div>
+                        </button>
+
+                        {p.isPending ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setReimbursePayerStatus(tx.id, p.id, "settled")
+                            }
+                            title={
+                              locale === "id"
+                                ? `Tandai ${p.name} lunas tanpa tambahan bayar`
+                                : `Mark ${p.name} settled without extra payment`
+                            }
+                            className="shrink-0 border border-[#1f8f6b]/45 bg-white px-2 py-1 font-mono text-[8.5px] font-bold tracking-[0.08em] text-[#1f8f6b] uppercase transition hover:bg-[#1f8f6b] hover:text-white"
+                          >
+                            {locale === "id" ? "✓ Lunas" : "✓ Settle"}
+                          </button>
+                        ) : (
+                          progress.maxReceivableIdr > 0 && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setReimbursePayerStatus(tx.id, p.id, "pending")
+                              }
+                              title={
+                                locale === "id"
+                                  ? `Buka kembali ${p.name}`
+                                  : `Reopen ${p.name}`
+                              }
+                              className="shrink-0 border border-[#745bc7]/35 bg-white px-2 py-1 font-mono text-[8.5px] font-bold tracking-[0.08em] text-[#745bc7] uppercase transition hover:bg-[#745bc7] hover:text-white"
+                            >
+                              {locale === "id" ? "Buka" : "Reopen"}
+                            </button>
+                          )
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
           </div>
 
-          {/* Record Repayment Form (shown when pending and remaining expense > 0) */}
+          {/* Record Repayment Form (shown when pending and remaining cap > 0) */}
           {progress.isPending && progress.maxReceivableIdr > 0 && (
             <div className="space-y-3.5">
+              {/* Payer Selector (Multi-Person Split Only) */}
+              {progress.isSplit && pendingPayers.length > 0 && (
+                <div>
+                  <span className="block font-mono text-[10px] font-semibold tracking-[0.16em] text-[#5d5370] uppercase">
+                    {locale === "id"
+                      ? "PEMBAYARAN DARI SIAPA?"
+                      : "WHO IS PAYING?"}
+                  </span>
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {pendingPayers.map((p) => {
+                      const selected = activePayer?.id === p.id;
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => handleSelectPayer(p.id)}
+                          className={`inline-flex items-center gap-1.5 border px-2.5 py-1.5 font-mono text-[11px] transition ${
+                            selected
+                              ? "border-[#745bc7] bg-[#745bc7] font-bold text-white"
+                              : "border-[#745bc7]/30 bg-white text-[#14100e] hover:border-[#745bc7]"
+                          }`}
+                        >
+                          <User className="h-3 w-3 shrink-0" />
+                          <span>{p.name}</span>
+                          {p.remainingExpectedIdr > 0 && (
+                            <span
+                              className={`text-[9.5px] ${
+                                selected ? "text-white/85" : "text-[#b45309]"
+                              }`}
+                            >
+                              ({formatIdr(p.remainingExpectedIdr)})
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Amount Chamber */}
               <div className="border border-[#745bc7]/45 bg-white px-4 py-3.5 text-center transition focus-within:border-[#745bc7]">
                 <label className="block font-mono text-[10px] font-semibold tracking-[0.18em] text-[#5d5370] uppercase">
-                  {t.reimburse.receivedAmountLabel}
+                  {progress.isSplit && activePayer
+                    ? locale === "id"
+                      ? `NOMINAL DITERIMA DARI ${activePayer.name.toUpperCase()} (IDR)`
+                      : `AMOUNT RECEIVED FROM ${activePayer.name.toUpperCase()} (IDR)`
+                    : t.reimburse.receivedAmountLabel}
                 </label>
                 <div className="mt-1.5 flex items-baseline justify-center gap-1.5">
                   <span className="font-mono-num text-xl font-bold text-[#1f8f6b]">
@@ -458,13 +764,19 @@ export const ReimburseModal: React.FC = () => {
                   className="vn-btn-band px-3.5 py-2.5 text-[10.5px] tracking-[0.1em]"
                 >
                   <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-                  <span>{t.reimburse.recordSettledBtn}</span>
+                  <span className="truncate">
+                    {progress.isSplit && activePayer
+                      ? locale === "id"
+                        ? `Catat & Lunas (${activePayer.name})`
+                        : `Save & Settle ${activePayer.name}`
+                      : t.reimburse.recordSettledBtn}
+                  </span>
                 </button>
               </div>
             </div>
           )}
 
-          {/* Direct Status Action (Mark Settled Without Extra Payment / Reopen) */}
+          {/* Direct Status Action (Mark All Settled Without Extra Payment / Reopen) */}
           {progress.isPending ? (
             <button
               type="button"
@@ -475,7 +787,13 @@ export const ReimburseModal: React.FC = () => {
               className="flex w-full items-center justify-center gap-1.5 border border-[#1f8f6b]/45 bg-[#1f8f6b]/6 px-3 py-2 font-mono text-[10px] font-semibold tracking-[0.1em] text-[#1f8f6b] uppercase transition hover:bg-[#1f8f6b] hover:text-white"
             >
               <CheckCircle2 className="h-3.5 w-3.5" />
-              <span>{t.reimburse.markSettledOnlyBtn}</span>
+              <span>
+                {progress.isSplit
+                  ? locale === "id"
+                    ? "Tandai Semua Lunas (Tanpa Tambahan)"
+                    : "Mark All Settled Now (No Extra Payment)"
+                  : t.reimburse.markSettledOnlyBtn}
+              </span>
             </button>
           ) : (
             progress.maxReceivableIdr > 0 && (
@@ -506,6 +824,9 @@ export const ReimburseModal: React.FC = () => {
                   const dest = entry.accountId
                     ? accountMap.get(entry.accountId)
                     : undefined;
+                  const payerName = entry.payerId
+                    ? payerNameById.get(entry.payerId)
+                    : undefined;
                   return (
                     <li
                       key={entry.id}
@@ -513,6 +834,11 @@ export const ReimburseModal: React.FC = () => {
                     >
                       <div className="min-w-0">
                         <p className="flex flex-wrap items-center gap-1.5 font-mono text-[11px]">
+                          {payerName && (
+                            <span className="border border-[#745bc7]/35 bg-[#f4effe] px-1.5 py-0 font-mono text-[9.5px] font-bold text-[#5b42a8]">
+                              {payerName}
+                            </span>
+                          )}
                           <span className="font-bold text-[#1f8f6b]">
                             +<MoneyDisplay amountIdr={entry.amountIdr} />
                           </span>

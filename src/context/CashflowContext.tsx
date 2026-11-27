@@ -37,7 +37,11 @@ import {
   clampCycleStartDay,
   getCurrentCycleKey,
 } from "../utils/format";
-import { getReimbursedTotalIdr, sanitizeReimbursement } from "../utils/reimburse";
+import {
+  getReimburseCapIdr,
+  getReimbursedTotalIdr,
+  sanitizeReimbursement,
+} from "../utils/reimburse";
 import { TRANSLATIONS, type TranslationDict } from "../i18n/translations";
 import {
   acknowledgeOAuthCallback,
@@ -88,24 +92,29 @@ function loadLocalModeStore(): CashflowStoreData {
               tx.type === "expense" ||
               tx.type === "transfer")
         )
-        .map((tx) => ({
-          ...tx,
-          categoryId: normalizeCategoryId(
-            tx.categoryId,
-            tx.type,
-            cleanCategories
-          ),
-          accountId: tx.accountId || undefined,
-          toAccountId: tx.toAccountId || undefined,
-          feeIdr:
-            tx.type === "transfer" && tx.feeIdr && tx.feeIdr > 0
+        .map((tx) => {
+          const cleanFee =
+            (tx.type === "transfer" || tx.type === "expense") &&
+            tx.feeIdr &&
+            tx.feeIdr > 0
               ? Math.round(tx.feeIdr)
-              : undefined,
-          reimburse:
-            tx.type === "expense"
-              ? sanitizeReimbursement(tx.reimburse, tx.amountIdr)
-              : undefined,
-        })),
+              : undefined;
+          return {
+            ...tx,
+            categoryId: normalizeCategoryId(
+              tx.categoryId,
+              tx.type,
+              cleanCategories
+            ),
+            accountId: tx.accountId || undefined,
+            toAccountId: tx.toAccountId || undefined,
+            feeIdr: cleanFee,
+            reimburse:
+              tx.type === "expense"
+                ? sanitizeReimbursement(tx.reimburse, tx.amountIdr, cleanFee ?? 0)
+                : undefined,
+          };
+        }),
       settings: {
         ...defaults,
         ...(parsed.settings ?? {}),
@@ -212,6 +221,7 @@ interface CashflowContextValue {
     payload: {
       amountIdr: number;
       accountId?: string;
+      payerId?: string;
       date: string;
       note?: string;
     },
@@ -219,6 +229,11 @@ interface CashflowContextValue {
   ) => void;
   deleteReimbursementEntry: (txId: string, entryId: string) => void;
   setReimburseStatus: (txId: string, status: ReimburseStatus) => void;
+  setReimbursePayerStatus: (
+    txId: string,
+    payerId: string,
+    status: ReimburseStatus
+  ) => void;
   // CRUD
   saveTransaction: (
     payload: Omit<Transaction, "id" | "createdAt">,
@@ -841,6 +856,7 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
       payload: {
         amountIdr: number;
         accountId?: string;
+        payerId?: string;
         date: string;
         note?: string;
       },
@@ -849,8 +865,9 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
       const targetTx = store.transactions.find((item) => item.id === txId);
       if (!targetTx || targetTx.type !== "expense") return;
 
+      const cap = getReimburseCapIdr(targetTx);
       const alreadyReimbursed = getReimbursedTotalIdr(targetTx);
-      const maxRemaining = Math.max(0, targetTx.amountIdr - alreadyReimbursed);
+      const maxRemaining = Math.max(0, cap - alreadyReimbursed);
       const cleanAmt = Math.min(
         maxRemaining,
         Math.max(0, Math.round(payload.amountIdr || 0))
@@ -858,31 +875,65 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
       if (cleanAmt <= 0) return;
 
       const nowIso = new Date().toISOString();
+      const base = targetTx.reimburse ?? { status: "pending" as const, entries: [] };
+      const hasSplitPayers = Boolean(base.payers && base.payers.length > 0);
+      const matchedPayer =
+        hasSplitPayers && payload.payerId
+          ? base.payers?.find((p) => p.id === payload.payerId)
+          : undefined;
+
       const newEntry: ReimbursementEntry = {
         id: generateId("rmb"),
         date: payload.date,
         amountIdr: cleanAmt,
         ...(payload.accountId ? { accountId: payload.accountId } : {}),
-        ...(payload.note?.trim() ? { note: payload.note.trim().slice(0, 120) } : {}),
+        ...(matchedPayer ? { payerId: matchedPayer.id } : {}),
+        ...(payload.note?.trim()
+          ? { note: payload.note.trim().slice(0, 120) }
+          : {}),
         createdAt: nowIso,
       };
 
-      const isNowSettled =
-        markSettled || alreadyReimbursed + cleanAmt >= targetTx.amountIdr;
+      const nextEntries = [...base.entries, newEntry];
+      const nextPayers = hasSplitPayers
+        ? (base.payers ?? []).map((p) => {
+            if (matchedPayer && p.id === matchedPayer.id) {
+              const paidForPayer = nextEntries
+                .filter((e) => e.payerId === p.id)
+                .reduce((acc, e) => acc + e.amountIdr, 0);
+              const payerNowSettled =
+                markSettled ||
+                (p.expectedIdr !== undefined && paidForPayer >= p.expectedIdr) ||
+                alreadyReimbursed + cleanAmt >= cap;
+              return {
+                ...p,
+                status: payerNowSettled ? ("settled" as const) : p.status,
+                ...(payerNowSettled ? { settledAt: nowIso } : {}),
+              };
+            }
+            return p;
+          })
+        : undefined;
+
+      const isTxSettled = hasSplitPayers
+        ? alreadyReimbursed + cleanAmt >= cap ||
+          Boolean(nextPayers?.every((p) => p.status === "settled"))
+        : markSettled || alreadyReimbursed + cleanAmt >= cap;
 
       setStore((prev) => ({
         ...prev,
         transactions: prev.transactions.map((tx) => {
           if (tx.id !== txId || tx.type !== "expense") return tx;
-          const base = tx.reimburse ?? { status: "pending" as const, entries: [] };
           const nextReimburse = sanitizeReimbursement(
             {
               ...base,
-              status: isNowSettled ? "settled" : "pending",
-              settledAt: isNowSettled ? nowIso : undefined,
-              entries: [...base.entries, newEntry],
+              ...(nextPayers ? { payers: nextPayers } : {}),
+              status: isTxSettled ? "settled" : "pending",
+              settledAt: isTxSettled ? nowIso : undefined,
+              entries: nextEntries,
             },
-            tx.amountIdr
+            tx.amountIdr,
+            tx.feeIdr ?? 0
           );
           return { ...tx, reimburse: nextReimburse };
         }),
@@ -894,19 +945,34 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
         amountIdr: cleanAmt,
         note: targetTx.note,
         accountId: payload.accountId,
-        reimburseSettled: isNowSettled,
-        reimburseFrom: targetTx.reimburse?.from,
+        reimburseSettled: isTxSettled,
+        reimburseFrom: matchedPayer?.name ?? targetTx.reimburse?.from,
         action: "reimbursed",
       });
 
+      const payerSettled = matchedPayer
+        ? Boolean(
+            nextPayers?.find((p) => p.id === matchedPayer.id)?.status ===
+              "settled"
+          )
+        : isTxSettled;
+
       notify(
         store.settings.locale === "id"
-          ? isNowSettled
+          ? isTxSettled
             ? "Reimburse dicatat & ditandai LUNAS."
-            : "Reimburse sebagian berhasil dicatat."
-          : isNowSettled
+            : matchedPayer && payerSettled
+              ? `Bagian ${matchedPayer.name} dicatat & LUNAS.`
+              : matchedPayer
+                ? `Pembayaran sebagian dari ${matchedPayer.name} dicatat.`
+                : "Reimburse sebagian berhasil dicatat."
+          : isTxSettled
             ? "Reimbursement recorded & marked settled."
-            : "Partial reimbursement recorded.",
+            : matchedPayer && payerSettled
+              ? `${matchedPayer.name}'s share recorded & settled.`
+              : matchedPayer
+                ? `Partial payment from ${matchedPayer.name} recorded.`
+                : "Partial reimbursement recorded.",
         "success"
       );
     },
@@ -919,17 +985,25 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
         ...prev,
         transactions: prev.transactions.map((tx) => {
           if (tx.id !== txId || tx.type !== "expense" || !tx.reimburse) return tx;
+          const removed = tx.reimburse.entries.find((e) => e.id === entryId);
           const remainingEntries = tx.reimburse.entries.filter(
             (e) => e.id !== entryId
+          );
+          const nextPayers = tx.reimburse.payers?.map((p) =>
+            removed?.payerId && p.id === removed.payerId
+              ? { ...p, status: "pending" as const, settledAt: undefined }
+              : p
           );
           const nextReimburse = sanitizeReimbursement(
             {
               ...tx.reimburse,
+              ...(nextPayers ? { payers: nextPayers } : {}),
               status: "pending",
               settledAt: undefined,
               entries: remainingEntries,
             },
-            tx.amountIdr
+            tx.amountIdr,
+            tx.feeIdr ?? 0
           );
           return { ...tx, reimburse: nextReimburse };
         }),
@@ -951,13 +1025,20 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
         ...prev,
         transactions: prev.transactions.map((tx) => {
           if (tx.id !== txId || tx.type !== "expense" || !tx.reimburse) return tx;
+          const nextPayers = tx.reimburse.payers?.map((p) => ({
+            ...p,
+            status,
+            settledAt: status === "settled" ? p.settledAt ?? nowIso : undefined,
+          }));
           const nextReimburse = sanitizeReimbursement(
             {
               ...tx.reimburse,
+              ...(nextPayers ? { payers: nextPayers } : {}),
               status,
               settledAt: status === "settled" ? nowIso : undefined,
             },
-            tx.amountIdr
+            tx.amountIdr,
+            tx.feeIdr ?? 0
           );
           return { ...tx, reimburse: nextReimburse };
         }),
@@ -976,9 +1057,66 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
     [notify, store.settings.locale]
   );
 
+  const setReimbursePayerStatus = useCallback(
+    (txId: string, payerId: string, status: ReimburseStatus) => {
+      const nowIso = new Date().toISOString();
+      let payerName = "";
+      setStore((prev) => ({
+        ...prev,
+        transactions: prev.transactions.map((tx) => {
+          if (
+            tx.id !== txId ||
+            tx.type !== "expense" ||
+            !tx.reimburse?.payers?.length
+          ) {
+            return tx;
+          }
+          const nextPayers = tx.reimburse.payers.map((p) => {
+            if (p.id !== payerId) return p;
+            payerName = p.name;
+            return {
+              ...p,
+              status,
+              settledAt: status === "settled" ? nowIso : undefined,
+            };
+          });
+          const allSettled = nextPayers.every((p) => p.status === "settled");
+          const nextReimburse = sanitizeReimbursement(
+            {
+              ...tx.reimburse,
+              payers: nextPayers,
+              status: allSettled ? "settled" : "pending",
+              settledAt: allSettled ? nowIso : undefined,
+            },
+            tx.amountIdr,
+            tx.feeIdr ?? 0
+          );
+          return { ...tx, reimburse: nextReimburse };
+        }),
+      }));
+      notify(
+        store.settings.locale === "id"
+          ? status === "settled"
+            ? `${payerName || "Orang"} ditandai LUNAS.`
+            : `${payerName || "Orang"} dibuka kembali sebagai PENDING.`
+          : status === "settled"
+            ? `${payerName || "Person"} marked as settled.`
+            : `${payerName || "Person"} reopened as pending.`,
+        status === "settled" ? "success" : "iris"
+      );
+    },
+    [notify, store.settings.locale]
+  );
+
   const saveTransaction = useCallback(
     (payload: Omit<Transaction, "id" | "createdAt">, existingId?: string) => {
       const cleanAmt = Math.max(0, Math.round(payload.amountIdr));
+      const cleanFee =
+        (payload.type === "transfer" || payload.type === "expense") &&
+        payload.feeIdr &&
+        payload.feeIdr > 0
+          ? Math.round(payload.feeIdr)
+          : undefined;
       const cleanPayload: Omit<Transaction, "id" | "createdAt"> =
         payload.type === "transfer"
           ? {
@@ -990,10 +1128,7 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
               merchant: undefined,
               accountId: payload.accountId || undefined,
               toAccountId: payload.toAccountId || undefined,
-              feeIdr:
-                payload.feeIdr && payload.feeIdr > 0
-                  ? Math.round(payload.feeIdr)
-                  : undefined,
+              feeIdr: cleanFee,
               reimburse: undefined,
             }
           : {
@@ -1009,10 +1144,14 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
               merchant: payload.merchant || undefined,
               accountId: payload.accountId || undefined,
               toAccountId: undefined,
-              feeIdr: undefined,
+              feeIdr: payload.type === "expense" ? cleanFee : undefined,
               reimburse:
                 payload.type === "expense"
-                  ? sanitizeReimbursement(payload.reimburse, cleanAmt)
+                  ? sanitizeReimbursement(
+                      payload.reimburse,
+                      cleanAmt,
+                      cleanFee ?? 0
+                    )
                   : undefined,
             };
 
@@ -1083,10 +1222,23 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
           tx.type === "expense" && tx.reimburse
             ? {
                 status: "pending",
+                ...(tx.reimburse.includeFee ? { includeFee: true } : {}),
                 ...(tx.reimburse.expectedIdr !== undefined
                   ? { expectedIdr: tx.reimburse.expectedIdr }
                   : {}),
                 ...(tx.reimburse.from ? { from: tx.reimburse.from } : {}),
+                ...(tx.reimburse.payers && tx.reimburse.payers.length > 0
+                  ? {
+                      payers: tx.reimburse.payers.map((p) => ({
+                        id: generateId("pyr"),
+                        name: p.name,
+                        ...(p.expectedIdr !== undefined
+                          ? { expectedIdr: p.expectedIdr }
+                          : {}),
+                        status: "pending" as const,
+                      })),
+                    }
+                  : {}),
                 entries: [],
               }
             : undefined,
@@ -1192,18 +1344,27 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
         version: 5,
         accounts: sanitizeAccounts(data.accounts),
         categories: cleanCategories,
-        transactions: data.transactions.map((tx) => ({
-          ...tx,
-          categoryId: normalizeCategoryId(
-            tx.categoryId,
-            tx.type,
-            cleanCategories
-          ),
-          reimburse:
-            tx.type === "expense"
-              ? sanitizeReimbursement(tx.reimburse, tx.amountIdr)
-              : undefined,
-        })),
+        transactions: data.transactions.map((tx) => {
+          const cleanFee =
+            (tx.type === "transfer" || tx.type === "expense") &&
+            tx.feeIdr &&
+            tx.feeIdr > 0
+              ? Math.round(tx.feeIdr)
+              : undefined;
+          return {
+            ...tx,
+            categoryId: normalizeCategoryId(
+              tx.categoryId,
+              tx.type,
+              cleanCategories
+            ),
+            feeIdr: cleanFee,
+            reimburse:
+              tx.type === "expense"
+                ? sanitizeReimbursement(tx.reimburse, tx.amountIdr, cleanFee ?? 0)
+                : undefined,
+          };
+        }),
         settings: {
           ...data.settings,
           cycleStartDay,
@@ -1263,6 +1424,7 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
       recordReimbursement,
       deleteReimbursementEntry,
       setReimburseStatus,
+      setReimbursePayerStatus,
       saveTransaction,
       deleteTransaction,
       duplicateTransaction,
@@ -1318,6 +1480,7 @@ export const CashflowProvider: React.FC<{ children: React.ReactNode }> = ({
       recordReimbursement,
       deleteReimbursementEntry,
       setReimburseStatus,
+      setReimbursePayerStatus,
       saveTransaction,
       deleteTransaction,
       duplicateTransaction,

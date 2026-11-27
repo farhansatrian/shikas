@@ -445,7 +445,12 @@ export const CashflowView: React.FC = () => {
         const toName = tx.toAccountId
           ? (accountMap.get(tx.toAccountId)?.name ?? "").toLowerCase()
           : "";
-        const reimbursePayer = (tx.reimburse?.from ?? "").toLowerCase();
+        const reimbursePayer = [
+          tx.reimburse?.from ?? "",
+          ...(tx.reimburse?.payers ?? []).map((p) => p.name),
+        ]
+          .join(" ")
+          .toLowerCase();
         const reimbursePockets = (tx.reimburse?.entries ?? [])
           .map((e) => (e.accountId ? accountMap.get(e.accountId)?.name ?? "" : ""))
           .join(" ")
@@ -588,10 +593,16 @@ export const CashflowView: React.FC = () => {
         const src = lastTxEvent.accountId
           ? accountMap.get(lastTxEvent.accountId)
           : undefined;
+        const expFeeNote =
+          lastTxEvent.feeIdr && lastTxEvent.feeIdr > 0
+            ? locale === "id"
+              ? ` (+admin ${mask(lastTxEvent.feeIdr)})`
+              : ` (+${mask(lastTxEvent.feeIdr)} fee)`
+            : "";
         lines.push(
           locale === "id"
-            ? `Pengeluaran dicatat: -${mask(lastTxEvent.amountIdr)}${src ? ` dari ${src.name}` : ""} untuk "${lastTxEvent.note}".`
-            : `Expense recorded: -${mask(lastTxEvent.amountIdr)}${src ? ` from ${src.name}` : ""} for "${lastTxEvent.note}".`
+            ? `Pengeluaran dicatat: -${mask(lastTxEvent.amountIdr)}${expFeeNote}${src ? ` dari ${src.name}` : ""} untuk "${lastTxEvent.note}".`
+            : `Expense recorded: -${mask(lastTxEvent.amountIdr)}${expFeeNote}${src ? ` from ${src.name}` : ""} for "${lastTxEvent.note}".`
         );
       }
     }
@@ -1686,9 +1697,11 @@ export const CashflowView: React.FC = () => {
                             >
                               {reimburseProg.isSettled
                                 ? t.reimburse.statusSettled
-                                : reimburseProg.isPartial
-                                  ? t.reimburse.statusPartial
-                                  : t.reimburse.statusPending}
+                                : reimburseProg.isSplit
+                                  ? `${reimburseProg.settledPayersCount}/${reimburseProg.payers.length}`
+                                  : reimburseProg.isPartial
+                                    ? t.reimburse.statusPartial
+                                    : t.reimburse.statusPending}
                             </button>
                           )}
                         </div>
@@ -1775,9 +1788,19 @@ export const CashflowView: React.FC = () => {
                                   store.categories
                                 )}
                                 {fromAcc ? ` · ${fromAcc.name}` : ""}
+                                {!isIncome && tx.feeIdr && tx.feeIdr > 0
+                                  ? ` · +${mask(tx.feeIdr)} ${locale === "id" ? "admin" : "fee"}`
+                                  : ""}
                                 {tx.merchant ? ` · ${tx.merchant}` : ""}
-                                {reimburseProg.isReimburse && tx.reimburse?.from
-                                  ? ` · ${locale === "id" ? "Dari" : "From"} ${tx.reimburse.from}`
+                                {reimburseProg.isReimburse &&
+                                (reimburseProg.isSplit || tx.reimburse?.from)
+                                  ? ` · ${locale === "id" ? "Dari" : "From"} ${
+                                      reimburseProg.isSplit
+                                        ? reimburseProg.payers
+                                            .map((p) => p.name)
+                                            .join(", ")
+                                        : tx.reimburse?.from
+                                    }`
                                   : ""}
                                 {reimburseProg.reimbursedIdr > 0
                                   ? ` · ${locale === "id" ? "Diganti" : "Reimb."} ${mask(reimburseProg.reimbursedIdr)}${reimburseDestNames.length > 0 ? ` → ${reimburseDestNames.join(", ")}` : ""}`

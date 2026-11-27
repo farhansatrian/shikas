@@ -376,20 +376,25 @@ function normalizeStorePayload(
             tx.type === "expense" ||
             tx.type === "transfer")
       )
-      .map((tx) => ({
-        ...tx,
-        categoryId: normalizeCategoryId(tx.categoryId, tx.type, cleanCategories),
-        accountId: tx.accountId || undefined,
-        toAccountId: tx.toAccountId || undefined,
-        feeIdr:
-          tx.type === "transfer" && tx.feeIdr && tx.feeIdr > 0
+      .map((tx) => {
+        const cleanFee =
+          (tx.type === "transfer" || tx.type === "expense") &&
+          tx.feeIdr &&
+          tx.feeIdr > 0
             ? Math.round(tx.feeIdr)
-            : undefined,
-        reimburse:
-          tx.type === "expense"
-            ? sanitizeReimbursement(tx.reimburse, tx.amountIdr)
-            : undefined,
-      })),
+            : undefined;
+        return {
+          ...tx,
+          categoryId: normalizeCategoryId(tx.categoryId, tx.type, cleanCategories),
+          accountId: tx.accountId || undefined,
+          toAccountId: tx.toAccountId || undefined,
+          feeIdr: cleanFee,
+          reimburse:
+            tx.type === "expense"
+              ? sanitizeReimbursement(tx.reimburse, tx.amountIdr, cleanFee ?? 0)
+              : undefined,
+        };
+      }),
     settings: {
       locale: parsed.settings?.locale === "id" ? "id" : "en",
       privacyMode: parsed.settings?.privacyMode ?? false,

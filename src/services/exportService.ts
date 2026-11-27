@@ -28,6 +28,7 @@ import {
 import {
   computePendingReimburseOverview,
   getNetExpenseIdr,
+  getReimburseCapIdr,
   getReimbursedTotalIdr,
   getReimburseProgress,
   sanitizeReimbursement,
@@ -146,7 +147,10 @@ export function buildTransactionsCsvContent(
     const cycleLabel = formatCycleLabel(cycleKey, locale, safeCycleDay);
     const prog = getReimburseProgress(tx);
     const reimbursed = getReimbursedTotalIdr(tx);
-    const fee = tx.type === "transfer" ? Math.max(0, Math.round(tx.feeIdr || 0)) : 0;
+    const fee =
+      tx.type === "transfer" || tx.type === "expense"
+        ? Math.max(0, Math.round(tx.feeIdr || 0))
+        : 0;
 
     const netIncome = tx.type === "income" ? tx.amountIdr : 0;
     const netExpense =
@@ -165,8 +169,8 @@ export function buildTransactionsCsvContent(
     if (tx.type === "income") {
       if (fromSavings) savingsFlow += tx.amountIdr;
     } else if (tx.type === "expense") {
-      if (fromSavings) savingsFlow -= tx.amountIdr;
-      let cap = Math.max(0, Math.round(tx.amountIdr || 0));
+      if (fromSavings) savingsFlow -= tx.amountIdr + fee;
+      let cap = getReimburseCapIdr(tx);
       for (const e of tx.reimburse?.entries ?? []) {
         const amt = Math.min(cap, Math.max(0, Math.round(e.amountIdr || 0)));
         if (amt <= 0) continue;
@@ -190,19 +194,24 @@ export function buildTransactionsCsvContent(
       : "";
 
     const reimburseStatus = prog.isReimburse ? prog.status.toUpperCase() : "";
-    const reimburseMode = prog.isReimburse
-      ? prog.isFlexible
-        ? "FLEXIBLE"
-        : "FIXED"
+    const baseReimburseMode = prog.isReimburse
+      ? prog.isSplit
+        ? "SPLIT"
+        : prog.isFlexible
+          ? "FLEXIBLE"
+          : "FIXED"
+      : "";
+    const reimburseMode = baseReimburseMode
+      ? `${baseReimburseMode}${prog.includeFee ? "+FEE" : ""}`
       : "";
     const reimburseTarget: number | string =
-      prog.isReimburse && !prog.isFlexible && prog.expectedIdr
-        ? prog.expectedIdr
-        : "";
+      prog.isReimburse && prog.expectedIdr ? prog.expectedIdr : "";
     const reimburseRemaining =
-      prog.isReimburse && prog.isPending && !prog.isFlexible
-        ? prog.remainingExpectedIdr
-        : 0;
+      prog.isReimburse && prog.isPending ? prog.remainingExpectedIdr : 0;
+
+    const payerNameById = new Map(
+      (tx.reimburse?.payers ?? []).map((p) => [p.id, p.name])
+    );
 
     const entries = tx.type === "expense" ? tx.reimburse?.entries ?? [] : [];
     const reimbursePockets = Array.from(
@@ -220,8 +229,12 @@ export function buildTransactionsCsvContent(
         const dest = e.accountId
           ? accMap.get(e.accountId)?.name ?? e.accountId
           : "Unassigned";
+        const payerPrefix =
+          e.payerId && payerNameById.has(e.payerId)
+            ? `[${payerNameById.get(e.payerId)}] `
+            : "";
         const noteSuffix = e.note ? ` (${e.note})` : "";
-        return `${e.date}: +${formatIdr(e.amountIdr)} -> ${dest}${noteSuffix}`;
+        return `${payerPrefix}${e.date}: +${formatIdr(e.amountIdr)} -> ${dest}${noteSuffix}`;
       })
       .join(" ; ");
 
@@ -460,6 +473,10 @@ export function parseBackupJson(rawText: string): CashflowStoreData {
         typeof tx.date === "string" && ISO_DATE_RE.test(tx.date)
           ? tx.date
           : todayFallback;
+      const cleanFee =
+        (tx.type === "transfer" || tx.type === "expense") && Number(tx.feeIdr) > 0
+          ? Math.round(Number(tx.feeIdr))
+          : undefined;
       return {
         id: String(tx.id ?? `tx-${Math.random().toString(36).slice(2, 8)}`),
         type: tx.type,
@@ -481,13 +498,10 @@ export function parseBackupJson(rawText: string): CashflowStoreData {
         merchant: tx.merchant ? String(tx.merchant) : undefined,
         accountId: tx.accountId ? String(tx.accountId) : undefined,
         toAccountId: tx.toAccountId ? String(tx.toAccountId) : undefined,
-        feeIdr:
-          tx.type === "transfer" && Number(tx.feeIdr) > 0
-            ? Math.round(Number(tx.feeIdr))
-            : undefined,
+        feeIdr: cleanFee,
         reimburse:
           tx.type === "expense"
-            ? sanitizeReimbursement(tx.reimburse, cleanAmount)
+            ? sanitizeReimbursement(tx.reimburse, cleanAmount, cleanFee ?? 0)
             : undefined,
         createdAt: String(tx.createdAt ?? new Date().toISOString()),
       };

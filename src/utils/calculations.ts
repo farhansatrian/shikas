@@ -6,7 +6,9 @@ import {
   shiftMonthKey,
 } from "./format";
 import {
+  getExpenseAccountingParts,
   getNetExpenseIdr,
+  getReimburseCapIdr,
   getReimbursedTotalIdr,
   getReimburseProgress,
 } from "./reimburse";
@@ -94,9 +96,12 @@ export function computeAccountBalances(
         }
       } else if (tx.type === "expense") {
         if (tx.accountId && balances.has(tx.accountId)) {
-          balances.set(tx.accountId, (balances.get(tx.accountId) ?? 0) - amt);
+          balances.set(
+            tx.accountId,
+            (balances.get(tx.accountId) ?? 0) - (amt + fee)
+          );
         } else {
-          unassignedDeltaIdr -= amt;
+          unassignedDeltaIdr -= amt + fee;
         }
       } else if (tx.type === "transfer") {
         if (tx.accountId && balances.has(tx.accountId)) {
@@ -118,7 +123,7 @@ export function computeAccountBalances(
 
     // Credit reimbursement repayments to whichever pocket received them (on their actual repayment date)
     if (tx.type === "expense" && tx.reimburse && tx.reimburse.entries.length > 0) {
-      let remainingCap = amt;
+      let remainingCap = getReimburseCapIdr(tx);
       for (const entry of tx.reimburse.entries) {
         const entryAmt = Math.min(
           remainingCap,
@@ -175,14 +180,14 @@ export function computeCumulativeNetBalance(
       if (tx.type === "income") {
         total += tx.amountIdr;
       } else if (tx.type === "expense") {
-        total -= tx.amountIdr;
+        total -= tx.amountIdr + Math.max(0, Math.round(tx.feeIdr || 0));
       } else if (tx.type === "transfer") {
         total -= Math.max(0, Math.round(tx.feeIdr || 0));
       }
     }
 
     if (tx.type === "expense" && tx.reimburse && tx.reimburse.entries.length > 0) {
-      let remainingCap = Math.max(0, Math.round(tx.amountIdr || 0));
+      let remainingCap = getReimburseCapIdr(tx);
       for (const entry of tx.reimburse.entries) {
         const entryAmt = Math.min(
           remainingCap,
@@ -241,19 +246,18 @@ export function computeMonthlySummary(
         const prog = getReimburseProgress(tx);
         if (prog.isPending) {
           pendingReimburseCount += 1;
-          if (prog.isFlexible) {
+          pendingReimburseKnownIdr += prog.remainingExpectedIdr;
+          if (prog.hasFlexiblePendingPayer) {
             pendingReimburseFlexibleCount += 1;
-          } else {
-            pendingReimburseKnownIdr += prog.remainingExpectedIdr;
           }
         }
       }
 
       if (tx.accountId && savingsIds.has(tx.accountId)) {
-        savingsOutflowIdr += tx.amountIdr;
+        savingsOutflowIdr += tx.amountIdr + fee;
       }
       if (tx.reimburse && tx.reimburse.entries.length > 0) {
-        let remainingCap = Math.max(0, Math.round(tx.amountIdr || 0));
+        let remainingCap = getReimburseCapIdr(tx);
         for (const entry of tx.reimburse.entries) {
           const entryAmt = Math.min(
             remainingCap,
@@ -345,15 +349,31 @@ export function computeCategoryBreakdownForMonths(
     if (allowed && !allowed.has(txCycle)) continue;
 
     if (tx.type === type) {
-      const effectiveAmt =
-        type === "expense" ? getNetExpenseIdr(tx) : tx.amountIdr;
-      if (effectiveAmt > 0) {
+      if (type === "expense") {
+        const parts = getExpenseAccountingParts(tx);
+        if (parts.netPrincipalIdr > 0) {
+          const prev = bucket.get(tx.categoryId) ?? { amountIdr: 0, count: 0 };
+          bucket.set(tx.categoryId, {
+            amountIdr: prev.amountIdr + parts.netPrincipalIdr,
+            count: prev.count + 1,
+          });
+          total += parts.netPrincipalIdr;
+        }
+        if (parts.netFeeIdr > 0) {
+          const prevFee = bucket.get("fees") ?? { amountIdr: 0, count: 0 };
+          bucket.set("fees", {
+            amountIdr: prevFee.amountIdr + parts.netFeeIdr,
+            count: prevFee.count + 1,
+          });
+          total += parts.netFeeIdr;
+        }
+      } else if (tx.amountIdr > 0) {
         const prev = bucket.get(tx.categoryId) ?? { amountIdr: 0, count: 0 };
         bucket.set(tx.categoryId, {
-          amountIdr: prev.amountIdr + effectiveAmt,
+          amountIdr: prev.amountIdr + tx.amountIdr,
           count: prev.count + 1,
         });
-        total += effectiveAmt;
+        total += tx.amountIdr;
       }
     } else if (type === "expense" && tx.type === "transfer") {
       const fee = Math.max(0, Math.round(tx.feeIdr || 0));

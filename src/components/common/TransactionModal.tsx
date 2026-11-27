@@ -4,15 +4,38 @@ import {
   Calendar,
   HandCoins,
   PiggyBank,
+  Plus,
   Star,
+  Trash2,
+  Users,
   Wallet,
   X,
 } from "lucide-react";
 import { useCashflow } from "../../context/CashflowContext";
-import type { ReimbursementInfo, TransactionType } from "../../types/cashflow";
+import type {
+  ReimbursementInfo,
+  ReimbursementPayer,
+  ReimburseStatus,
+  TransactionType,
+} from "../../types/cashflow";
 import { formatIdr, todayIsoDate } from "../../utils/format";
 import { getReimbursedTotalIdr } from "../../utils/reimburse";
 import { CategoryIcon } from "./CategoryIcon";
+
+interface SplitPayerDraft {
+  id: string;
+  name: string;
+  targetDigits: string;
+  status: ReimburseStatus;
+  settledAt?: string;
+}
+
+function makePayerId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `pyr-${crypto.randomUUID().slice(0, 8)}`;
+  }
+  return `pyr-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+}
 
 function formatDigitsWithDots(digits: string): string {
   const clean = digits.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
@@ -71,8 +94,12 @@ export const TransactionModal: React.FC = () => {
   const [merchant, setMerchant] = useState("");
   const [note, setNote] = useState("");
   const [isReimburse, setIsReimburse] = useState(false);
+  const [reimburseIncludeFee, setReimburseIncludeFee] = useState(false);
+  const [reimburseSplitMode, setReimburseSplitMode] = useState<"single" | "split">("single");
   const [reimburseFrom, setReimburseFrom] = useState("");
   const [reimburseTargetDigits, setReimburseTargetDigits] = useState("");
+  const [splitPayers, setSplitPayers] = useState<SplitPayerDraft[]>([]);
+  const [splitIncludeMe, setSplitIncludeMe] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const alreadyReimbursedIdr = useMemo(
@@ -82,6 +109,15 @@ export const TransactionModal: React.FC = () => {
   const hasRecordedRepayments =
     editingTx?.type === "expense" &&
     Boolean(editingTx.reimburse && editingTx.reimburse.entries.length > 0);
+  const lockedPayerIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (editingTx?.type === "expense" && editingTx.reimburse) {
+      for (const e of editingTx.reimburse.entries) {
+        if (e.payerId) ids.add(e.payerId);
+      }
+    }
+    return ids;
+  }, [editingTx]);
 
   useEffect(() => {
     if (!isTxModalOpen) return;
@@ -108,13 +144,34 @@ export const TransactionModal: React.FC = () => {
       setToAccountId(validToId);
       setMerchant(editingTx.merchant ?? "");
       setNote(editingTx.note);
-      setIsReimburse(editingTx.type === "expense" && Boolean(editingTx.reimburse));
-      setReimburseFrom(editingTx.reimburse?.from ?? "");
-      setReimburseTargetDigits(
-        editingTx.reimburse?.expectedIdr
-          ? String(editingTx.reimburse.expectedIdr)
-          : ""
-      );
+      const hasReimb = editingTx.type === "expense" && Boolean(editingTx.reimburse);
+      setIsReimburse(hasReimb);
+      setReimburseIncludeFee(Boolean(editingTx.reimburse?.includeFee));
+      const existingPayers = editingTx.reimburse?.payers ?? [];
+      if (hasReimb && existingPayers.length > 0) {
+        setReimburseSplitMode("split");
+        setSplitPayers(
+          existingPayers.map((p) => ({
+            id: p.id,
+            name: p.name,
+            targetDigits: p.expectedIdr ? String(p.expectedIdr) : "",
+            status: p.status,
+            settledAt: p.settledAt,
+          }))
+        );
+        setReimburseFrom("");
+        setReimburseTargetDigits("");
+      } else {
+        setReimburseSplitMode("single");
+        setSplitPayers([]);
+        setReimburseFrom(editingTx.reimburse?.from ?? "");
+        setReimburseTargetDigits(
+          editingTx.reimburse?.expectedIdr
+            ? String(editingTx.reimburse.expectedIdr)
+            : ""
+        );
+      }
+      setSplitIncludeMe(true);
     } else {
       setType(defaultTxType);
       setRawDigits("");
@@ -136,8 +193,12 @@ export const TransactionModal: React.FC = () => {
       setMerchant("");
       setNote("");
       setIsReimburse(false);
+      setReimburseIncludeFee(false);
+      setReimburseSplitMode("single");
       setReimburseFrom("");
       setReimburseTargetDigits("");
+      setSplitPayers([]);
+      setSplitIncludeMe(true);
     }
   }, [isTxModalOpen, editingTx, defaultTxType, defaultAccountId]);
 
@@ -176,7 +237,10 @@ export const TransactionModal: React.FC = () => {
   if (!isTxModalOpen) return null;
 
   const parsedAmount = Number(rawDigits) || 0;
-  const parsedFee = type === "transfer" ? Number(feeDigits) || 0 : 0;
+  const parsedFee =
+    type === "transfer" || type === "expense" ? Number(feeDigits) || 0 : 0;
+  const reimburseBaseIdr =
+    parsedAmount + (reimburseIncludeFee && parsedFee > 0 ? parsedFee : 0);
   const formattedAmount = formatDigitsWithDots(rawDigits);
   const today = todayIsoDate();
   const yesterday = getOffsetIsoDate(-1);
@@ -186,6 +250,78 @@ export const TransactionModal: React.FC = () => {
 
   const fromAcc = accounts.find((a) => a.id === accountId);
   const toAcc = accounts.find((a) => a.id === toAccountId);
+
+  const switchToSplitMode = () => {
+    setReimburseSplitMode("split");
+    setSplitPayers((curr) => {
+      if (curr.length >= 2) return curr;
+      const first: SplitPayerDraft = curr[0] ?? {
+        id: makePayerId(),
+        name: reimburseFrom.trim(),
+        targetDigits: reimburseTargetDigits,
+        status: "pending",
+      };
+      const second: SplitPayerDraft = {
+        id: makePayerId(),
+        name: "",
+        targetDigits: "",
+        status: "pending",
+      };
+      return [first, second];
+    });
+    if (error) setError(null);
+  };
+
+  const switchToSingleMode = () => {
+    if (hasRecordedRepayments) {
+      setError(t.reimburse.lockedHint);
+      return;
+    }
+    setReimburseSplitMode("single");
+    if (splitPayers[0]) {
+      setReimburseFrom(splitPayers[0].name);
+      setReimburseTargetDigits(splitPayers[0].targetDigits);
+    }
+    if (error) setError(null);
+  };
+
+  const applyEqualSplit = (totalPeople: number) => {
+    if (reimburseBaseIdr <= 0 || totalPeople < 2) return;
+    const friendCount = splitIncludeMe ? totalPeople - 1 : totalPeople;
+    const perPerson = Math.round(reimburseBaseIdr / totalPeople);
+
+    setSplitPayers((curr) => {
+      const next: SplitPayerDraft[] = [];
+      let assigned = 0;
+      for (let i = 0; i < friendCount; i += 1) {
+        const existing = curr[i];
+        let share = perPerson;
+        if (!splitIncludeMe && i === friendCount - 1) {
+          share = Math.max(0, reimburseBaseIdr - assigned);
+        }
+        assigned += share;
+        next.push({
+          id: existing?.id ?? makePayerId(),
+          name: existing?.name ?? "",
+          targetDigits: share > 0 ? String(share) : "",
+          status: existing?.status ?? "pending",
+          settledAt: existing?.settledAt,
+        });
+      }
+      return next;
+    });
+    if (error) setError(null);
+  };
+
+  const splitFixedSum = splitPayers.reduce(
+    (sum, p) => sum + (Number(p.targetDigits) || 0),
+    0
+  );
+  const splitHasFlexible = splitPayers.some((p) => !(Number(p.targetDigits) > 0));
+  const splitExceedsBase =
+    reimburseSplitMode === "split" &&
+    reimburseBaseIdr > 0 &&
+    splitFixedSum > reimburseBaseIdr;
 
   const quickAdds = isIncome
     ? [
@@ -274,7 +410,11 @@ export const TransactionModal: React.FC = () => {
       return;
     }
 
-    if (type === "expense" && hasRecordedRepayments && parsedAmount < alreadyReimbursedIdr) {
+    if (
+      type === "expense" &&
+      hasRecordedRepayments &&
+      reimburseBaseIdr < alreadyReimbursedIdr
+    ) {
       setError(
         `${t.reimburse.amountBelowReimbursed} (${formatIdr(alreadyReimbursedIdr)})`
       );
@@ -283,22 +423,79 @@ export const TransactionModal: React.FC = () => {
 
     let nextReimburse: ReimbursementInfo | undefined;
     if (type === "expense" && isReimburse) {
-      const parsedTarget = Number(reimburseTargetDigits) || 0;
       const existingReimburse =
         editingTx?.type === "expense" ? editingTx.reimburse : undefined;
-      nextReimburse = {
-        status: existingReimburse?.status ?? "pending",
-        ...(parsedTarget > 0
-          ? { expectedIdr: Math.min(parsedAmount, parsedTarget) }
-          : {}),
-        ...(reimburseFrom.trim()
-          ? { from: reimburseFrom.trim().slice(0, 80) }
-          : {}),
-        ...(existingReimburse?.settledAt
-          ? { settledAt: existingReimburse.settledAt }
-          : {}),
-        entries: existingReimburse?.entries ?? [],
-      };
+      const includeFeeFlag = reimburseIncludeFee && parsedFee > 0;
+
+      if (reimburseSplitMode === "split") {
+        const cleanedPayers: ReimbursementPayer[] = [];
+        let targetsSum = 0;
+        for (const p of splitPayers) {
+          const pName = p.name.trim().slice(0, 48);
+          const pTarget = Number(p.targetDigits) || 0;
+          if (!pName && pTarget <= 0) continue;
+          if (!pName) {
+            setError(
+              locale === "id"
+                ? "Isi nama tiap orang yang patungan."
+                : "Enter a name for each person in the split."
+            );
+            return;
+          }
+          targetsSum += pTarget;
+          cleanedPayers.push({
+            id: p.id,
+            name: pName,
+            ...(pTarget > 0 ? { expectedIdr: pTarget } : {}),
+            status: p.status,
+            ...(p.settledAt ? { settledAt: p.settledAt } : {}),
+          });
+        }
+
+        if (cleanedPayers.length === 0) {
+          setError(
+            locale === "id"
+              ? "Tambahkan minimal 1 nama orang untuk patungan."
+              : "Add at least 1 person's name for split bill."
+          );
+          return;
+        }
+        if (targetsSum > reimburseBaseIdr) {
+          setError(
+            locale === "id"
+              ? `Total target patungan (${formatIdr(targetsSum)}) melebihi batas reimburse (${formatIdr(reimburseBaseIdr)}).`
+              : `Combined split targets (${formatIdr(targetsSum)}) exceed reimbursable total (${formatIdr(reimburseBaseIdr)}).`
+          );
+          return;
+        }
+
+        nextReimburse = {
+          status: existingReimburse?.status ?? "pending",
+          ...(includeFeeFlag ? { includeFee: true } : {}),
+          payers: cleanedPayers,
+          from: cleanedPayers.map((p) => p.name).join(", "),
+          ...(existingReimburse?.settledAt
+            ? { settledAt: existingReimburse.settledAt }
+            : {}),
+          entries: existingReimburse?.entries ?? [],
+        };
+      } else {
+        const parsedTarget = Number(reimburseTargetDigits) || 0;
+        nextReimburse = {
+          status: existingReimburse?.status ?? "pending",
+          ...(includeFeeFlag ? { includeFee: true } : {}),
+          ...(parsedTarget > 0
+            ? { expectedIdr: Math.min(reimburseBaseIdr, parsedTarget) }
+            : {}),
+          ...(reimburseFrom.trim()
+            ? { from: reimburseFrom.trim().slice(0, 80) }
+            : {}),
+          ...(existingReimburse?.settledAt
+            ? { settledAt: existingReimburse.settledAt }
+            : {}),
+          entries: existingReimburse?.entries ?? [],
+        };
+      }
     }
 
     saveTransaction(
@@ -308,6 +505,7 @@ export const TransactionModal: React.FC = () => {
         amountIdr: parsedAmount,
         categoryId,
         accountId: accounts.length > 0 && accountId ? accountId : undefined,
+        feeIdr: type === "expense" && parsedFee > 0 ? parsedFee : undefined,
         merchant: merchant.trim() || undefined,
         reimburse: nextReimburse,
         note:
@@ -769,7 +967,92 @@ export const TransactionModal: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Expense-Only Flexible Reimburse / Split-Bill Toggle */}
+                  {/* Expense-Only Optional Admin Fee (e.g. BI-FAST Rp 2.500 when lending or paying via external bank) */}
+                  {type === "expense" && (
+                    <div className="border border-[#745bc7]/30 bg-[#faf7ff] p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <label className="font-mono text-[10px] font-semibold tracking-[0.14em] text-[#5d5370] uppercase">
+                          {t.txModal.adminFee}
+                        </label>
+                        <div className="flex flex-wrap gap-1">
+                          {FEE_PRESETS.map((presetFee) => {
+                            const active = parsedFee === presetFee;
+                            return (
+                              <button
+                                key={presetFee}
+                                type="button"
+                                onClick={() => {
+                                  setFeeDigits(
+                                    presetFee === 0 ? "" : String(presetFee)
+                                  );
+                                  if (presetFee === 0) {
+                                    setReimburseIncludeFee(false);
+                                  }
+                                  if (error) setError(null);
+                                }}
+                                className={`border px-2 py-0.5 font-mono text-[10px] font-semibold transition ${
+                                  active
+                                    ? "border-[#745bc7] bg-[#745bc7] text-white"
+                                    : "border-[#745bc7]/30 bg-white text-[#5d5370] hover:border-[#745bc7] hover:text-[#14100e]"
+                                }`}
+                              >
+                                {presetFee === 0
+                                  ? locale === "id"
+                                    ? "Gratis"
+                                    : "Free"
+                                  : formatIdr(presetFee)}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="mt-2 flex items-center gap-1.5 border border-[#745bc7]/35 bg-white px-2.5 py-1.5 focus-within:border-[#745bc7]">
+                        <span className="font-mono-num text-xs font-bold text-[#5d5370]">
+                          Rp
+                        </span>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="0"
+                          value={formatDigitsWithDots(feeDigits)}
+                          onChange={(e) => {
+                            const digits = e.target.value
+                              .replace(/\D/g, "")
+                              .slice(0, 9);
+                            setFeeDigits(digits);
+                            if (!(Number(digits) > 0)) {
+                              setReimburseIncludeFee(false);
+                            }
+                            if (error) setError(null);
+                          }}
+                          className="font-mono-num w-full bg-transparent text-xs font-bold text-[#14100e] outline-none placeholder:text-[#5d5370]/45"
+                        />
+                      </div>
+
+                      {parsedFee > 0 && parsedAmount > 0 && (
+                        <p className="mt-1.5 font-mono text-[10px] text-[#4e4361]">
+                          {fromAcc ? (
+                            <span className="font-semibold text-[#14100e]">
+                              {fromAcc.name}{" "}
+                            </span>
+                          ) : null}
+                          <span className="font-bold text-[#c837a5]">
+                            -{formatIdr(parsedAmount + parsedFee)}
+                          </span>{" "}
+                          <span className="text-[#5d5370]">
+                            ({formatIdr(parsedFee)}{" "}
+                            {locale === "id"
+                              ? "masuk Bank & Admin"
+                              : "in Bank & Admin"}
+                            )
+                          </span>
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Expense-Only Flexible Reimburse / Multi-Person Split-Bill Toggle */}
                   {type === "expense" && (
                     <div
                       className={`border p-3 transition ${
@@ -821,97 +1104,380 @@ export const TransactionModal: React.FC = () => {
                             {t.reimburse.toggleHint}
                           </p>
 
-                          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                            <div>
-                              <label className="block font-mono text-[9.5px] font-semibold tracking-[0.14em] text-[#5d5370] uppercase">
-                                {t.reimburse.fromLabel}
-                              </label>
-                              <input
-                                type="text"
-                                placeholder={t.reimburse.fromPlaceholder}
-                                value={reimburseFrom}
-                                onChange={(e) => setReimburseFrom(e.target.value)}
-                                className="mt-1 w-full border border-[#745bc7]/35 bg-white px-2.5 py-1.5 text-xs text-[#14100e] outline-none placeholder:text-[#5d5370]/65 focus:border-[#745bc7]"
-                              />
-                            </div>
-
-                            <div>
-                              <div className="flex items-center justify-between gap-1">
-                                <label className="truncate font-mono text-[9.5px] font-semibold tracking-[0.12em] text-[#5d5370] uppercase">
+                          {/* Optional Fee Inclusion Toggle (only shown when Expense has Admin Fee > 0) */}
+                          {parsedFee > 0 && (
+                            <div className="space-y-1">
+                              <span className="block font-mono text-[9.5px] font-semibold tracking-[0.14em] text-[#5d5370] uppercase">
+                                {locale === "id"
+                                  ? `BIAYA ADMIN (${formatIdr(parsedFee)})`
+                                  : `ADMIN FEE (${formatIdr(parsedFee)})`}
+                              </span>
+                              <div className="grid grid-cols-2 border border-[#745bc7]/60 bg-white">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setReimburseIncludeFee(false);
+                                    if (
+                                      reimburseSplitMode === "single" &&
+                                      Number(reimburseTargetDigits) ===
+                                        parsedAmount + parsedFee
+                                    ) {
+                                      setReimburseTargetDigits(
+                                        String(parsedAmount)
+                                      );
+                                    }
+                                    if (error) setError(null);
+                                  }}
+                                  className={`border-r border-[#745bc7]/50 px-2.5 py-1.5 font-mono text-[9.5px] font-bold tracking-[0.08em] uppercase transition ${
+                                    !reimburseIncludeFee
+                                      ? "bg-[#745bc7] text-white"
+                                      : "text-[#5d5370] hover:bg-[#f4effd] hover:text-[#14100e]"
+                                  }`}
+                                >
                                   {locale === "id"
-                                    ? "Target (Opsional)"
-                                    : "Target (Optional)"}
-                                </label>
-                                <div className="flex shrink-0 gap-1">
-                                  <button
-                                    type="button"
-                                    onClick={() => setReimburseTargetDigits("")}
-                                    className={`border px-1.5 py-0.5 font-mono text-[9px] font-semibold transition ${
-                                      !reimburseTargetDigits
-                                        ? "border-[#745bc7] bg-[#745bc7] text-white"
-                                        : "border-[#745bc7]/30 bg-white text-[#5d5370] hover:border-[#745bc7]"
-                                    }`}
-                                  >
-                                    {t.reimburse.flexibleChip}
-                                  </button>
-                                  {parsedAmount > 0 && (
-                                    <>
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          setReimburseTargetDigits(
-                                            String(Math.round(parsedAmount / 2))
-                                          )
-                                        }
-                                        className={`border px-1.5 py-0.5 font-mono text-[9px] font-semibold transition ${
-                                          Number(reimburseTargetDigits) ===
-                                          Math.round(parsedAmount / 2)
-                                            ? "border-[#745bc7] bg-[#745bc7] text-white"
-                                            : "border-[#745bc7]/30 bg-white text-[#5d5370] hover:border-[#745bc7]"
-                                        }`}
-                                      >
-                                        50%
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          setReimburseTargetDigits(
-                                            String(parsedAmount)
-                                          )
-                                        }
-                                        className={`border px-1.5 py-0.5 font-mono text-[9px] font-semibold transition ${
-                                          Number(reimburseTargetDigits) ===
-                                          parsedAmount
-                                            ? "border-[#745bc7] bg-[#745bc7] text-white"
-                                            : "border-[#745bc7]/30 bg-white text-[#5d5370] hover:border-[#745bc7]"
-                                        }`}
-                                      >
-                                        100%
-                                      </button>
-                                    </>
-                                  )}
-                                </div>
+                                    ? "TANPA FEE"
+                                    : "WITHOUT FEE"}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setReimburseIncludeFee(true);
+                                    if (
+                                      reimburseSplitMode === "single" &&
+                                      Number(reimburseTargetDigits) === parsedAmount &&
+                                      parsedAmount > 0
+                                    ) {
+                                      setReimburseTargetDigits(
+                                        String(parsedAmount + parsedFee)
+                                      );
+                                    }
+                                    if (error) setError(null);
+                                  }}
+                                  className={`px-2.5 py-1.5 font-mono text-[9.5px] font-bold tracking-[0.08em] uppercase transition ${
+                                    reimburseIncludeFee
+                                      ? "bg-[#745bc7] text-white"
+                                      : "text-[#5d5370] hover:bg-[#f4effd] hover:text-[#14100e]"
+                                  }`}
+                                >
+                                  {locale === "id"
+                                    ? `TERMASUK FEE (+${formatIdr(parsedFee)})`
+                                    : `INCLUDE FEE (+${formatIdr(parsedFee)})`}
+                                </button>
                               </div>
+                              <p className="font-mono text-[9.5px] text-[#5d5370]">
+                                {reimburseIncludeFee
+                                  ? locale === "id"
+                                    ? `Total yang direimburse termasuk biaya admin (maks. ${formatIdr(reimburseBaseIdr)}).`
+                                    : `Reimburse covers the admin fee too (max ${formatIdr(reimburseBaseIdr)}).`
+                                  : locale === "id"
+                                    ? `Biaya admin ${formatIdr(parsedFee)} tetap kamu tanggung di Bank & Admin.`
+                                    : `You absorb the ${formatIdr(parsedFee)} fee in Bank & Admin.`}
+                              </p>
+                            </div>
+                          )}
 
-                              <div className="mt-1 flex items-center gap-1.5 border border-[#745bc7]/35 bg-white px-2.5 py-1.5 focus-within:border-[#745bc7]">
-                                <span className="font-mono-num text-xs font-bold text-[#5d5370]">
-                                  Rp
-                                </span>
+                          {/* 1 Person vs Multi-Person Split Switcher */}
+                          <div className="grid grid-cols-2 border border-[#745bc7]/60 bg-white">
+                            <button
+                              type="button"
+                              onClick={switchToSingleMode}
+                              className={`border-r border-[#745bc7]/50 py-1.5 font-mono text-[9.5px] font-bold tracking-[0.1em] uppercase transition ${
+                                reimburseSplitMode === "single"
+                                  ? "bg-[#745bc7] text-white"
+                                  : "text-[#5d5370] hover:bg-[#f4effd] hover:text-[#14100e]"
+                              }`}
+                            >
+                              {locale === "id" ? "1 ORANG" : "1 PERSON"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={switchToSplitMode}
+                              className={`inline-flex items-center justify-center gap-1 py-1.5 font-mono text-[9.5px] font-bold tracking-[0.1em] uppercase transition ${
+                                reimburseSplitMode === "split"
+                                  ? "bg-[#745bc7] text-white"
+                                  : "text-[#5d5370] hover:bg-[#f4effd] hover:text-[#14100e]"
+                              }`}
+                            >
+                              <Users className="h-3 w-3 shrink-0" />
+                              <span>
+                                {locale === "id"
+                                  ? "PATUNGAN (2+ ORANG)"
+                                  : "SPLIT (2+ PEOPLE)"}
+                              </span>
+                            </button>
+                          </div>
+
+                          {reimburseSplitMode === "single" ? (
+                            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                              <div>
+                                <label className="block font-mono text-[9.5px] font-semibold tracking-[0.14em] text-[#5d5370] uppercase">
+                                  {t.reimburse.fromLabel}
+                                </label>
                                 <input
                                   type="text"
-                                  inputMode="numeric"
-                                  placeholder={t.reimburse.flexibleChip}
-                                  value={formatDigitsWithDots(reimburseTargetDigits)}
-                                  onChange={(e) =>
-                                    setReimburseTargetDigits(
-                                      e.target.value.replace(/\D/g, "").slice(0, 12)
-                                    )
-                                  }
-                                  className="font-mono-num w-full bg-transparent text-xs font-bold text-[#14100e] outline-none placeholder:font-normal placeholder:text-[#745bc7]/70"
+                                  placeholder={t.reimburse.fromPlaceholder}
+                                  value={reimburseFrom}
+                                  onChange={(e) => setReimburseFrom(e.target.value)}
+                                  className="mt-1 w-full border border-[#745bc7]/35 bg-white px-2.5 py-1.5 text-xs text-[#14100e] outline-none placeholder:text-[#5d5370]/65 focus:border-[#745bc7]"
                                 />
                               </div>
+
+                              <div>
+                                <div className="flex items-center justify-between gap-1">
+                                  <label className="truncate font-mono text-[9.5px] font-semibold tracking-[0.12em] text-[#5d5370] uppercase">
+                                    {locale === "id"
+                                      ? "Target (Opsional)"
+                                      : "Target (Optional)"}
+                                  </label>
+                                  <div className="flex shrink-0 gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => setReimburseTargetDigits("")}
+                                      className={`border px-1.5 py-0.5 font-mono text-[9px] font-semibold transition ${
+                                        !reimburseTargetDigits
+                                          ? "border-[#745bc7] bg-[#745bc7] text-white"
+                                          : "border-[#745bc7]/30 bg-white text-[#5d5370] hover:border-[#745bc7]"
+                                      }`}
+                                    >
+                                      {t.reimburse.flexibleChip}
+                                    </button>
+                                    {reimburseBaseIdr > 0 && (
+                                      <>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setReimburseTargetDigits(
+                                              String(
+                                                Math.round(reimburseBaseIdr / 2)
+                                              )
+                                            )
+                                          }
+                                          className={`border px-1.5 py-0.5 font-mono text-[9px] font-semibold transition ${
+                                            Number(reimburseTargetDigits) ===
+                                            Math.round(reimburseBaseIdr / 2)
+                                              ? "border-[#745bc7] bg-[#745bc7] text-white"
+                                              : "border-[#745bc7]/30 bg-white text-[#5d5370] hover:border-[#745bc7]"
+                                          }`}
+                                        >
+                                          50%
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setReimburseTargetDigits(
+                                              String(reimburseBaseIdr)
+                                            )
+                                          }
+                                          className={`border px-1.5 py-0.5 font-mono text-[9px] font-semibold transition ${
+                                            Number(reimburseTargetDigits) ===
+                                            reimburseBaseIdr
+                                              ? "border-[#745bc7] bg-[#745bc7] text-white"
+                                              : "border-[#745bc7]/30 bg-white text-[#5d5370] hover:border-[#745bc7]"
+                                          }`}
+                                        >
+                                          100%
+                                        </button>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="mt-1 flex items-center gap-1.5 border border-[#745bc7]/35 bg-white px-2.5 py-1.5 focus-within:border-[#745bc7]">
+                                  <span className="font-mono-num text-xs font-bold text-[#5d5370]">
+                                    Rp
+                                  </span>
+                                  <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    placeholder={t.reimburse.flexibleChip}
+                                    value={formatDigitsWithDots(
+                                      reimburseTargetDigits
+                                    )}
+                                    onChange={(e) =>
+                                      setReimburseTargetDigits(
+                                        e.target.value
+                                          .replace(/\D/g, "")
+                                          .slice(0, 12)
+                                      )
+                                    }
+                                    className="font-mono-num w-full bg-transparent text-xs font-bold text-[#14100e] outline-none placeholder:font-normal placeholder:text-[#745bc7]/70"
+                                  />
+                                </div>
+                              </div>
                             </div>
-                          </div>
+                          ) : (
+                            <div className="space-y-2.5">
+                              {/* Quick Equal-Split Helper Bar (e.g. GoFood ÷3 with "Include me") */}
+                              {reimburseBaseIdr > 0 && (
+                                <div className="flex flex-wrap items-center justify-between gap-2 border border-[#745bc7]/25 bg-white px-2.5 py-2">
+                                  <label className="inline-flex cursor-pointer items-center gap-1.5 font-mono text-[9.5px] font-semibold text-[#14100e]">
+                                    <input
+                                      type="checkbox"
+                                      checked={splitIncludeMe}
+                                      onChange={(e) =>
+                                        setSplitIncludeMe(e.target.checked)
+                                      }
+                                      className="h-3 w-3 accent-[#745bc7]"
+                                    />
+                                    <span>
+                                      {locale === "id"
+                                        ? "Termasuk saya"
+                                        : "Include me"}
+                                    </span>
+                                  </label>
+
+                                  <div className="flex flex-wrap items-center gap-1">
+                                    <span className="font-mono text-[9px] font-semibold text-[#5d5370] uppercase">
+                                      {locale === "id" ? "Bagi rata:" : "Equal:"}
+                                    </span>
+                                    {[2, 3, 4].map((n) => (
+                                      <button
+                                        key={n}
+                                        type="button"
+                                        onClick={() => applyEqualSplit(n)}
+                                        className="border border-[#745bc7]/40 bg-[#f5effe]/75 px-1.5 py-0.5 font-mono text-[9.5px] font-bold text-[#14100e] transition hover:border-[#745bc7] hover:bg-[#745bc7] hover:text-white"
+                                      >
+                                        ÷{n}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Multi-Person Rows */}
+                              <div className="space-y-1.5">
+                                {splitPayers.map((payer, idx) => {
+                                  const isLocked = lockedPayerIds.has(payer.id);
+                                  return (
+                                    <div
+                                      key={payer.id}
+                                      className="grid grid-cols-[minmax(0,1fr)_minmax(108px,136px)_auto] items-center gap-1.5"
+                                    >
+                                      <input
+                                        type="text"
+                                        maxLength={48}
+                                        placeholder={
+                                          locale === "id"
+                                            ? `Orang ${idx + 1} (cth. Andi)`
+                                            : `Person ${idx + 1} (e.g. Andi)`
+                                        }
+                                        value={payer.name}
+                                        onChange={(e) => {
+                                          const val = e.target.value;
+                                          setSplitPayers((curr) =>
+                                            curr.map((row) =>
+                                              row.id === payer.id
+                                                ? { ...row, name: val }
+                                                : row
+                                            )
+                                          );
+                                          if (error) setError(null);
+                                        }}
+                                        className="min-w-0 border border-[#745bc7]/35 bg-white px-2.5 py-1.5 text-xs text-[#14100e] outline-none placeholder:text-[#5d5370]/60 focus:border-[#745bc7]"
+                                      />
+
+                                      <div className="flex items-center gap-1 border border-[#745bc7]/35 bg-white px-2 py-1.5 focus-within:border-[#745bc7]">
+                                        <span className="font-mono-num text-[11px] font-bold text-[#5d5370]">
+                                          Rp
+                                        </span>
+                                        <input
+                                          type="text"
+                                          inputMode="numeric"
+                                          placeholder={t.reimburse.flexibleChip}
+                                          value={formatDigitsWithDots(
+                                            payer.targetDigits
+                                          )}
+                                          onChange={(e) => {
+                                            const digits = e.target.value
+                                              .replace(/\D/g, "")
+                                              .slice(0, 12);
+                                            setSplitPayers((curr) =>
+                                              curr.map((row) =>
+                                                row.id === payer.id
+                                                  ? { ...row, targetDigits: digits }
+                                                  : row
+                                              )
+                                            );
+                                            if (error) setError(null);
+                                          }}
+                                          className="font-mono-num w-full min-w-0 bg-transparent text-xs font-bold text-[#14100e] outline-none placeholder:font-normal placeholder:text-[#745bc7]/70"
+                                        />
+                                      </div>
+
+                                      <button
+                                        type="button"
+                                        disabled={
+                                          splitPayers.length <= 1 || isLocked
+                                        }
+                                        onClick={() =>
+                                          setSplitPayers((curr) =>
+                                            curr.filter(
+                                              (row) => row.id !== payer.id
+                                            )
+                                          )
+                                        }
+                                        aria-label={t.actions.delete}
+                                        className="flex h-8 w-8 items-center justify-center border border-[#745bc7]/25 bg-white text-[#5d5370] transition hover:border-[#c837a5] hover:text-[#c837a5] disabled:cursor-not-allowed disabled:opacity-35"
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                {splitPayers.length < 12 ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setSplitPayers((curr) => [
+                                        ...curr,
+                                        {
+                                          id: makePayerId(),
+                                          name: "",
+                                          targetDigits: "",
+                                          status: "pending",
+                                        },
+                                      ])
+                                    }
+                                    className="inline-flex items-center gap-1 border border-[#745bc7]/45 bg-white px-2.5 py-1 font-mono text-[9.5px] font-bold tracking-[0.08em] text-[#745bc7] uppercase transition hover:bg-[#745bc7] hover:text-white"
+                                  >
+                                    <Plus className="h-3 w-3" />
+                                    <span>
+                                      {locale === "id"
+                                        ? "Tambah Orang"
+                                        : "Add Person"}
+                                    </span>
+                                  </button>
+                                ) : (
+                                  <span />
+                                )}
+
+                                {reimburseBaseIdr > 0 && (
+                                  <span
+                                    className={`font-mono text-[10px] ${
+                                      splitExceedsBase
+                                        ? "font-bold text-[#c837a5]"
+                                        : "text-[#4e4361]"
+                                    }`}
+                                  >
+                                    {splitExceedsBase
+                                      ? locale === "id"
+                                        ? `Melebihi batas ${formatIdr(reimburseBaseIdr)}!`
+                                        : `Exceeds max ${formatIdr(reimburseBaseIdr)}!`
+                                      : splitHasFlexible
+                                        ? locale === "id"
+                                          ? `Target tercatat: ${formatIdr(splitFixedSum)} + fleksibel`
+                                          : `Targets: ${formatIdr(splitFixedSum)} + flexible`
+                                        : locale === "id"
+                                          ? `Teman: ${formatIdr(splitFixedSum)} · Bagianmu: ${formatIdr(Math.max(0, reimburseBaseIdr - splitFixedSum))}`
+                                          : `Friends: ${formatIdr(splitFixedSum)} · Your share: ${formatIdr(Math.max(0, reimburseBaseIdr - splitFixedSum))}`}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          )}
 
                           {hasRecordedRepayments && editingTx && (
                             <div className="flex flex-wrap items-center justify-between gap-2 border border-[#1f8f6b]/40 bg-white px-2.5 py-2 font-mono text-[10px]">
